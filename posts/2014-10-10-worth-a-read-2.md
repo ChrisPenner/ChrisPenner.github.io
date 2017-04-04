@@ -2,7 +2,7 @@
 title: Worth a Read #2 - CSS
 author: Chris Penner
 date: Nov. 10th 2014
-categories: Worth-a-read
+categories: worth-a-read
 tags: CSS
 ---
 

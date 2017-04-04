@@ -2,7 +2,7 @@
 title: "Gem: Font-Awesome"
 author: Chris Penner
 date: Jan 21 2015
-tags: open-source typography css design
+tags: open-source, typography, css, design
 categories: open-source-gems
 language: CSS
 state: Released

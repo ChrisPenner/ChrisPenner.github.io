@@ -31,16 +31,11 @@
                 $endfor$
             </span>
         $endif$
-        $if(tags)$
+
             <br>
             <span class="tags">
-                Tagged:
-                $tags$
-                $for(tags)$
-                    <a class="tag" href="/tag/$body$">$body$</a>
-                $endfor$
+                Tagged: $tags$
             </span>
-        $endif$
     </div>
 </div>
 <article class="post">

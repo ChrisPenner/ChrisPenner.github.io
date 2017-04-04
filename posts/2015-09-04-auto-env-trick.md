@@ -2,7 +2,7 @@
 title: Autoenv Trick
 author: Chris Penner
 date: September 4th 2015
-tags: open-source programming workflow unix
+tags: open-source, programming, workflow, unix
 description: Use Auto-env to streamline your workflow.
 image: autoenv.gif
 ---

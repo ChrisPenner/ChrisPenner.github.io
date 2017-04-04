@@ -2,6 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Monoid
 import Data.Foldable
+import Data.String
+import Text.Blaze.Html
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
 import Hakyll
 
 
@@ -57,29 +61,17 @@ main = hakyll $ do
 
   match "templates/*" $ compile templateBodyCompiler
 
-
 --------------------------------------------------------------------------------
 postCtx :: Tags -> Context String
 postCtx tags = fold
-  [ tagsField "tags" tags
+  [ --tagsField "tags" tags
+  tagsFieldWith getTags makeLink fold "tags" tags
+  -- field "tags" $ \i -> getTags (itemIdentifier i) >>= renderTags makeLink concat
+  -- tagCloudFieldWith "tags" rendTag (++) 1.0 1.0 tags
+                    -- 
   , dateField "date" "%B %e, %Y"
-  -- , tagsContext
-  -- , categoriesContext
   , defaultContext
   ]
-
-listContextWith :: Context String -> String -> Context a
-listContextWith ctx s = listField s ctx $ do
-    identifier <- getUnderlying
-    fieldData <- getMetadataField identifier s
-    let metas = maybe [] (fmap trim . splitAll ",")  fieldData
-    return $ fmap (\x -> Item (fromFilePath x) x) metas
-
-listContext :: String -> Context a
-listContext = listContextWith defaultContext
-
-tagsContext :: Context a
-tagsContext = listContext "tags"
-
-categoriesContext :: Context a
-categoriesContext = listContext "categories"
+    where 
+      makeLink tag (Just url) = Just $ H.a (fromString tag) ! A.class_ "tag" ! A.href (fromString ("/" ++ url))
+      makeLink _  Nothing = Nothing

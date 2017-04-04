@@ -2,7 +2,7 @@
 title: "Gem: Jekyll"
 author: Chris Penner
 date: Nov. 3rd 2014
-tags: "open-source ruby"
+tags: "open-source, ruby"
 categories: "Open-source-gems"
 language: Ruby
 state: Released
