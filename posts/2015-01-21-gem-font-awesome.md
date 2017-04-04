@@ -38,4 +38,4 @@ TLDR:
 Go ahead and check out the icons and maybe even add one of your own here:
 [Font-Awesome](http://fortawesome.github.io/Font-Awesome/).
 
-Follow me on twitter [@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!
+Follow me on twitter [\@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!

@@ -13,7 +13,7 @@ anything else I've been reading. Might be themed, might not! Hope you enjoy it!
 
 This week's list contains a variety of topics from different disciplines,
 hopefully you'll find something interesting! Follow me on twitter
-[@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with future
+[\@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with future
 posts!
 
 ###Worth a read:

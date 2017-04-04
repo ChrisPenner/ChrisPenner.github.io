@@ -10,7 +10,7 @@ This Worth A Read highlights some articles about CSS. See how the pros do
 things and learn a new trick or two.
 
 Follow me on twitter
-[@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
+[\@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
 future posts!
 
 ###Worth a read:

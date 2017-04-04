@@ -1,67 +1,85 @@
 --------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
-import           Data.Monoid (mappend)
-import           Hakyll
+import Data.Monoid
+import Data.Foldable
+import Hakyll
 
 
 --------------------------------------------------------------------------------
 main :: IO ()
 main = hakyll $ do
-    match "images/*" $ do
-        route   idRoute
-        compile copyFileCompiler
+  match "images/*" $ do
+    route   idRoute
+    compile copyFileCompiler
 
-    match "css/*" $ do
-        route   idRoute
-        compile compressCssCompiler
+  match "css/*" $ do
+    route   idRoute
+    compile compressCssCompiler
 
-    match (fromList ["about.rst", "contact.md"]) $ do
-        route   $ setExtension "html"
-        compile $ pandocCompiler
-            >>= loadAndApplyTemplate "templates/default.html" defaultContext
-            >>= relativizeUrls
+  match "js/*" $ do
+    route   idRoute
+    compile copyFileCompiler
 
-    match "posts/*" $ do
-        route $ setExtension "html"
-        compile $ pandocCompiler
-            >>= loadAndApplyTemplate "templates/post.html"    postCtx
-            >>= loadAndApplyTemplate "templates/default.html" postCtx
-            >>= relativizeUrls
+  tags <- buildTags "posts/*" (fromCapture "tags/*.html")
+  match "posts/*" $ do
+    route $ setExtension "html"
+    compile $ pandocCompiler
+        >>= loadAndApplyTemplate "templates/post.html" (postCtx tags)
+        >>= loadAndApplyTemplate "templates/base.html" (postCtx tags)
+        >>= relativizeUrls
 
-    create ["archive.html"] $ do
-        route idRoute
-        compile $ do
-            posts <- recentFirst =<< loadAll "posts/*"
-            let archiveCtx =
-                    listField "posts" postCtx (return posts) `mappend`
-                    constField "title" "Archives"            `mappend`
-                    defaultContext
+  create ["index.html"] $ do
+    route idRoute
+    compile $ do
+      posts <- recentFirst =<< loadAll "posts/*"
+      let indexCtx =
+            listField "posts" (postCtx tags) (return posts) <>
+              constField "title" "All Posts"                <>
+              defaultContext
 
-            makeItem ""
-                >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
-                >>= loadAndApplyTemplate "templates/default.html" archiveCtx
-                >>= relativizeUrls
+      makeItem ""
+          >>= loadAndApplyTemplate "templates/contents.html" indexCtx
+          >>= loadAndApplyTemplate "templates/base.html" indexCtx
+          >>= relativizeUrls
 
+  tagsRules tags $ \tag pattern -> do
+    let title = "Tagged \"" ++ tag ++ "\""
+    route idRoute
+    compile $ do
+      posts <- recentFirst =<< loadAll pattern
+      let ctx = constField "title" title <>
+                  listField "posts" (postCtx tags) (return posts) <>
+                  defaultContext
 
-    match "index.html" $ do
-        route idRoute
-        compile $ do
-            posts <- recentFirst =<< loadAll "posts/*"
-            let indexCtx =
-                    listField "posts" postCtx (return posts) `mappend`
-                    constField "title" "Home"                `mappend`
-                    defaultContext
+      makeItem "" >>= loadAndApplyTemplate "templates/contents.html" ctx
+                  >>= loadAndApplyTemplate "templates/base.html" ctx
+                  >>= relativizeUrls
 
-            getResourceBody
-                >>= applyAsTemplate indexCtx
-                >>= loadAndApplyTemplate "templates/default.html" indexCtx
-                >>= relativizeUrls
-
-    match "templates/*" $ compile templateBodyCompiler
+  match "templates/*" $ compile templateBodyCompiler
 
 
 --------------------------------------------------------------------------------
-postCtx :: Context String
-postCtx =
-    dateField "date" "%B %e, %Y" `mappend`
-    defaultContext
+postCtx :: Tags -> Context String
+postCtx tags = fold
+  [ tagsField "tags" tags
+  , dateField "date" "%B %e, %Y"
+  -- , tagsContext
+  -- , categoriesContext
+  , defaultContext
+  ]
+
+listContextWith :: Context String -> String -> Context a
+listContextWith ctx s = listField s ctx $ do
+    identifier <- getUnderlying
+    fieldData <- getMetadataField identifier s
+    let metas = maybe [] (fmap trim . splitAll ",")  fieldData
+    return $ fmap (\x -> Item (fromFilePath x) x) metas
+
+listContext :: String -> Context a
+listContext = listContextWith defaultContext
+
+tagsContext :: Context a
+tagsContext = listContext "tags"
+
+categoriesContext :: Context a
+categoriesContext = listContext "categories"

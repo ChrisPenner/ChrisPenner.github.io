@@ -15,7 +15,7 @@ useful Unix tools that I use. Finally a list of some other cool tools you may
 want to check out. I hope you find that it's worth a read!
 
 Follow me on twitter
-[@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
+[\@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
 future posts!
 
 ### Worth a read:

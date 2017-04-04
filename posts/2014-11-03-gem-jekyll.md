@@ -38,4 +38,4 @@ TLDR:
 If you want to check out the source it's available on the Jekyll
 [Github page](https://github.com/jekyll/jekyll).
 
-Follow me on twitter [@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!
+Follow me on twitter [\@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!

@@ -25,4 +25,4 @@ Some of Neovim's driving principals are as follows:
 
 I'll be writing more about vim and what it's capable of soon, so keep an eye out for more, and run vimtutor on your terminal to try it out! You can help out right now by checking out the source on [Github](http://github.com/neovim/neovim) or by donating on [BountySource](https://www.bountysource.com/teams/neovim/).
 
-Follow me on twitter [@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!
+Follow me on twitter [\@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!

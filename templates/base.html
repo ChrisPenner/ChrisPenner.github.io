@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8">
+    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
+    <meta name="author" content="Chris Penner">
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    $partial("templates/meta-data.html")$
+    <title>$title$</title>
+    <link rel="alternative" type="application/rss+xml" title="Chris Penner RSS Feed" href="/feed" />
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/syntax.css">
+</head>
+<body>
+<header>
+    <nav>
+        <a id="beacon" href="/">
+
+            $partial("templates/enso.svg")$
+
+        </a>
+    </nav>
+    <div id="theme-button">DAY</div>
+</header>
+
+<div id="page">
+    $body$
+</div>
+
+<footer>
+    &copy; 2014-2017 Chris Penner - <a href="/feed">RSS</a>
+</footer>
+
+<link href='http://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+<link href='http://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+<script src="/js/main.min.js"></script>
+</body>
+</html>

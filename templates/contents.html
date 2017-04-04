@@ -1,0 +1,28 @@
+<section class="table-of-contents">
+    <h1>$title$</h1>
+    <div class="metadata">
+        $if(categories)$
+            <br>
+            <span class="categories">
+                Categories<br>
+                {% for c in categories %}
+                    <a class="category" href="/category/{{c}}">{{c.replace('-', ' ')|capitalize}}</a>
+                {% endfor %}
+            </span>
+        $endif$
+        $if(tags)$
+            <br>
+            <span class="tags">
+                Tags<br>
+                {% for t in tags %}
+                    <a class="tag" href="/tag/{{t}}">{{t.replace('-', ' ')|capitalize}}</a>
+                {% endfor %}
+            </span>
+            $endif$
+    </div>
+    <ul>
+        $for(posts)$
+            <li><a href="$url$">$title$<span class="date">$date$</span></a></li>
+        $endfor$
+    </ul>
+</section>

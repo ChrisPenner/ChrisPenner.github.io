@@ -34,4 +34,4 @@ Some of the design decisions that really set Duckling apart:
 Go ahead and check out the docs and give building your own parser a try:
 [Duckling](http://duckling-lib.org/ ).
 
-Follow me on twitter [@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!
+Follow me on twitter [\@chrislpenner](http://www.twitter.com/chrislpenner) to catch new articles as they come!

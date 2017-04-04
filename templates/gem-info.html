@@ -1,0 +1,37 @@
+{% if post.language or post.platforms or post.state or post.type or post.links %}
+    <div class="gem-info">
+
+        <table>
+            {% if post.language %}
+                <tr>
+                    <td>Language</td>
+                    <td>{{post.language}}</td>
+                </tr>
+            {% endif %}
+            {% if post.platforms %}
+                <tr>
+                    <td>Platforms</td>
+                    <td>{{post.platforms}}</td>
+                </tr>
+            {% endif %}
+            {% if post.state %}
+                <tr>
+                    <td>State</td>
+                    <td>{{post.state}}</td>
+                </tr>
+            {% endif %}
+            {% if post.type %}
+                <tr>
+                    <td>Type</td>
+                    <td>{{post.type}}</td>
+                </tr>
+            {% endif %}
+            {% if post.links %}
+                <tr>
+                    <td>Links</td>
+                    <td>{{post.links|safe}}</td>
+                </tr>
+            {% endif %}
+        </table>
+    </div>
+{% endif %}

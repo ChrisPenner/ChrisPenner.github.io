@@ -20,14 +20,31 @@ about it rather than just allowing old limitations to make our decision for us.
 I'm going to make the case that 0 should be truthy, the argument for this is
 very simple: 0 is a value. In most cases where I've seen truthyness and
 falsyness used in code it's used to check whether a variable has a value;
-something like `if(account){do stuff with account}`. We need to check that the
+something like: 
+
+```c
+if(account) {
+    // do stuff with account
+}
+```
+
+We need to check that the
 'account' we returned from a function or API call actually exists before we
 perform operations on it, ensuring that it isn't 'null' or 'None' or something
 like that. This case works great, but what about this:
-`if(number_of_accounts){do stuff} else {raise APIError}`? Granted, this is a
-simplified case that won't come up often, but in this case if there are 0
-accounts, our code will raise an APIError rather than executing our operation.
-In this case 0 is clearly a value, and so should be considered truthy.
+
+```c
+if(number_of_accounts){
+    // do stuff
+} else {
+    raise APIError
+}
+```
+
+Granted, this is a simplified case that won't come up often, but in this case
+if there are 0 accounts, our code will raise an APIError rather than executing
+our operation. In this case 0 is clearly a value, and so should be considered
+truthy.
 
 While the previous example may seem contrived, it comes from a real-life case
 that I dealt with at work one day. We were doing some pretty complex work with

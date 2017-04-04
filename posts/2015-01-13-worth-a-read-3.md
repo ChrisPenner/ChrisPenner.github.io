@@ -13,7 +13,7 @@ regardless a few more tools in the typography tool-chest sure doesn't hurt.
 Here are a few articles to check out.
 
 Follow me on twitter
-[@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
+[\@chrislpenner](http://www.twitter.com/chrislpenner) to keep up with
 future posts!
 
 ###Worth a read:
