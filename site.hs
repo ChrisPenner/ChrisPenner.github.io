@@ -24,9 +24,9 @@ main = hakyll $ do
     route   idRoute
     compile copyFileCompiler
 
-  tags <- buildTags "posts/*" (fromCapture "tags/*.html")
+  tags <- buildTags "posts/*" (fromCapture "tags/*")
   match "posts/*" $ do
-    route $ setExtension "html"
+    route $ setExtension ""
     compile $ pandocCompiler
         >>= loadAndApplyTemplate "templates/post.html" (postCtx tags)
         >>= loadAndApplyTemplate "templates/base.html" (postCtx tags)
