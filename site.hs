@@ -1,13 +1,13 @@
 --------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Monoid
+import Data.List
 import Data.Foldable
 import Data.String
 import Text.Blaze.Html
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import Hakyll
-
 
 --------------------------------------------------------------------------------
 main :: IO ()
@@ -26,11 +26,12 @@ main = hakyll $ do
 
   tags <- buildTags "posts/*" (fromCapture "tags/*")
   match "posts/*" $ do
-    route $ setExtension ""
+    route $ setExtension "html"
     compile $ pandocCompiler
         >>= loadAndApplyTemplate "templates/post.html" (postCtx tags)
         >>= loadAndApplyTemplate "templates/base.html" (postCtx tags)
         >>= relativizeUrls
+        >>= stripHTMLSuffix
 
   create ["index.html"] $ do
     route idRoute
@@ -45,6 +46,7 @@ main = hakyll $ do
           >>= loadAndApplyTemplate "templates/contents.html" indexCtx
           >>= loadAndApplyTemplate "templates/base.html" indexCtx
           >>= relativizeUrls
+          >>= stripHTMLSuffix
 
   tagsRules tags $ \tag pattern -> do
     let title = "Tagged \"" ++ tag ++ "\""
@@ -58,10 +60,17 @@ main = hakyll $ do
       makeItem "" >>= loadAndApplyTemplate "templates/contents.html" ctx
                   >>= loadAndApplyTemplate "templates/base.html" ctx
                   >>= relativizeUrls
+                  >>= stripHTMLSuffix
 
   match "templates/*" $ compile templateBodyCompiler
 
 --------------------------------------------------------------------------------
+stripHTMLSuffix :: Item String -> Compiler (Item String)
+stripHTMLSuffix = return . fmap (withUrls stripSuffix)
+  where stripSuffix x 
+        | isSuffixOf ".html" x = reverse . drop 5 . reverse $ x
+        | otherwise = x
+
 postCtx :: Tags -> Context String
 postCtx tags = fold
   [ --tagsField "tags" tags
