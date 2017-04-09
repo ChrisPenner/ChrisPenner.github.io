@@ -4,6 +4,7 @@ author: Chris Penner
 date: Nov. 10th 2014
 categories: worth-a-read
 tags: CSS
+description: Learn something new about CSS.
 ---
 
 This Worth A Read highlights some articles about CSS. See how the pros do

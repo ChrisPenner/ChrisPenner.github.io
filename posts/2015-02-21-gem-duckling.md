@@ -7,6 +7,7 @@ categories: "open-source-gems"
 language: Clojure
 type: Dynamic Customizable Parser
 image: duckling.png
+description: A few cool pages
 links: "Duckling|http://duckling-lib.org/, Github|https://github.com/wit-ai/duckling"
 ---
 

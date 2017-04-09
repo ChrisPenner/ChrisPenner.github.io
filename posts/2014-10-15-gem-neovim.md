@@ -11,6 +11,7 @@ type: Text-editor
 program: neovim
 image: "neovim-logo.png"
 links: "Neovim|http://neovim.org, Github|http://github.com/neovim/neovim"
+description: Neovim
 ---
 
 This is the first of a series which will highlight open-source "Gems in the rough" that is, projects which are worth taking a look at, downloading, or contributing to. Let's get started!

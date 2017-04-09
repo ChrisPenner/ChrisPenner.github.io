@@ -5,6 +5,7 @@ date: Jan 13 2015
 categories: Worth-a-read
 tags: typography
 image: typography-t.png
+description: Some articles on Typography
 ---
 
 This time we're talking typography. Some would say that good web-design is

@@ -3,6 +3,7 @@ title: Vim vs. Emacs?
 author: Chris Penner
 date: Feb 6th 2015
 image: vim-vs-emacs.png
+description: I care way too much about text editors.
 ---
 
 So about a year ago I realized that as someone going into Computer Science as

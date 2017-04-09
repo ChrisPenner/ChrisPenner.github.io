@@ -2,6 +2,7 @@
 title: "Gem: Font-Awesome"
 author: Chris Penner
 date: Jan 21 2015
+description: Font-Awesome; a cool site for free font glyphs.
 tags: open-source, typography, css, design
 categories: open-source-gems
 language: CSS

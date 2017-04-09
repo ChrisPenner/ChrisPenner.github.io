@@ -4,6 +4,7 @@ author: Chris Penner
 date: Jan 3 2015
 tags: programming
 image: no-mans-sky.png
+description: How procedural generation is changing programming and games.
 ---
 
 I 've been noticing a trend in gaming recently towards procedurally

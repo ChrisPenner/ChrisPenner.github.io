@@ -5,6 +5,7 @@ date: September 24 2014
 tags: design
 categories: thoughts
 image: modular.png
+description: Let's make software more modular.
 ---
 
 I 've always been annoyed with software, the particular reasons have changed consistently over the years, but I think that for all of us there's always been something that gets on our nerves; whether it's how your word processor never indents your lists properly, or how your computer's calendar starts on Sunday when you'd prefer to have it start on Monday.

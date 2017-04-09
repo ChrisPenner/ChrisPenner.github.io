@@ -5,6 +5,7 @@ date: March 19th 2015
 categories: thoughts
 description: When did schooling become more important than skill? Should we really be discriminating against people based on the school they went to?
 image: getting-schooled.png
+description: Schooling sometimes matters too much.
 ---
 
 I must prefix this discussion with the disclaimer that I haven't done any

@@ -62,12 +62,30 @@ main = hakyll $ do
                   >>= relativizeUrls
                   >>= stripHTMLSuffix
 
+  create ["atom.xml"] $ do
+      route idRoute
+      compile $ do
+        let feedCtx = postCtx tags
+        posts <- fmap (take 10) . recentFirst =<< loadAll "posts/*"
+        renderAtom myFeedConfiguration feedCtx posts
+
+
   match "templates/*" $ compile templateBodyCompiler
 
 --------------------------------------------------------------------------------
+
+myFeedConfiguration :: FeedConfiguration
+myFeedConfiguration = FeedConfiguration
+    { feedTitle       = "Chris Penner FP"
+    , feedDescription = "Funcitonal Programming and other rants."
+    , feedAuthorName  = "Chris Penner"
+    , feedAuthorEmail = "chris@chrispenner.ca"
+    , feedRoot        = "chrispenner.ca"
+    }
+
 stripHTMLSuffix :: Item String -> Compiler (Item String)
 stripHTMLSuffix = return . fmap (withUrls stripSuffix)
-  where stripSuffix x 
+  where stripSuffix x
           | isSuffixOf ".html" x = reverse . drop 5 . reverse $ x
           | otherwise = x
 
@@ -77,10 +95,10 @@ postCtx tags = fold
   tagsFieldWith getTags makeLink fold "tags" tags
   -- field "tags" $ \i -> getTags (itemIdentifier i) >>= renderTags makeLink concat
   -- tagCloudFieldWith "tags" rendTag (++) 1.0 1.0 tags
-                    -- 
+                    --
   , dateField "date" "%B %e, %Y"
   , defaultContext
   ]
-    where 
+    where
       makeLink tag (Just url) = Just $ H.a (fromString tag) ! A.class_ "tag" ! A.href (fromString ("/" ++ url))
       makeLink _  Nothing = Nothing
