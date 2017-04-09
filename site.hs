@@ -24,9 +24,9 @@ main = hakyll $ do
     route   idRoute
     compile copyFileCompiler
 
-  tags <- buildTags "posts/*" (fromCapture "tags/*")
+  tags <- buildTags "posts/*" (fromCapture "tags/*.html")
   match "posts/*" $ do
-    route $ setExtension "html"
+    route $ setExtension ".html"
     compile $ pandocCompiler
         >>= loadAndApplyTemplate "templates/post.html" (postCtx tags)
         >>= loadAndApplyTemplate "templates/base.html" (postCtx tags)
@@ -68,8 +68,8 @@ main = hakyll $ do
 stripHTMLSuffix :: Item String -> Compiler (Item String)
 stripHTMLSuffix = return . fmap (withUrls stripSuffix)
   where stripSuffix x 
-        | isSuffixOf ".html" x = reverse . drop 5 . reverse $ x
-        | otherwise = x
+          | isSuffixOf ".html" x = reverse . drop 5 . reverse $ x
+          | otherwise = x
 
 postCtx :: Tags -> Context String
 postCtx tags = fold
