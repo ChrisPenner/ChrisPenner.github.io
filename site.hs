@@ -9,6 +9,8 @@ import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 import Hakyll
 
+postsGlob :: Pattern
+postsGlob = "posts/*"
 --------------------------------------------------------------------------------
 main :: IO ()
 main = hakyll $ do
@@ -27,9 +29,11 @@ main = hakyll $ do
   tags <- buildTags "posts/*" (fromCapture "tags/*.html")
   match "posts/*" $ do
     route $ setExtension ".html"
-    compile $ pandocCompiler
-        >>= loadAndApplyTemplate "templates/post.html" (postCtx tags)
-        >>= loadAndApplyTemplate "templates/base.html" (postCtx tags)
+    compile $ do
+      let postCtx = mkPostCtx tags
+      pandocCompiler
+        >>= loadAndApplyTemplate "templates/post.html" postCtx
+        >>= loadAndApplyTemplate "templates/base.html" postCtx
         >>= relativizeUrls
         >>= stripHTMLSuffix
 
@@ -38,7 +42,7 @@ main = hakyll $ do
     compile $ do
       posts <- recentFirst =<< loadAll "posts/*"
       let indexCtx =
-            listField "posts" (postCtx tags) (return posts) <>
+            listField "posts" (mkPostCtx tags) (return posts) <>
               constField "title" "All Posts"                <>
               defaultContext
 
@@ -54,7 +58,7 @@ main = hakyll $ do
     compile $ do
       posts <- recentFirst =<< loadAll pattern
       let ctx = constField "title" title <>
-                  listField "posts" (postCtx tags) (return posts) <>
+                  listField "posts" (mkPostCtx tags) (return posts) <>
                   defaultContext
 
       makeItem "" >>= loadAndApplyTemplate "templates/contents.html" ctx
@@ -65,8 +69,8 @@ main = hakyll $ do
   create ["atom.xml"] $ do
       route idRoute
       compile $ do
-        let feedCtx = postCtx tags
         posts <- fmap (take 10) . recentFirst =<< loadAll "posts/*"
+        let feedCtx = mkPostCtx tags
         renderAtom myFeedConfiguration feedCtx posts
 
 
@@ -89,16 +93,50 @@ stripHTMLSuffix = return . fmap (withUrls stripSuffix)
           | isSuffixOf ".html" x = reverse . drop 5 . reverse $ x
           | otherwise = x
 
-postCtx :: Tags -> Context String
-postCtx tags = fold
+mkPostCtx :: Tags -> Context String
+mkPostCtx tags = fold
   [ --tagsField "tags" tags
   tagsFieldWith getTags makeLink fold "tags" tags
   -- field "tags" $ \i -> getTags (itemIdentifier i) >>= renderTags makeLink concat
   -- tagCloudFieldWith "tags" rendTag (++) 1.0 1.0 tags
-                    --
   , dateField "date" "%B %e, %Y"
+  , field "nextPost" nextPostUrl
+  , field "prevPost" previousPostUrl
   , defaultContext
+
   ]
     where
       makeLink tag (Just url) = Just $ H.a (fromString tag) ! A.class_ "tag" ! A.href (fromString ("/" ++ url))
       makeLink _  Nothing = Nothing
+
+---------------------------------------------------------------------------------
+previousPostUrl :: Item String -> Compiler String
+previousPostUrl post = do
+    posts <- getMatches postsGlob
+    let ident = itemIdentifier post
+        ident' = itemBefore posts ident
+    case ident' of
+        Just i -> (fmap (maybe "prev" $ toUrl) . getRoute) i
+        Nothing -> return ""
+
+
+nextPostUrl :: Item String -> Compiler String
+nextPostUrl post = do
+    posts <- getMatches postsGlob
+    let ident = itemIdentifier post
+        ident' = itemAfter posts ident
+    case ident' of
+        Just i -> (fmap (maybe "next" $ toUrl) . getRoute) i
+        Nothing -> return ""
+
+itemAfter :: Eq a => [a] -> a -> Maybe a
+itemAfter xs x =
+    lookup x $ zip xs (tail xs)
+
+itemBefore :: Eq a => [a] -> a -> Maybe a
+itemBefore xs x =
+    lookup x $ zip (tail xs) xs
+
+urlOfPost :: Item String -> Compiler String
+urlOfPost =
+    fmap (maybe "" $ toUrl) . getRoute . itemIdentifier
