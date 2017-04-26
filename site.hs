@@ -7,6 +7,7 @@ import Data.String
 import Text.Blaze.Html
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
+import Control.Applicative
 import Hakyll
 
 postsGlob :: Pattern
@@ -110,24 +111,24 @@ mkPostCtx tags = fold
       makeLink _  Nothing = Nothing
 
 ---------------------------------------------------------------------------------
-previousPostUrl :: Item String -> Compiler String
-previousPostUrl post = do
-    posts <- getMatches postsGlob
-    let ident = itemIdentifier post
-        ident' = itemBefore posts ident
-    case ident' of
-        Just i -> (fmap (maybe "prev" $ toUrl) . getRoute) i
-        Nothing -> return ""
-
-
 nextPostUrl :: Item String -> Compiler String
 nextPostUrl post = do
     posts <- getMatches postsGlob
     let ident = itemIdentifier post
+        ident' = itemBefore posts ident
+    case ident' of
+        Just i -> (fmap (maybe empty $ toUrl) . getRoute) i
+        Nothing -> empty
+
+
+previousPostUrl :: Item String -> Compiler String
+previousPostUrl post = do
+    posts <- getMatches postsGlob
+    let ident = itemIdentifier post
         ident' = itemAfter posts ident
     case ident' of
-        Just i -> (fmap (maybe "next" $ toUrl) . getRoute) i
-        Nothing -> return ""
+        Just i -> (fmap (maybe empty $ toUrl) . getRoute) i
+        Nothing -> empty
 
 itemAfter :: Eq a => [a] -> a -> Maybe a
 itemAfter xs x =
