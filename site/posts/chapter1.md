@@ -1,7 +1,7 @@
 ---
 title: "Chapter 1"
 author: Lewis Carroll
-date: 1865-11-26-T01
+date: 1865-11-26T11:04:36Z
 tags: [rabbits, keys]
 description: Down the rabbit hole we go!
 ---
