@@ -18,12 +18,12 @@ blogTitle = "Chris Penner"
 main :: IO ()
 main = siteWithGlobals funcs $ do
   posts <- resourceLoader markdownReader ["posts/*.md"]
-  let tags = getTags id posts
+  let tags = getTags (setExt "html" . addPrefix "/tag/") posts
   writeTemplate "templates/index.html" [mkIndexEnv posts tags]
   writeTemplate "templates/post.html" (over (key "tags" . _Array . traverse) stripHTMLSuffix <$> posts)
   writeTemplate "templates/tag.html" (stripPostsHTMLSuffix <$> tags)
-  staticAssets
   atomRssFeed posts
+  staticAssets
 
 funcs :: MT.Value
 funcs = MT.object
@@ -47,9 +47,9 @@ mkIndexEnv posts tags =
 
 staticAssets :: SiteM ()
 staticAssets = copyFiles
-    [ "css/*.css"
-    , "js/"
-    , "images/"
+    [ "css"
+    , "js"
+    , "images"
     ]
 
 atomRssFeed :: [Value] -> SiteM ()
