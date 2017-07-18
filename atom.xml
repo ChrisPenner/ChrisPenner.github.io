@@ -1,0 +1,679 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <title>Chris Penner</title>
+    <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
+  <updated>2017-07-18T01:00:16Z</updated>
+  <author>
+      <name>Chris Penner</name>
+  </author>
+  <id>http://chrispenner.ca/</id>
+
+  <entry>
+      <title>Shipping Haskell via Homebrew</title>
+      <link href="http://chrispenner.ca/posts/homebrew-haskell.html"/>
+      <id>http://chrispenner.ca/posts/homebrew-haskell.html</id>
+      <updated>2017-04-24T00:00:00Z</updated>
+      <summary>How to set up your Haskell project to distribute via Homebrew</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/homebrew.jpg" alt="Shipping Haskell via Homebrew">
+              <p>If you're reading this I assume you already love Haskell; so I won't convince you of why it's great to work in. One thing that isn't so great is Haskell's story for distributing code to non-haskellers. <code>stack install</code> is great, but most folks don't have stack installed and compiling Haskell projects from source is a lengthy process. These barriers prevented me from sharing my Haskell projects for a long time.</p>
+<p>Here's how I eventually set up my project to be installed via Homebrew.</p>
+<p>We'll be using Homebrew's binary deployment strategy since it's the easiest to both set up and for users to install.</p>
+<p>If you're content to build binaries using stack locally and upload them to Github yourself then you can skip down to the Homebrew Formula section.</p>
+<h2 id="building-binaries-with-travis-ci">Building Binaries with Travis-CI</h2>
+<p>Here's a look at my <code>.travis.yml</code>:</p>
+<pre class="yaml"><code>addons:
+  apt:
+    packages:
+    - libgmp-dev
+language: c
+sudo: false
+cache:
+  directories:
+  - $HOME/.local/bin
+  - $HOME/.stack
+os:
+- linux
+- osx
+before_install:
+- sh tools/install-stack.sh
+- sh tools/install-ghr.sh
+script:
+- stack setup
+- stack build --ghc-options -O2 --pedantic
+after_success:
+- sh tools/attach-binary.sh</code></pre>
+<p>This is just a basic setup for building haskell on Travis-CI; we need the additional package <code>libgmp-dev</code>, cache a few things, and specify to build for both linux and osx. This way we'll have both linux and osx binaries when we're done! In the pre-install hooks we install stack manually, then install <a href="https://github.com/tcnksm/ghr">ghr</a> a github resource management tool.</p>
+<p>You can find <a href="https://github.com/ChrisPenner/tempered/blob/master/tools/install-stack.sh">install-stack.sh</a> and <a href="https://github.com/ChrisPenner/tempered/blob/master/tools/install-ghr.sh">install-ghr.sh</a> scripts on my <a href="https://github.com/ChrisPenner/tempered">Tempered</a> project. They use Travis Env variables for everything, so you can just copy-paste them into your project.</p>
+<p>Inside <code>script</code> we build the project as normal you can do this however you like so long as a binary is produced.</p>
+<p>Lastly is the <a href="https://github.com/ChrisPenner/tempered/blob/master/tools/attach-binary.sh"><code>attach-binary.sh</code></a> script. This runs after the build and uploads the generated binaries to the releases page on Github. It first checks if the current release is tagged and will only build and upload tagged releases, so make sure you <code>git tag vx.y.z</code> your commits before you push them or it won't run the upload step. Next it pulls in your github token which ghr will use to do the upload. You must manually add this to your Travis-CI Environment variables for the project. Create a new github access token <a href="https://github.com/settings/tokens">here</a> then add it to your Travis-CI project at <code>https://travis-ci.org/&lt;user&gt;/&lt;repo&gt;/settings</code> under the name <code>GITHUB_TOKEN</code>.</p>
+<p>The script assumes the binary has the same name as your repo, if that's not the case you can hard-code the script to something else. At this point whenever you upload a tagged release Travis-CI should run a mac and a linux build and upload the result of each to your Github Repo's releases page. You'll likely need to trouble-shoot one or two things to get it just right.</p>
+<h2 id="setting-up-a-homebrew-formula">Setting up a Homebrew Formula</h2>
+<p>You can follow <a href="http://octavore.com/posts/2016/02/15/distributing-go-apps-os-x">this guide by octavore</a> to set up your own homebrew tap; then we'll make a formula. Here's what mine for my tempered project looks like:</p>
+<pre class="ruby"><code>class Tempered &lt; Formula
+  desc &quot;A dead-simple templating utility for simple shell interpolation&quot;
+  homepage &quot;https://github.com/ChrisPenner/tempered&quot;
+  url &quot;https://github.com/ChrisPenner/tempered/releases/download/v0.1.0/tempered-v0.1.0-osx.tar.gz&quot;
+  sha256 &quot;9241be80db128ddcfaf9d2fc2520d22aab47935bcabc117ed874c627c0e1e0be&quot;
+
+  bottle :unneeded
+
+  def install
+    bin.install &quot;tempered&quot;
+  end
+
+  test do
+    system &quot;#{bin}/tempered&quot;
+  end
+end</code></pre>
+<p>You'll of course have to change the names, and you'll need to change the url to match the uploaded tar.gz file (for osx) on your github releases page from step one.</p>
+<p>Lastly we'll need to get the <code>sha 256</code> of the bundle; you can just download it and run <code>shasum -a 256 &lt;filename&gt;</code> if you like; or you can look in your Travis-CI logs for the osx build under the <code>attach-binary.sh</code> step; the script logs out the sha sum before uploading the binary.</p>
+<p>After you've pushed up your homebrew formula pointing to the latest binary then users can install it by running:</p>
+<pre class="sh"><code># Replace the names respectively
+brew update &amp;&amp; brew install githubuser/tapname/reponame</code></pre>
+<p>Each time you release a new version you'll need to update the url and sha in the homebrew formula; you could automate this as a script to run in Travis if you like; I haven't been bothered enough to do it yet, but if you do it let me know and I'll update this post!</p>
+<p>This guide was inspired by (and guided by) <a href="http://taylor.fausak.me/2016/05/09/add-files-to-github-releases/">Taylor Fausak's post</a> on a similar topic; most of the scripts are adapted from his.</p>
+<p>Cheers and good luck!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Kleisli Endomorphisms</title>
+      <link href="http://chrispenner.ca/posts/kleisli-endo.html"/>
+      <id>http://chrispenner.ca/posts/kleisli-endo.html</id>
+      <updated>2017-04-08T00:00:00Z</updated>
+      <summary>Discovering an isomorphism between the Kleisli version of Endomorphisms to the mtl StateT transformer.</summary>
+      <content type="html"><![CDATA[
+              <p>After listening to the latest <a href="https://twitter.com/MagicReadAlong">Magic Read-along</a> episode <a href="http://www.magicreadalong.com/episode/45">&quot;You should watch this&quot;</a> (which you should go listen to now) I got caught up thinking about Brian's idea of an Endomorphism version of Kleisli composition for use with <a href="https://github.com/reactjs/react-redux">Redux</a>, it's actually a very similar model to what I'm using in my <a href="github.com/chrispenner/eve">event framework</a> for event listeners so I figured I'd try to formalize the pattern and recognize some of the concepts involved. They talk about the idea of a Redux-reducer, which is usually of type <code>s -&gt; Action -&gt; s</code>, it takes a state and an action and returns a new state. He then re-arranged the arguments to <code>Action -&gt; s -&gt; s</code>. He then recognized this as <code>Action -&gt; Endo s</code> (an Endo-morphism is just any function from one type to itself: <code>a -&gt; a</code>). He would take his list of reducers and partially apply them with the <code>Action</code>, yielding a list of type <code>Endo s</code> where <code>s</code> is the state object the reducer operates over. At this point we can use the Monoid instance <code>Endo</code> has defined, so we foldmap with Endo to combine the list of reducers into a sort of pipeline where each function feeds into the next; the Endo instance of Monoid is just function composition over functions which return the same type as their input.</p>
+<p>This cleans up the interface of the reducers a fair amount, but what about an alternate kind of <code>Endo</code> which uses Kleisli composition instead of normal function composition? <a href="http://hackage.haskell.org/package/base-4.9.1.0/docs/Control-Monad.html#v:-62--61--62-">Kleisli composition</a> often referenced as (&gt;=&gt;); takes two functions which return monads and composes them together using the underlying bind/flatmap of the Monad. The type of Kleisli composition is: <code>(&gt;=&gt;) :: Monad m =&gt; (a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c</code>. If we could define a nice Endo-style monoid over this type then we could compose reducers like we did above, but also allow the functions to perform monadic effects (which is a bad idea in Redux, but there are other times this would be useful, imagine running a user through a pipeline of transformations which interact with a database or do some error handling). We can easily define this instance like so:</p>
+<pre class="haskell"><code>import Control.Monad
+newtype KEndo m a = KEndo
+  { getKEndo :: (a -&gt; m a) }
+  
+instance Monad m =&gt; Monoid (KEndo m a) where
+  mempty = KEndo return
+  (KEndo a) `mappend` (KEndo b) = KEndo (a &gt;=&gt; b)  </code></pre>
+<p>This is great, now if we have a list of functions of some type <code>[User -&gt; Writer Error User]</code> or something we can use foldmap to combine them into a single function! It works like this:</p>
+<pre class="haskell"><code>actions :: [User -&gt; Writer Error User]
+actions = [...]
+
+pipeline :: User -&gt; Writer Error User
+pipeline = getKEndo . foldMap KEndo $ actions</code></pre>
+<p>The whole Kleisli Endo thing is a cool idea; but this thing has actually been done before! It's actually the same as the <a href="http://hackage.haskell.org/package/mtl-2.2.1/docs/Control-Monad-State-Lazy.html#v:StateT"><code>StateT</code></a> state monad transformer from mtl; let's see how we can make the comparison. A generic Endo is of type <code>s -&gt; s</code>, this is isomorphic to <code>s -&gt; ((), s)</code>, aka <code>State s ()</code>. The trick is that the Kleisli Endo (<code>s -&gt; m s</code> or by isomorphism <code>s -&gt; m ((), s)</code>) can actually be generalized over the <code>()</code> to <code>s -&gt; m (a, s)</code> which incidentally matches <code>runStateT :: StateT s m a -&gt; s -&gt; m (a, s)</code> from mtl!</p>
+<p>So basically KEndo is isomorphic to StateT, but we'd still like a monoid instance for it, Gabriel shows a monoid over the IO monad in <a href="https://youtu.be/WsA7GtUQeB8">&quot;Applied category theory and abstract algebra&quot;</a>, the Monoid he shows actually generalizes to any monad as this instance:</p>
+<pre class="haskell"><code>instance (Monad m, Monoid a) =&gt; Monoid (m a) where
+  mempty = return mempty
+  ma `mappend` mb = do
+    a &lt;- ma
+    b &lt;- mb
+    return (a `mappend` b)</code></pre>
+<p>So that means we can use this instance for StateT (which is a monad). Since <code>()</code> is a trivial monoid (where every mappend just returns <code>()</code>) the simple case is <code>State s ()</code> which was our <code>KEndo</code> of <code>s -&gt; ((), s)</code> but now we have the Monoid instance, which behaves the same as the <code>KEndo</code> instance, so we don't need <code>KEndo</code> anymore. If we want to allow arbitrary effects we use the Transformer version: <code>StateT s m ()</code> where <code>m</code> is a monad containing any additional effects we want. In addition to being able to add additional effects we also gain the ability to aggregate information as a monoid! If you decided you wanted your reducers to also aggregate some form of information, then they'd be: <code>Monoid a =&gt; Action -&gt; s -&gt; (a, s)</code>, which is <code>Action -&gt; State s a</code>, and if <code>a</code> is a monoid, then the monoid instance of <code>State</code> acts like Endo, but also aggregates the 'a's along the way!</p>
+<p>Lastly we recognize that in the case of the Redux Reducers, if we have a whole list of reducers: <code>Action -&gt; State s ()</code> then we can rephrase it as the ReaderT Monad: <code>ReaderT Action (State s) ()</code>, which maintains all of the nice monoids we've set up so far, and becomes even more composable!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Tail Recursion In Python</title>
+      <link href="http://chrispenner.ca/posts/python-tail-recursion.html"/>
+      <id>http://chrispenner.ca/posts/python-tail-recursion.html</id>
+      <updated>2016-07-26T00:00:00Z</updated>
+      <summary>Tail Recursion in python without introspection</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/ouroboros.jpg" alt="Tail Recursion In Python">
+              <p>Some programming languages are <a href="https://en.wikipedia.org/wiki/Tail_call">tail-recursive</a>, essentially this means is that they're able to make optimizations to functions that return the result of calling themselves. That is, the function returns <strong>only</strong> a call to itself.</p>
+<p>Confusing, I know, but stick with me. It turns out that most recursive functions can be reworked into the tail-call form. Here's an example of the factorial function in it's original form, then reworked into the tail-call form.</p>
+<script type="text/javascript" src="https://gist.github.com/ChrisPenner/c0b3f4feb054daa2f6370d2e9961d6d3.js"></script>
+<p>They both look similar, and in fact the original even <strong>looks</strong> like it's in the tail call form, but since there's that pesky multiplication which is outside of the recursive call it can't be optimized away. In the non-tail version the computer needs to keep track of the number you're going to multiply it with, whereas in the tail-call version the computer can realize that the only work left to do is another function call and it can forget about all of the variables and state used in the current function (or if it's really smart, it can re-use the memory of the last function call for the new one)</p>
+<p>This is all great, but there's a problem with that example, namely that python doesn't support tail-call optimization. There's a few reasons for this, the simplest of which is just that python is built more around the idea of iteration than recursion.</p>
+<p>But hey, I don't really care if this is something we should or shouldn't be doing, I'm just curious if we can! Let's see if we can make it happen.</p>
+<script type="text/javascript" src="https://gist.github.com/ChrisPenner/c958afbf6e7a763c188d8b83275751bb.js"></script>
+<p>Now, don't get scared by decorators if you haven't seen them before, in fact go <a href="http://thecodeship.com/patterns/guide-to-python-function-decorators/">read about them now</a>, basically they're functions which are called on other functions and change the behaviour in some way.</p>
+<p>This decorator will call the function it's given and will check to see if it wants to 'recurse'. We signal a 'recursion' by simply raising an exception with the arguments we'd like to recurse with. Then our decorator simply unpacks the variables from the exception and tries calling the function again.</p>
+<p>Eventually we'll reach our exit condition (we hope) and the function will <strong>return</strong> instead of raising an exception. At this point the decorator just passes along that return value to whoever was asking for it.</p>
+<p>This particular method helps out with doing recursive calls in python because python has a rather small limit to how many recursive calls can be made (typically ~1000). The reason for this limit is (among other things) doing recursive calls takes a lot of memory and resources because each frame in the call stack must be persisted until the call is complete. Our decorator gets around that problem by continually entering and exiting a single call, so technically our function isn't actually recursive anymore and we avoid the limits.</p>
+<p>I tested out both versions, the normal version hits the tail-recursion limit at factorial(980) whereas the tail-recursive version will happily compute numbers as large as your computer can handle.</p>
+<p>There's an <a href="http://code.activestate.com/recipes/474088-tail-call-optimization-decorator/">alternative approach</a> that actually uses stack introspection to do it, but it's a bit more complex than the one we built here.</p>
+<p>Hope you learned something, cheers!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>The Interface We Need</title>
+      <link href="http://chrispenner.ca/posts/dont-argue.html"/>
+      <id>http://chrispenner.ca/posts/dont-argue.html</id>
+      <updated>2016-02-15T00:00:00Z</updated>
+      <summary>Starting with the interface can make things easier for everyone</summary>
+      <content type="html"><![CDATA[
+              <p>I suffer from a not-so-rare condition where as soon as a problem is presented to me I immediately start trying to solve it with the tools I know well. This may not sound like a bad thing, but what happens is that I end up with a user interface built around supporting the implementation I was planning to write, which is very rarely an interface that anyone would actually like to use. In the worst case I end up changing my implementation plans along the way and now we're stuck with a crappy API designed around an implementation that doesn't even exist! I've been learning that it's usually better to design an interface that's elegant and does what you need, then the implementation will fall into place from there.</p>
+<p>Anyway, I ended up learning this lesson once more the other day, here's the story: I was writing a laughably simple script and I wanted it to be able to accept arguments from the command line. I remembered that Python has an argument parsing module in its standard library (argparse), but upon looking it up I remembered how much of a pain it was to get all your arguments set up. Argparse is great in that it allows you to do complex things with arguments, but I think there should be an alternate path to avoid the complexity when all you need is to grab a few arguments from the command line. Sure I could have just used sys.argv manually, but I wanted to use command line '--options' and parsing those out from argv would be a royal pain.</p>
+<p>In the end I decided to write my own little helper module for this sort of thing, which you can find here. The goal was to design the simplest possible interface that just does the right thing.</p>
+<p>At this point I would usually write out a few example use-cases with an interface that I'd want to use even if I'm not sure it's possible to implement that way. For some reason I avoided my own advice this time and started on the implementation first. Here's an example of the interface that resulted from my original implementation:</p>
+<script src="https://gist.github.com/ChrisPenner/1436ac6d9f73dd8a9242.js?file=old_syntax.py"></script>
+<p>Hrmm, so it works, but you can see that we're writing each argument out twice. Keyword args are also doubled, and for some reason keywords aren't strings, whereas the other arguments are. The worst offender is the 'args' syntax. In order to specify we want to collect extra arguments into a list we set &quot;args=True&quot;, then have an argument named args below. Hrmm, all of this is a little clunky, this definitely isn't an &quot;it just works&quot; scenario and honestly it's just as easy to screw up as using argparse in the first place. It was at this point that I realized I built it this way because it was easy to implement, not because it was easy to use! So back to the drawing board, let's design something we'd like to use first, then see if we can implement it!</p>
+<script src="https://gist.github.com/ChrisPenner/1436ac6d9f73dd8a9242.js?file=new_syntax.py"></script>
+<p>Whoah, okay that's a lot simpler! No more duplication, I'd use that! But it almost seems a bit too much like magic, is it even possible to implement it this way? Let's try it out, one of the things we wanted was to be able to handle '--options' on the command line, and argparse has that ability, so we should probably take advantage of that. To that end we need to pass the names of the arguments to argparse to set it up, how can we do that now that we're not passing argument names to our decorator? After a quick dive into the depths of Stack Overflow I discovered what we need in the 'inspect' module from the standard library.</p>
+<p>The <strong>inspect</strong> module allows us to peer into code that's running during execution. What I though was impossible is actually pretty easy to do! Using inspect's getargspec function we can get the names of the arguments of a function just like we need! From this point it was just a matter of outfitting the decorator to handle different combinations of arguments, keyword arguments, and splat arguments properly and we can end up with exactly the API we wanted! The code ends up being much cleaner too since we don't have to deal with as many edge cases.</p>
+<p>We ended up with a much simpler interface, one that we probably wouldn't have even thought was possible if we'd started thinking about the implementation too early on. This just goes to show that designing a nice interface first can lead to better design, a much improved user experience, and in this case: cleaner code! Remember to put the interface first the next time you're implementing some new feature for your app.</p>
+<p>You can find the full decorator <a href="https://github.com/chrispenner/dont-argue">here</a>, it's only a few lines long.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Let there be Truth</title>
+      <link href="http://chrispenner.ca/posts/let-there-be-truth.html"/>
+      <id>http://chrispenner.ca/posts/let-there-be-truth.html</id>
+      <updated>2016-01-02T00:00:00Z</updated>
+      <summary>Let&#39;s re-visit truthy/falsy.</summary>
+      <content type="html"><![CDATA[
+              <p>Okay, so here's the deal. The idea of &quot;truthy&quot; and &quot;falsy&quot; values is a pretty common language pattern these days that saves us all some time and effort. I've been thinking about it lately and I think we made a pretty big mistake as to the implementation of this idea in most languages, namely that 0 is usually considered &quot;falsy&quot;. Why did we do that? Yes, I know that it's how false was represented in C, but modern languages aren't C and they can make their own choices. We have types and classes and all sorts of nice tools now, we don't need 0 to represent false.</p>
+<p>So what should 0 be then? I think we should revisit this and actually think about it rather than just allowing old limitations to make our decision for us. I'm going to make the case that 0 should be truthy, the argument for this is very simple: 0 is a value. In most cases where I've seen truthyness and falsyness used in code it's used to check whether a variable has a value; something like <code>if(account){do stuff with account}</code>. We need to check that the 'account' we returned from a function or API call actually exists before we perform operations on it, ensuring that it isn't 'null' or 'None' or something like that. This case works great, but what about this: <code>if(number_of_accounts){do stuff} else {raise APIError}</code>? Granted, this is a simplified case that won't come up often, but in this case if there are 0 accounts, our code will raise an APIError rather than executing our operation. In this case 0 is clearly a value, and so should be considered truthy.</p>
+<p>While the previous example may seem contrived, it comes from a real-life case that I dealt with at work one day. We were doing some pretty complex work with web forms using JavaScript and had multiple field-types in the form. Some of these fields used numerical values, and since <code>if (value !== null &amp;&amp; value !== undefined)</code> is a bit wordy, in most cases we were just using <code>if (value)</code>. This worked great in almost all cases, including checking whether or not the user had typed in a text field (<code>&quot;&quot;</code> is falsy). Unfortunately we hadn't handled the case where the value of a numerical field was 0, and were incorrectly throwing validation errors. We knew 0 was a value, but JavaScript disagreed and treats it as falsy, causing us a bug or twelve.</p>
+<p>I'm sure we're not the only ones to have made that mistake. Clever folks can probably come up with some case where it makes sense for 0 to be falsy, but I think that the value-checking scenario I've presented above is the most common use-case of truthy/falsy by far.</p>
+<p>It's unfortunate, but languages are largely undecided on truthy/falsy. Python has all of <code>'', 0, {}, []</code> and <code>None</code> as falsy values, in JavaScript <code>0, '', null,</code> and <code>undefined</code> are all falsy, but <code>[]</code> and <code>{}</code> are truthy! PHP even considers <code>'0'</code> to be false! Ruby has the strict definition that only nil and False are considered falsy, everything else (including <code>0, '', [], {}</code>) are ALL considered true!</p>
+<p>I'm still undecided as to the fate of <code>'', [],</code> and <code>{}</code>, but I think it's time for 0 to be truthy.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Autoenv Trick</title>
+      <link href="http://chrispenner.ca/posts/auto-env-trick.html"/>
+      <id>http://chrispenner.ca/posts/auto-env-trick.html</id>
+      <updated>2015-09-04T00:00:00Z</updated>
+      <summary>Use Auto-env to streamline your workflow.</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/autoenv.gif" alt="Autoenv Trick">
+              <p>Firstly, if you haven't heard of <a href="https://github.com/kennethreitz/autoenv">autoenv</a> then I suggest you go check it out now. Basically it allows you to run arbitrary shell scripts any time you enter a directory or any of its children, it's pretty useful.</p>
+<p>You can do all sorts of things with this tool, though most people use it to configure their environment variables (hence the name). I use it for that as well, but I've added a new trick.</p>
+<p>Basically, each time you enter a project it will try to join an existing tmux session for that project, if none exist it will create one.</p>
+<p>Here's what's in each project's '.env' file now:</p>
+<script src="https://gist.github.com/ChrisPenner/83ad2665eed3dd5fff15.js"></script>
+<p>I use vim with tmux extensively, and so I often set up a workplace with several tmux windows and splits. Setting all this up and remembering what I was working on every time I context switch can be a bit of a pain, so now I use autoenv to manage it for me. What would usually happen to me is that I'd set up a tmux session with all of this, then forget about it next time I went to work on this project, but now every time I enter a project's directory it automagically puts me back into the session.</p>
+<p>Simple! Now I can't forget!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Semantic Versioning</title>
+      <link href="http://chrispenner.ca/posts/use-semantic-versioning.html"/>
+      <id>http://chrispenner.ca/posts/use-semantic-versioning.html</id>
+      <updated>2015-04-02T00:00:00Z</updated>
+      <summary>null</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/versioning.jpg" alt="Semantic Versioning">
+              <p>So! I'm going to talk about Semantic Versioning today because it's something that I think <em>everyone</em> should be using. Why? Because it takes something that is largely arbitrary and meaningless and redeems it by giving it meaning. A side effect of the system is that everyone thinks a little more about how their software changes affect those who actually use it.</p>
+<p>How's this whole Semantic Versioning thing work? Well essentially it's a set of conventions for how version numbers are changed when software is altered. I recommend reading the whole description <a href="http://semver.org/">here</a>, but I'll give you the TL;DR version. The idea is that versions should take the form X.Y.Z where each letter is an integer (e.g. 2.5.17). Each number has it's own meaning; MAJOR.MINOR.PATCH</p>
+<p>X = MAJOR-version: This is incremented any time the new API is not back compatible with an API you've previously shipped. It doesn't matter how different it is, if the API acts differently, change the MAJOR version.</p>
+<p>Y = MINOR-version: This is incremented when the API is changed, but it's completely back compatible with previous versions of this MAJOR release. Use this when ADDING features to your API.</p>
+<p>Z = PATCH-version: This is incremented when you make bugfixes that don't affect the API.</p>
+<p>The idea is to allow devs to reason about when/how to update their dependencies. Under this system, the dev knows that they can safely update to any version that changes the MINOR or PATCH versions, but that a change in the MAJOR version will mean API alterations which may break their application.</p>
+<p>It's as simple as that. Read <a href="http://semver.org/">semver.org</a> for more info on all of this, and start using this system TODAY!</p>
+<p>Cheers!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>BoxKite: Open-Sourced</title>
+      <link href="http://chrispenner.ca/posts/boxkite.html"/>
+      <id>http://chrispenner.ca/posts/boxkite.html</id>
+      <updated>2015-03-25T00:00:00Z</updated>
+      <summary>I&#39;ve open-sourced the code that I use to generate this blog.</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/boxkite.png" alt="BoxKite: Open-Sourced">
+              <p>When I was first developing interested in web-technologies (almost exactly a year ago now) I wanted to build some things to test my skills. I've always believed that book learning will only get you so far, you discover so much more about a system by building something tangible with it. I decided as a first project to make a blog for myself. I looked at things like Jekyll and Wordpress, but I initially had trouble customizing Jekyll (though I'm sure I could manage it now). I didn't think I'd learn what I wanted to from building with Wordpress, so I decided to go with a custom solution.</p>
+<p>I fiddled around and made a few handlers in a Python Google App Engine site, adding a bit of logic to convert Markdown files into HTML and insert them into jinja templates. This worked pretty well so I cleaned it up, added a few functions to parse metadata about each post, using it to build a table of contents and a site structure. Pretty soon I had a working blog framework that I knew from front to back and it was simple enough to extend in any way I could imagine.</p>
+<p>The result is an adaptable and intuitive framework that for some unknown reason I've decided to call &quot;BoxKite&quot;. Check out the Source (and installation instructions) here: <a href="http://github.com/ChrisPenner/BoxKite">BoxKite</a></p>
+<p>So why should you try out BoxKite? Well, it depends on what you want to use it for; but here are some things that I like about it:</p>
+<ul>
+<li>ALL data related to a post is stored plain-as-day in the post's markdown file. (I can't stress how nice this is for organizational purposes)</li>
+<li>No managing images or content through clunky CMS systems, just put it in the right folder and reference it in your post or template.</li>
+<li>Need to change a post or it's tags/categories/image? Just edit the text file and everything dependent on it will be updated when you deploy.</li>
+<li>Want to add something unique to your site? Just edit the jinja template (or CSS), everything is available to you.</li>
+<li>The entire site can be exported statically if you have a vendetta against using web-servers (or performance concerns, see the README).</li>
+<li>It's responsive and scales to the viewport size. It also reflows content properly for a good mobile experience.</li>
+<li>Did I mention that comments and social media connectivity are a breeze? They're configured by default. You just need to input your Disqus name.</li>
+</ul>
+<p>Who shouldn't use BoxKite?</p>
+<ul>
+<li>People who aren't interested in learning anything about websites</li>
+<li>Companies with hundreds and hundreds of posts.</li>
+<li>Blogs with many authors, this set-up is great for personal blogs, but breaks down with more than a few people posting.</li>
+</ul>
+<p>In conclusion, I'd highly recommend building something like this from scratch in whatever web framework you like to use (node, rails, appengine, etc.). It's a great way to learn, and you'll understand the whole framework better (and web tech as a whole) as a result. This is actually my first try at open-source and any sort of distributable project, so take it with a grain of salt, but take a look at it, mess around with it, and let me know what you think! Cheers!</p>
+<p><a href="http://github.com/ChrisPenner/BoxKite">BoxKite at Github</a></p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Getting Schooled</title>
+      <link href="http://chrispenner.ca/posts/getting-schooled.html"/>
+      <id>http://chrispenner.ca/posts/getting-schooled.html</id>
+      <updated>2015-03-19T00:00:00Z</updated>
+      <summary>When did schooling become more important than skill? Should we really be discriminating against people based on the school they went to?</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/getting-schooled.png" alt="Getting Schooled">
+              <p>I must prefix this discussion with the disclaimer that I haven't done any studies nor performed official research, however I have a general feeling, it's an atmosphere, that I've noticed. And often a shared feeling like this, or a bias perpetuated in the media is enough to make a difference in the way we think about things.</p>
+<p>In the TV Series <strong>Suits</strong> (which I've been watching lately) the main law firm has a strict policy wherein they hire exclusively from Harvard. &quot;Of course!&quot; many people say... &quot;Harvard is the best!&quot;, but are they really? Is everyone who graduates from Harvard just inherently better than those girls and guys who get their community college degrees or go to a local state University in Mississippi somewhere?</p>
+<blockquote>
+<p>When did schooling become more important than skill?</p>
+</blockquote>
+<p>Certainly these schools have obtained their reputations as a result of careful planning, good professors, and a rigorous and uncompromising gauntlet of education. This means that to make it through one of these schools you must be rather clever, and that graduating there DOES mean something, but I'm not convinced that it means enough to justify this educational prejudice that I've seen.</p>
+<p>These Ivy League schools require amazing marks, community involvement, and LOTS of money for students to attend. If a student is missing one or more of these things, they will miss out on the opportunity to attend one of these schools, and as a result will miss many further opportunities that they may have otherwise been been qualified for. Many companies will pass over State University degrees for someone from Yale without even a second thought. When did schooling become more important than skill? Someone who made a few poor choices in high school and didn't find their passions until a few years into college is systematically disadvantaged from that point on. It doesn't have to be this way!</p>
+<p>I'm Canadian, and as far as I can tell, this problem hasn't gained much traction here. I can get just as far with a degree from University of Saskatchewan as I can with one from University of Toronto. In fact, I'd never even heard of University of Toronto until now when I needed to look it up to confirm that it actually exists. Companies here tend to use degrees as a baseline requirement for a job, but not as a strong indicator of skill or personal ability. This is good, it gives equal opportunity to all qualified applicants and makes the job hunt about finding the person most qualified, not the one with the most family money or who happened to be the smartest when they were 16. Additional benefits are that students can go to school close to home (further reducing financial barriers to education), or can choose a school that has programs that are interesting to them; making these choices without fear that their future will suffer as a result.</p>
+<p>Discrimination is discrimination; if a company is hiring someone based on their age, race, religion, OR their Alma Mater instead of solely evaluating their skills as objectively as possible, then it's still discrimination.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Gem: Duckling</title>
+      <link href="http://chrispenner.ca/posts/gem-duckling.html"/>
+      <id>http://chrispenner.ca/posts/gem-duckling.html</id>
+      <updated>2015-02-21T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/duckling.png" alt="Gem: Duckling">
+              <p>Duckling is a very interesting project that I think exemplifies many great design principles. It's a parser written in Clojure that can turn natural language sentences into structured computer readable data. Clojure, if you haven't heard, is a Lisp that runs on Java's virtual machine. Now's a good a time as any to check it out!</p>
+<p>Here are some things Duckling can understand:</p>
+<ul>
+<li>&quot;from 9:30 - 11:00 on Thursday</li>
+<li>&quot;the day before labor day 2020&quot;</li>
+<li>&quot;thirty two Celsius&quot;</li>
+<li>&quot;seventh&quot;</li>
+</ul>
+<p>Some of the design decisions that really set Duckling apart:</p>
+<ul>
+<li>Extensibility: Easily write your own set of rules to make it work for your own purposes.</li>
+<li>Probabilistic: Duckling doesn't always know what's right, but it'll take its best guess and tell you how sure it is.</li>
+<li>Data Agnostic: Duckling doesn't make assumptions about what you need, it can be trained to do whatever you like.</li>
+</ul>
+<p>Go ahead and check out the docs and give building your own parser a try: <a href="http://duckling-lib.org/">Duckling</a>.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to catch new articles as they come!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Worth a Read #4 - Unix Tools</title>
+      <link href="http://chrispenner.ca/posts/worth-a-read-4.html"/>
+      <id>http://chrispenner.ca/posts/worth-a-read-4.html</id>
+      <updated>2015-02-13T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/unix-prompt.png" alt="Worth a Read #4 - Unix Tools">
+              <p>Okay! This time we're reading about cool and useful Unix tools. We've got some wargames to start us off, a fun way to learn Unix better through a series of challenges. Next is a great series of articles regarding using Unix as a development environment, then an overview of awk and tmux, some of the most useful Unix tools that I use. Finally a list of some other cool tools you may want to check out. I hope you find that it's worth a read!</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to keep up with future posts!</p>
+<h3 id="worth-a-read">Worth a read:</h3>
+<ul>
+<li><a href="http://overthewire.org/wargames/bandit/">Some fun wargames to learn the secrets of Unix</a></li>
+<li><a href="http://blog.sanctum.geek.nz/series/unix-as-ide/">Using Unix as an IDE</a></li>
+<li><a href="http://code.tutsplus.com/tutorials/intro-to-tmux--net-33889">Overview of tmux, a session manager</a></li>
+<li><a href="http://www.vectorsite.net/tsawk.html">Basic 'awk' overview, the swiss-army knife of text filtering</a></li>
+<li><a href="http://kkovacs.eu/cool-but-obscure-unix-tools">A list of cool and useful tools, pick a new one to learn</a></li>
+</ul>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Vim vs. Emacs?</title>
+      <link href="http://chrispenner.ca/posts/vim-vs-emacs.html"/>
+      <id>http://chrispenner.ca/posts/vim-vs-emacs.html</id>
+      <updated>2015-02-06T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/vim-vs-emacs.png" alt="Vim vs. Emacs?">
+              <p>So about a year ago I realized that as someone going into Computer Science as a career I would be typing for the rest of my life. Somewhere on the vastness of the internet I read that learning how to properly use a text editor (or, how to use a proper editor) would not only help me type faster, but also that being able to get what's in my head onto the screen efficiently would help keep me focused on the task at hand. These posts all came with the disclaimer that it would take time, effort, and that learning something new would slow me down at the start. However, if I can spend a few hours here and there to save myself countless hours throughout my career, it doesn't take complex mental math to see that it's a worthwhile thing to do.</p>
+<p>I started researching the best editor to learn, there're hundreds out there, and most shortcuts and advanced techniques tend to be non-transferable (at least among the more complex editors). After a short period of watching some videos and reading a thing or two I quickly uncovered the presence of the everlasting holy war between Emacs and Vi users. Personally I've never been interested in participating in fanboy-ism. I don't particularly care what anyone else uses; as long as I'm content and efficient with what I have. Unfortunately though, due to the holy war it's nearly impossible to get any sort of objective assessment of the pros and cons of each editor.</p>
+<p>Nonetheless I picked one and started spending some time with it. One thing is for certain, learning a new system definitely changes the way you approach data entry. I felt pretty much useless and slow at first, but held to my stubbornness and waited it out. It wasn't long before I had the basics down, and I realized that having something so amazingly customizable was really an amazing thing. In fact, thinking of it now I can't come up with a single other system that I use that offers this level of highly accessible customization. My car doesn't let me record a macro of me backing out of my driveway, (probably a good thing), I can't easily get my web-browser to load specific sites dependent on the time of day, heck I can't even change most keyboard shortcuts in my OS. The customization quickly became an addiction, I'd think constantly about how I could improve my work-flow or shave a few keystrokes off of a task I do often. Granted, all this thought and consideration often caused me to take an hour or so to figure out something that saved me a total of 30 seconds; but in that hour I'd also learn 2 or 3 other tricks that would also save me 30 seconds each time I used them. It became really fun actually to find new tricks and improve my expertise, and now I consider myself something of a Guru in my editor of choice (though I still have endless amounts to learn).</p>
+<p>This post isn't to tell you which editor to use, I'd sooner help you decide whether you should bother learning one at all. First, if you're not a programmer, writer, or typist, I'd say it's probably just not worth the effort. I absolutely love these editors, but that's because as a programmer I'm often doing complicated reformatting, refactoring, editing dozens of files at a time, and testing code alongside it. If all that you do is type up an essay now and again or write up your grocery list, you're just not going to get a very good return on your investment. If you fit into one of the typing-centric categories however it MAY be worth your while. If you spend a lot of time in code then I'd say it's worth it (even if you're already far along in your career). Note that Vim and Emacs actually do relatively little in the way of helping with your TYPING, but rather help almost exclusively with EDITING and ORGANIZATION.</p>
+<p>Without further delay, here's a list of objective (see: opinionated) pros and cons (take with a grain [or boulder] of salt).</p>
+<h2 id="emacs">Emacs</h2>
+<p>Emacs is often mocked by Vim users as &quot;A great operating system, lacking only a decent editor&quot;, while Emacs users would disagree, there's still a shadow of truth in this statement. Emacs prides itself on being able to organize your projects, write your email, play Tetris, compile your code, and even tie your shoes for you in the morning! (Oh and it'll edit text too!)</p>
+<p>This means that if you choose Emacs you'll likely end up using Emacs for almost everything text related, which is great actually because it means you'll only need to learn one set of shortcuts and one interface.</p>
+<p>Emacs is also great (and far ahead of Vim) when it comes to doing more than one thing at once, and for being able to run and check code as you work on it. It's the defacto editor of most Lisps (it's also written in a Lisp variant, which helps) because it's a cinch to get a shell or REPL running alongside your project. All of these things are possible in Vim too of course, though you'll be in for more than a few headaches.</p>
+<p>The downsides of emacs include the famed 'Emacs-pinky', a reference to the strain and difficulty of inputting some of Emacs's long mapping sequences. Since Emacs has decided to leave the keyboard open for typing it means all editor commands and shortcuts use one or more modifiers like control or alt to enter. This has the benefit of letting beginners type away on the keyboard as they expect it to work, but these complicated sequences can get tiresome and difficult to remember later on.</p>
+<p>Emacs has <strong>strong</strong> extensibility in the way of plugins and sheer Lisp hackability. If there's something you want to do, you can probably find an Emacs plugin to help you do it, or build one yourself. You'll need to learn a bit of eLisp to do accomplish anything, but it makes sense and comes with a lot of power once you get used to it. Though honestly in most cases whichever functionality you require is probably already a part of some plugin in the repository.</p>
+<h2 id="vim">Vim</h2>
+<p>First off, Vim is a modal editor, that is to say that keys on your keyboard will do different things depending on which state the editor is in. This is both its weakest and strongest point. Most user interface designers will tell you that modes should be avoided whenever possible, consult the insightful <a href="http://www.azarask.in/blog/post/is_visual_feedback_enough_why_modes_kill/">Aza Raskin</a> for further study. However, in this case the modes are central to the whole design, so although they definitely confuse new users, seasoned Vimmers never forget which mode they're in because they use them very particularly, staying in 'normal' mode always except when switching to insert or visual mode for a quick change.</p>
+<p>Vim takes a different design philosophy and runs with it. Vim is about having a dialog with your editor. You tell it what you want it to do and where to do it and Vim will happily oblige. It's best to think of Vim commands and shortcuts more as a language than as individual keypresses. For example, to change a paragraph to something else you position the cursor within the paragraph and press the keys (ignore the quotes) &quot;cip&quot;. This is a small statement in Vim's 'language' that states (c)hange (i)nside this (p)aragraph. It has a verb (change) and an object to do the verb to (inside the paragraph). This system makes it very easy to remember Vim commands because you only need to spell out what you'd like to do (most keys have a pretty good mnemonic associated with them). Once you learn an action for use in one area you can automatically assume it'll also work on the other object and motion commands you already know.</p>
+<p>Vim excels at editing the text that's in front of you as quickly and efficiently as possible. What it lacks in organization it makes up for in speed. It boots up in milliseconds and works just as well over ssh as it does locally. It's installed <em>almost</em> everywhere and like Emacs has a large userbase that is constantly adding functionality in the way of plugins.</p>
+<p>Vim is very easy to customize, maybe not as easy as ticking boxes in a preferences panel, but you can get it to do almost anything you'd like if you think about it. One of the beautiful things about creating vim commands or mappings is that it uses the same interface as normal editing. The mapping you need is exactly what you'd type inside the editor. This means that the more you learn in the main editor, the more customization options you unlock.</p>
+<p>Unfortunately if you'd like to write any plugins or more complex functions you'll need to learn some Vimscript, which honestly is simply an atrocious language (nearly everyone agrees).</p>
+<p>Another area Vim currently has trouble is mostly related to concurrency. Vim is primarily single-threaded and so can't do more than one thing at a time. This currently is being addressed in an offshoot called NeoVim, (see my post on that <a href="http://www.chrispenner.ca/post/gem-neovim">here</a>), though it's got a bit of a way to go yet. Vim isn't great at multitasking or doing complex tasks like email or chat, but it's blazing fast at doing the editing it's designed for.</p>
+<h2 id="summary">Summary</h2>
+<p>So, there's good and bad to each, though they definitely do fill two different niches at the end of the day, if only we could have both... oh wait! There's a way to do that actually. There's a plugin called Evil that emulates Vim's modal interface almost flawlessly within Emacs. This allows the quick and effective editing commands of Vim within the adaptability and all-inclusiveness of Emacs. Some would say this is the way to go, the best of both worlds, but the jury is still out on this one.</p>
+<p>Some things to check out (check back for more posts on getting started soon):</p>
+<ul>
+<li>Type vimtutor on your terminal to get started on Vim.</li>
+<li>Download &amp; open Emacs then press Ctrl + h, t for an Emacs starter.</li>
+<li>Bling has written some great articles on Emacs, Vim, and their intersection <a href="http://bling.github.io/blog/2013/10/16/emacs-as-my-leader-evil-mode/">here,</a> <a href="http://bling.github.io/blog/2013/10/27/emacs-as-my-leader-vim-survival-guide/">here,</a> and <a href="http://bling.github.io/blog/2013/10/16/emacs-as-my-leader-evil-mode/">here.</a></li>
+</ul>
+<p>Anyways, I hope you consider putting in a bit of an investment to save yourself time in the long run! It's totally worth it, no matter which tool you use (Sublime Text is pretty good too!). Drop a comment or find me on twitter if you have any questions. Cheers!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Gem: Font-Awesome</title>
+      <link href="http://chrispenner.ca/posts/gem-font-awesome.html"/>
+      <id>http://chrispenner.ca/posts/gem-font-awesome.html</id>
+      <updated>2015-01-21T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/font-awesome-logo.png" alt="Gem: Font-Awesome">
+              <p>Not all open-source projects are software or code! Here's a project that has definitely helped me out as I build various websites.</p>
+<p>Their site states their project best: &quot;Font Awesome gives you scalable vector icons that can instantly be customized — size, color, drop shadow, and anything that can be done with the power of CSS.&quot; This has many advantages over using images for these icons. Firstly they can be included with other text in-line without any trouble, no need to worry about margins/padding etc. The icons will also scale with their font size according to the CSS. Lastly (this was a game-changer for me) you can change the colour of the icons in any way you can change text-colour. This makes mouse-over responsive buttons a cinch and also means you don't need to recolor every icon on the site when you change your colour-scheme.</p>
+<p>All of these perks are on top of the fact that you don't need to hire an artist to create these icons in the first place, they've got quite a comprehensive collection already.</p>
+<p>TLDR:</p>
+<ul>
+<li>Every type of icon you could need available as one easy font.</li>
+<li>Icons scale, change color, and react like text.</li>
+<li>Free!</li>
+</ul>
+<p>Go ahead and check out the icons and maybe even add one of your own here: <a href="http://fortawesome.github.io/Font-Awesome/">Font-Awesome</a>.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to catch new articles as they come!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Worth a Read #3 - Typography</title>
+      <link href="http://chrispenner.ca/posts/worth-a-read-3.html"/>
+      <id>http://chrispenner.ca/posts/worth-a-read-3.html</id>
+      <updated>2015-01-13T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/typography-t.png" alt="Worth a Read #3 - Typography">
+              <p>This time we're talking typography. Some would say that good web-design is 90-99% typography. I'll let you decide whether you want to believe that, but regardless a few more tools in the typography tool-chest sure doesn't hurt. Here are a few articles to check out.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to keep up with future posts!</p>
+<h3 id="worth-a-read">Worth a read:</h3>
+<ul>
+<li><a href="http://typ.io">Some well curated heading &amp; body font pairings</a></li>
+<li><a href="http://tendollarfonts.com/">Beautiful Ten Dollar Fonts!</a></li>
+<li><a href="http://femmebot.github.io/google-type/">Some very beautiful handpicked font-pairs from (Free) Google Webfonts</a></li>
+<li><a href="http://hellohappy.org/beautiful-web-type/">More of the best (Free!) Google Webfont pairings</a></li>
+<li><a href="http://flippingtypical.com/">Display and peruse all the fonts on your computer</a></li>
+<li><a href="http://trentwalton.com/2012/06/19/fluid-type/">A discussion of adapting typography to the web. Mostly here because I just really wanted to link to Trent Walton, he's a typography/web-design genius</a></li>
+<li><a href="https://tobi.oetiker.ch/lshort/lshort.pdf">A not so short introduction to the LaTeX document layout and typesetting system</a></li>
+</ul>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Gem: Git</title>
+      <link href="http://chrispenner.ca/posts/gem-git.html"/>
+      <id>http://chrispenner.ca/posts/gem-git.html</id>
+      <updated>2015-01-05T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/git-logo.png" alt="Gem: Git">
+              <p>Speaking of open-source gems, it's tough to make it too far into this topic without mentioning Git. If you've been at all involved in the open source community recently then you're certainly familiar with it already. If not, then learning Git is a great place to start your journey into open-source tech.</p>
+<p>Git is a distributed version control system that has taken the open-source world by storm. In contrast with most previous version control systems, everyone working on a project has access to their own copy of the source files. They can change them as they like, and then may merge their changes back into the main repository when their change is complete. This method allows hundreds of people to work on the same project at a time, and git's focus on branching and merging makes it painless to add experimental features. In addition to it's unique design, git is also blazing fast in comparison with it's competition.</p>
+<p>Git has seamless integration with Github, a website dedicated to hosting open-source software that is managed with git. At any rate, I can yammer on about it, or you can just go check it out and start using it.</p>
+<p>TLDR:</p>
+<ul>
+<li>Git's <em>Distributed</em> nature allows hundreds of people to work on a project at the same time.</li>
+<li>Git is fast and is built around the ideals of quick branching and merging</li>
+<li>Git's integration with Github (for hosting) make it a great choice for hosting open-source projects.</li>
+</ul>
+<p>If you want to check out the source, of course you can find it on <a href="https://github.com/git/git">Github</a>, read the documentation to learn how to contribute.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to catch new articles as they come!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Procedural Generation is the Future</title>
+      <link href="http://chrispenner.ca/posts/procedural-content.html"/>
+      <id>http://chrispenner.ca/posts/procedural-content.html</id>
+      <updated>2015-01-03T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/no-mans-sky.png" alt="Procedural Generation is the Future">
+              <p>I 've been noticing a trend in gaming recently towards procedurally generated content. <a href="https://minecraft.net/">Minecraft</a> has it, <a href="http://playstarbound.com/">Starbound</a> and <a href="http://terraria.org/">Terraria</a> have it, and randomized rogue-likes are running amok. No longer do we just play the same level over and over again until we memorize it well enough (remember Super Mario Bros?). The new gaming paradigm is one of discovery and adventure! While I know from experience that meticulously planned dungeons and carefully crafted levels can deliver an amazing experience, there are several reasons as to why I think the trend towards procedurally generated content is a good one.</p>
+<p>These are some of the primary benefits I've discovered in using procedural generation:</p>
+<ol style="list-style-type: decimal">
+<li><strong>PG Allows you to produce near unlimited amounts of content.</strong></li>
+<li><strong>PG Saves disk space.</strong></li>
+<li><strong>PG Spikes Creativity</strong></li>
+</ol>
+<h2 id="pg-allows-you-to-produce-near-unlimited-amounts-of-content.">1) pg allows you to produce near unlimited amounts of content.</h2>
+<p>If <a href="https://minecraft.net/">Minecraft</a> or <a href="http://terraria.org/">Terraria</a> had been built by hand with only one world to explore, people would have figured out its tricks, read about them online, figured out the quickest way to their goal and would be done with them by now. A key part of what makes these games special is that they have amazing replay value because the whole world changes every time you start over. You can explore as far as you like, the developer didn't need to put bounds on the world because the computer can just follow its rules and continue to create! A procedural generation approach lets your world create and discover itself!</p>
+<h2 id="pg-saves-disk-space.">2) pg saves disk space.</h2>
+<p>One amazing and mostly unintended benefit of generating your world on the fly is that an entire game world can be represented as a seed value of just a few letters or numbers. If a part of the world hasn't been altered, then any given section of that world can be regenerated as needed from the seed value. Since math doesn't change, it will turn out the same every time. In a world like <a href="https://minecraft.net/">Minecraft</a> where the world morphs and changes, only the differences from the generated world need to be remembered and can be applied like a patch. This means that in a game like <a href="http://www.no-mans-sky.com/">No Man's Sky</a> with 18 quintillion planets, every one of those planets can be remembered with a single seed value taking up no more than a few bits.</p>
+<h2 id="pg-spikes-creativity">3) pg spikes creativity</h2>
+<p>When things are randomly generated, sometimes they don't always go according to plan. While this is one of the bigger frustrations with creating this sort of game, it's also one of the best sources of inspiration. Did a bug in your system accidentally create an entire city under the ocean biome? Cool, that might be fun! Uh-oh, gorillas are accidentally spawning all over the north pole, what would a tribe of arctic apes look like? The unexpected nature of generators like this can spark some interesting ideas. I can't remember how many times I've been cruising through Spelunky when something so beautifully unplanned causes my run to come to a hilarious and unpredictable demise.</p>
+<h2 id="case-study">Case Study</h2>
+<p>Let's examine two cases, that of Assassin's Creed and that of No Man's Sky, which is unreleased at the writing of this article, however most of its design principles have been announced through various developer interviews. Assassin's Creed is made by Ubisoft, a corporate giant; ballpark estimates for the number of employees working on <a href="http://assassinscreed.ubi.com/en-us/games/assassins-creed-black-flag.aspx">Assassin's Creed IV: Black Flag</a> range between 900 and 1000 people. In the other corner we have Hello Games, a team of less than a dozen people who are developing No Man's Sky, a far reaching game about space exploration that according to the developers could have as many as 18 quintillion possible planets. How is it that it takes a team of over 900 people to craft one world, when a team of 10 can craft 18 quintillion? It's a matter of where they've invested their effort.</p>
+<p>Ubisoft is using a more traditional development paradigm. They are designing their world by hand, carefully crafting graphical assets to fit that world as it is designed. This means that every window, building, nook and handhold are intentionally placed, by hand, in spots that a designer chose. This method, while effective, is clearly time consuming and can sometimes seem too contrived.</p>
+<p>Hello Games on the other hand have decided to leverage the full power of their paradigm and have decided to put their hard work into creating a clever system that will do the rest of their work for them. They decided that instead of crafting worlds, they would create a world-crafter. The initial work-load to do this is substantial, but the payoff is that now they can create as many worlds as they like with little effort, able to tweak their algorithm as they go along.</p>
+<p>The take-home point here isn't that every game should be using procedural generation, but rather that every developer should at least <strong>consider</strong> whether it's appropriate for their current use case. Who knows, could end up saving you a ton of time and adding some awesome new features.</p>
+<p>Cheers everyone!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Worth a Read #2 - CSS</title>
+      <link href="http://chrispenner.ca/posts/worth-a-read-2.html"/>
+      <id>http://chrispenner.ca/posts/worth-a-read-2.html</id>
+      <updated>2014-11-10T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+              <p>This Worth A Read highlights some articles about CSS. See how the pros do things and learn a new trick or two.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to keep up with future posts!</p>
+<h3 id="worth-a-read">Worth a read:</h3>
+<ul>
+<li><a href="http://codepen.io/chriscoyier/blog/codepens-css">Overview of CodePen's CSS Organization and Design</a></li>
+<li><a href="http://codyhouse.co/gem/icons-filling-effect/">Learn how to create an icon-filling scroll effect</a></li>
+<li><a href="http://www.hugeinc.com/ideas/perspective/why-the-best-designers-dont-specialize">Why the best designers don't specialize</a></li>
+<li><a href="http://demosthenes.info/blog/908/The-First-CSS-Variable-currentColor">The first CSS variable: currentColor</a></li>
+<li><a href="http://alistapart.com/blog/post/ten-css-one-liners-to-replace-native-apps">Ten CSS one-liners that replace native-apps</a></li>
+</ul>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Gem: Jekyll</title>
+      <link href="http://chrispenner.ca/posts/gem-jekyll.html"/>
+      <id>http://chrispenner.ca/posts/gem-jekyll.html</id>
+      <updated>2014-11-03T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/jekyll-logo.png" alt="Gem: Jekyll">
+              <p>Jekyll is a web-framework written in Ruby for creating <em>static</em> pages. If you're unfamiliar with the term, <em>static</em> means that it can take a set of input files and turn it into a site that's linked up very nicely, but cannot provide any interaction with the user, nor can it react to it's environment by using a web-server. Interactivity is still available on the client-side through the use of javascript of course.</p>
+<p>Jekyll is very good at things like making informational sites, or even simple blogs. It will parse markdown and load it into templates for you, which makes it quick and easy to write content for your site. If creating a blog is something that interests you, also check out <a href="http://octopress.org/">Octopress</a>, which is a blog framework built on top of Jekyll.</p>
+<p>If you've always wanted your own blog, or even just want to get started learning out to create a website, now is a good a time as any. Jekyll and Octopress integrate perfectly with <a href="https://pages.github.com/">Github Pages</a>, which allow you to host static sites completely free!</p>
+<p>TLDR:</p>
+<ul>
+<li>Jekyll is a quick and easy static site framework.</li>
+<li>Host a blog for free on <a href="https://pages.github.com/">Github Pages</a>.</li>
+</ul>
+<p>If you want to check out the source it's available on the Jekyll <a href="https://github.com/jekyll/jekyll">Github page</a>.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to catch new articles as they come!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Worth a Read #1</title>
+      <link href="http://chrispenner.ca/posts/worth-a-read-1.html"/>
+      <id>http://chrispenner.ca/posts/worth-a-read-1.html</id>
+      <updated>2014-10-31T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+              <p>This marks the beginning of a new feature, <strong>Worth a Read</strong>, which will contain a quick and easy list of blog posts and articles that I've found interesting recently. They may have to do with programming, design, lifestyle, cool products, or anything else I've been reading. Might be themed, might not! Hope you enjoy it!</p>
+<p>This week's list contains a variety of topics from different disciplines, hopefully you'll find something interesting! Follow me on twitter <a href="http://www.twitter.com/chrislpenner">@chrislpenner</a> to keep up with future posts!</p>
+<h3 id="worth-a-read">Worth a read:</h3>
+<ul>
+<li><a href="http://vimeo.com/100264064">A clever and informative talk about CSS's quirks</a></li>
+<li><a href="http://lifehacker.com/wordmark-it-instantly-previews-all-your-installed-fonts-1624496407">Wordmark.it helps preview all your fonts</a></li>
+<li><a href="http://nothingbutsnark.svbtle.com/how-to-argue-for-pythons-use">Python (vs?) Go</a></li>
+<li><a href="http://www.agencypost.com/10-principles-design-transformed-gorgeous-colored-paper-posters/">Principles of design as a poster series</a></li>
+<li><a href="http://lifehacker.com/the-30-percent-rule-and-the-art-of-early-feedback-1619474527">The 30% rule of early feedback</a></li>
+</ul>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Gem: Neovim</title>
+      <link href="http://chrispenner.ca/posts/gem-neovim.html"/>
+      <id>http://chrispenner.ca/posts/gem-neovim.html</id>
+      <updated>2014-10-15T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/neovim-logo.png" alt="Gem: Neovim">
+              <p>This is the first of a series which will highlight open-source &quot;Gems in the rough&quot; that is, projects which are worth taking a look at, downloading, or contributing to. Let's get started!</p>
+<p>Neovim is a rebirth of the retro text editor <a href="http://en.wikipedia.org/wiki/Vim_(text_editor)">Vim</a> (circa 1991). It's interesting that the team decided to rebuild it because Vim itself is still very much alive, there are new plugins and patches released often and development on it continues. The folks at Neovim have realized however that it's getting old and the Vim Script language that original vim plugins are written in is a syntax nightmare. It's tougher to extend and interact with than it could be, so they decided to renew the project by rebuilding the entire code-base into something easier to maintain.</p>
+<p>Some of Neovim's driving principals are as follows:</p>
+<ul>
+<li>Allow vim to be extended in any language.</li>
+<li>Allow plugins to run asynchronously and send events.</li>
+<li>Implement an embedded text interface, ready for integration into any application.</li>
+</ul>
+<p>I'll be writing more about vim and what it's capable of soon, so keep an eye out for more, and run vimtutor on your terminal to try it out! You can help out right now by checking out the source on <a href="http://github.com/neovim/neovim">Github</a> or by donating on <a href="https://www.bountysource.com/teams/neovim/">BountySource</a>.</p>
+<p>Follow me on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) to catch new articles as they come!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>You Own Your Data</title>
+      <link href="http://chrispenner.ca/posts/you-own-your-data.html"/>
+      <id>http://chrispenner.ca/posts/you-own-your-data.html</id>
+      <updated>2014-09-26T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/security-vs-privacy.jpg" alt="You Own Your Data">
+              <p>First off, thanks for taking the time to read this, please send me a message on twitter <span class="citation">[@chrislpenner]</span>(http://www.twitter.com/chrislpenner) if you have ideas or comments, and share this post around if you agree with it.</p>
+<p><em>Comic used with permission of <a href="http://www.claybennett.com/">Clay Bennett</a>.</em></p>
+<p>Okay, so what's this whole thing about? To put it in a nutshell for you: our data is important, our data isn't safe, therefore something needs to change. What is Facebook doing with your data? Are they giving it to the NSA? What if my employer finds out about such and such? We spend far too much time worrying about whether our data is safe and what would happen if these businesses that we trust with our virtual lives decide to go bad.</p>
+<p>Most people you ask would say that Facebook (who I'll be picking on because they're most popular at the time) is free to use, but the reality is far from that, the cost is your data. Facebook doesn't work unless everyone shares data. You can't actively use your FB account unless you take the plunge and decide to give them your pictures, thoughts, buying habits, movie and music likes and dislikes... the list goes on. Everyone knows that they're giving this information away, but when asked, most would say they don't really have much of a choice. They either share their data, or Facebook becomes useless. Heck, I myself have been keenly aware of this for years, but I still participate because having access to my friend's thoughts, contact info and photos is far too convenient to justify giving up. We've grown to a place where every one of us needs social media in some form or another, that's not even a question at this point, the question then becomes: Who do we trust to handle all this data?</p>
+<p><em>Think about that for a minute, maybe even two...</em></p>
+<p>No, seriously, stop looking at this screen and actually think: Who do you really trust to handle all of your personal data? Trust is important.</p>
+<p>Now I don't know about you, but my answer was simple, I can only trust myself. I propose we address this issue by decentralizing data storage. There's a very important clarification to make: the data is separate from the service. Facebook isn't a collection of data, it's a service that curates and presents a collection of data to you. What this means is that programs like Facebook's &quot;news feed&quot; could exist and be maintained separately from the data itself.</p>
+<blockquote>
+<p>Who do we trust to handle all this data?</p>
+</blockquote>
+<p>I propose that as an open-source community we devise a generic social media program which users can download and run on their computers which pulls in data and presents data about users from personal data repositories. Users can choose to host their data wherever they feel comfortable, maybe on their own secure web server, maybe on Dropbox, maybe they trust a third party site with it, maybe they can even host it on their own computer, the point is that this choice is up to the user and the user alone. This data would then be pulled down to the program when requested if and only if the user who is signed into the program has that person's permission to do so, either through a link or some sort of case by case verification system; think of friending on Facebook or sharing a document on Google Drive. These permissions can be revoked by the owner of the data at any time, or the data can simply be deleted from their own storage container.</p>
+<blockquote>
+<p>The data is separate from the service</p>
+</blockquote>
+<p>Though this system has its own challenges, I believe it solves some major problems. In the new model:</p>
+<ul>
+<li>Data is decentralized. (No one company controls it all)</li>
+<li>Control belongs to the data's owner. (They can change, delete, or revoke the permissions of their own data)</li>
+<li>No middleman. (The open-source software would pull data directly from people's sources to the user's computer, no opportunity for it to be snatched up)</li>
+<li>Extensible. (Once everyone is hosting their own data and the process is standardized in some fashion, new programs and social networks can simply use existing data-stores and people don't need to rebuild their virtual life every 5 years)</li>
+</ul>
+<p><em>It'll take work, it'll be a tough change, but if we don't demand it, it'll never happen.</em></p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>The Future of Software</title>
+      <link href="http://chrispenner.ca/posts/modular-software.html"/>
+      <id>http://chrispenner.ca/posts/modular-software.html</id>
+      <updated>2014-09-24T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/modular.png" alt="The Future of Software">
+              <p>I 've always been annoyed with software, the particular reasons have changed consistently over the years, but I think that for all of us there's always been something that gets on our nerves; whether it's how your word processor never indents your lists properly, or how your computer's calendar starts on Sunday when you'd prefer to have it start on Monday.</p>
+<p>Lately what's been bothering me is the closed-ness of most desktop software in general. Don't like the default colour-scheme? Too bad, you can't change it. Don't like the way your notes are laid out? Too bad, can't change that either. Want to use your favourite text editor instead of that tiny box they're giving you? Nope!</p>
+<p>This problem has actually already been solved for the most part. The solution exists in <em>modularity</em>. For the uninitiated, modular design means that the way a thing works is separated into distinct sections. A home theater system would be a good example to think of: you have a source for your sound and video (A DVD player perhaps) the video signal proceeds to your Television, the sound goes to your amplifier, then continues to your speakers. Each link in this chain has a specific purpose and works independently from the other links. If you'd like to switch out your speakers, you simply unplug the old ones and plug the new ones in. Similarly with the video signal; the DVD player doesn't care where the video ends up. If you'd like to switch your Television out for a Projector, Video Recorder, or even a toaster it doesn't know the difference and continues to happily send video. Whether you'd like to view your movie on a toaster or an IMAX screen is entirely up to the user (though the viewing experience is likely to change dramatically).</p>
+<blockquote>
+<p>The solution exists in modularity.</p>
+</blockquote>
+<p>Unfortunately, in the world of software the parts aren't as clearly defined. Where should one box end and another box start? Modern web technologies provide insight into this. Websites are complicated these days. On any given news website you'll have writers, designers, programmers and editors all working together to deliver a good experience. To keep these groups from stepping all over each other's toes content, presentation, and behaviour must be separated from each other. These aspects correspond to HTML, CSS, and Javascript respectively. HTML contains the content and gives the content meaning, CSS tells the browser how to present it, which colours to use and what goes where, while Javascript handles any user interaction and responds accordingly. I believe this is how we should be modelling our desktop software.</p>
+<p>Whether this means actually using HTML, CSS and Javascript for desktop software I'm not sure (that's certainly a possible solution), but whichever tools are used, the programs created must recognize what they're actually trying to do and should focus solely on that. If a program is an email client it should handle the sending and receiving of email and should do it well, and do no more and no less. Allow the user to patch in and use any text editor they'd like to create those emails. All programs should allow mixing and matching of different program components.</p>
+<p>A strong benefit to this approach is that it would allow programs to easily interact with one another and solve problems together. This is something that is nearly impossible to do given the current architecture. Imagine a &quot;Dashboard&quot; plugin that focused only on bringing multiple programs from your computer together in one place. You'd have a column of emails on the right, some favourite music playlists on the left, your favourite text editor in the middle that can send directly to Evernote, Microsoft Word, Email, or a text message. When the user chooses an action to perform the Dashboard sends the appropriate <em>event</em> to the corresponding program with any necessary text or user information as parameters. A timer app could send an email, start a song or switch into &quot;work-mode&quot; when certain timer events fire. Users could easily design new facades for their favourite clients so long as it sends any necessary events and data to the program behind the scenes.</p>
+<p>Responding to any and every event in any way you like provides extensive hackability to everything. Note-taking apps and Email clients wouldn't need to go through all the work to (poorly) implement autocompletion or spell-checks because that would be the job of the text editor (which it would do well).</p>
+<p>I'm sure that you can see that the possibilities are nearly endless if we can just unlock this method of interaction and modularization. Everyone can work on doing just one thing well and can borrow all the other functionality from other programs.I can only hope we'll end up there eventually.</p>
+<p>Until next time.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Set the Data Free</title>
+      <link href="http://chrispenner.ca/posts/set-the-data-free.html"/>
+      <id>http://chrispenner.ca/posts/set-the-data-free.html</id>
+      <updated>2014-08-02T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/set-the-data-free.png" alt="Set the Data Free">
+              <p>So lately I've been noticing something. The way we consume our data is changing, suddenly just having data isn't good enough, it's all about presentation. Most modern data formats such as Microsoft Word documents, Powerpoint Slides and PDFs are increasingly focused on making your data LOOK good.</p>
+<p>This is a good thing, it's good that consumer computing has developed to a point where we have enough tools to easily format and present our data the way we want, and it's great that as a result we can send messages not only through the text itself, but also through the way we display it, but we're losing something valuable with this transition as well: The ability to manipulate plain-old vanilla text. Most data is now being trapped inside proprietary layers of code. While tools like grep can still sometimes decipher these encodings and still find what you're looking for, piping text from a Powerpoint file, formatting the string with Unix utilities, then compiling it with several other Powerpoint files and their text would not be a pleasent experience.</p>
+<p>I understand that all of this formatting is complicated, that it would not be easy to encode a modern day Word document without using special characters and bytes and bytes of stored settings; however, I think it's worth looking for a compromise.</p>
+<p>Two options come readily to mind. Perhaps text from Word Documents, Powerpoints, PDF files, and other proprietary formats could be included in full as a precursor to the needed code which would then use combinations of line-numbers or character addresses to apply formatting to code in chunks. Perhaps transformations could be performed through the use of recognized tags (similar to HTML) which could be parsed or ignored depending on context. These both have the downside of unnecessarily bloating the files and increasing the data stored on disc, and would get complicated very quickly with more complex presentations, however they would allow common command-line programs to be taught to understand them properly and allow full command-line piping and functionality.</p>
+<p>Unfortunately, it would be very difficult (see: impossible) to get vendors to agree on a set convention for this and would most-likely lead to big tangled mess of competing standards, but as I learn more and more about Unix utilities and the wealth of functionality that they provide, it seems a crying shame to invalidate them all just because we'd like a bold word or want to position our margins correctly. Ideally there would be a strong way to separate content from formatting a la HTML and CSS.</p>
+<p>It is also unfortunate that so few people know and use the command line these days, there are so many shortcuts and so much functionality in their computers that they're missing. Let's hope more will be inspired to explore!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Legacy in Design</title>
+      <link href="http://chrispenner.ca/posts/legacy-in-design.html"/>
+      <id>http://chrispenner.ca/posts/legacy-in-design.html</id>
+      <updated>2014-07-26T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/legacy-in-design.png" alt="Legacy in Design">
+              <p>Designers often feel pressure to come up with something new and revolutionary. They want to make their mark on the design world by revolutionizing some new concept or idea. Certainly this form of thinking is a good thing; it fuels innovation and leads to exciting new possibilities that others wouldn't have ever contrived. However, humans build habits, and if we're designing for humans we simply must take this into account.</p>
+<h2 id="habits.">Habits.</h2>
+<p>Have you ever switched operating systems and found yourself trying to close a window but the 'X' is on the wrong side? Have you ever driven a friend's car and suddenly jerked forward because their gas pedal was more sensitive than you were used to? Humans are habit forming creatures, we build muscle memory and our brains will begin to automate tasks that we perform often enough. This is a great thing! Can you imagine the effort that typing would require if you had to consciously remember where each key was and deliberately press them in sequence?</p>
+<p>Whether we like it or not, our design 'ancestors' have pioneered the field and have developed many habits in users. Some good, some great, some absolutely terrible. This means that whenever you make a design decision we must all be conscious of how the user expects it to work from past experience, and then only change it if we're certain that the improvement strongly outweighs the discomfort the user will endure learning the new system.</p>
+<p>You must ask yourself, will the user do this enough to develop a new habit? If you're designing a simple company website, or a simple utility program the answer is no. It is better to follow convention and lay out the site as people would expect, even if your design and layout is 'improved' in some way.</p>
+<h2 id="innovation.">Innovation.</h2>
+<p>How then can we innovate? There's a few options here. Unfortunately in most cases, as a single designer it is simply impossible to have a large enough effect to change the design landscape. Existing habits are strongly formed by years of legacy and shift only slightly over many many years.</p>
+<p>One way the design landscape changes is through the introduction of new mediums. Mobile devices and tablets, though they are computers, are different enough from laptops and desktops so as to require a fundamental shift in design paradigms. It is in these moments that designers thrive. When technology is new, habits have yet to form and designers can form the landscape as they see fit. These are times when designers must be conscious of every little decision they make, for it again sets precedent for all future designers in the medium.</p>
+<p>Good luck!</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Caps-lock</title>
+      <link href="http://chrispenner.ca/posts/capslock.html"/>
+      <id>http://chrispenner.ca/posts/capslock.html</id>
+      <updated>2014-05-25T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/capslock.png" alt="Caps-lock">
+              <p>Any time I consider decisions of designers past, my mind always drifts towards the keyboard. It is a ubiquitous piece of hardware that most take for granted. If you take more than a second to think about it, it's a very strange design. The letters seem to be placed without rhyme or reason, most layouts have rows staggered by a seemingly arbitrary amount from one another, some keys are mirrored on either side (shift, control, etc) others are not (tab, return). It seems as though no-one in their right mind would ever design such a piece of work! The keyboard is the result of years of 'legacy' design, one or two things get carried over from iteration to iteration and over time the sense of it all is lost.</p>
+<p>Even stranger is that the nonsensical layout doesn't tend to slow us down in the slightest. Once learned it is sufficiently fast. Studies have shown that even laboriously designed key layouts (Dvorak) provide only very modest improvements to typing speeds.</p>
+<p>The worst offender of design legacy that I have yet to come across is the Caps-lock key. Here's just a few of the many reasons why:</p>
+<p>Caps-lock is the only modal key on the keyboard, (i.e. press to engage, again to disengage), this is extremely unintuitive and is a source of constant frustration. Consult the brilliant <a href="http://www.azarask.in/blog/post/is_visual_feedback_enough_why_modes_kill/">Aza Raskin</a> for more on how modes break things. People begin to type without knowing that Caps-lock is engaged and after writing one or two lines they notice that they've been yelling the whole time. They must then delete the whole thing because for some reason there's STILL no easy way to switch cases on already typed text in most editors.</p>
+<p>This would be bad enough as-is, however someone had the gall to place this evil key in prime real-estate where it is easily accessible, and is often pressed by accident.I don't know how it ended up where it is, but I do know that it shouldn't be there. Why not use this position for shift or Ctrl/Cmd ? I can't think of any good reasons, can you?</p>
+<p>Caps-lock offends again in the behaviour department. Standard Caps-lock behaviour is nonsensical. At first glance it appears as though engaging Caps-lock simply locks the shift key ON, though when one attempts to type a symbol or number key, one finds that this isn't the case. This destroys the initial mental model that is formed and forces each person to learn a completely new typing paradigm for these few small use-cases.</p>
+<p>I don't we ended up here, but I think it's about time to start a trend towards making the Caps-lock key useful again or deprecating it from future designs. You can start right now by rebinding it to something useful to you and encouraging your friends to do the same. Being a faithful Vim user I've bound it to act as Escape on every system I own. If you're not a Vim user, I'd recommend trying Ctrl/Cmd. Rebinding on OSX is as simple as looking through the system settings and changing the modifier keys, for more complex mappings I recommend <a href="http://pqrs.org/macosx/keyremap4macbook/pckeyboardhack.html.en">PCKeyboardHack</a>. For Windows I'd check out <a href="http://www.autohotkey.com/">AutoHotKey</a>. For Linux try googling an appropriate xmodmap command.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>The Switch To Mac</title>
+      <link href="http://chrispenner.ca/posts/switch-to-mac.html"/>
+      <id>http://chrispenner.ca/posts/switch-to-mac.html</id>
+      <updated>2014-05-19T00:00:00Z</updated>
+      <summary></summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/the-switch-to-mac.png" alt="The Switch To Mac">
+              <p>The time had come to replace my slowly fading laptop, it had served me well in the last four years, but all good things must come to an end. I was faced with a choice: which operating system do I commit to for my next four years? As a Computer Science student I wanted to make the right choice. These days most things I could ever want to do are possible on any one of the big three (Windows, OSX or Linux), so it was mostly a choice of form factor and style. How would each choice affect my experience throughout the years to come? Would I have to give up some long-loved programs that I had invested my time and money into? How could it affect my workflow? Here's a bit about my past experience with each OS.</p>
+<h2 id="windows">Windows</h2>
+<p>I've always been a Windows guy. My family grew up with them. I can still remember playing computer games with my father on our old Windows 2.1 desktop. My Father works in IT, so we managed to keep up with trends and usually had the latest version Windows on mostly-decent hardware. I'd gotten used to it and didn't have any reason to mess with a good thing so when I got my first personal laptop as a graduation gift naturally I went with Windows 7. It mostly did as it was told, it rarely complained, it handled device drivers like a champ. Aside from the occasional annoying &quot;Your computer will reboot for updates in 5 minutes&quot; I didn't have any major complaints. It was only once I started to get a little deeper into programming (mostly in C++) that I started to find a few shortfalls. Installing any sort of IDE was a nightmare due to way the file system was (mis)organized. Things you attempt to install would misplace libraries or install them twice. There's really no system for where programs were meant to put things and often programs would clutter up my own files with their junk. Since when do Adobe plugin files count as &quot;Documents&quot;?</p>
+<p>Installation problems could usually be fixed by editing some complicated system settings that weren't meant to be messed with. Editing the system path consisted of fumbling through a long jumbled line of file paths all sandwiched together in a fixed size text-box, making it impossible to see what's already there, nor what you're changing. The native command-line interface is lacking in most areas and isn't meant for doing any serious work in. These design warts, legacies of the Microsoft's past OS's have been patched and repaired, but continue to cause problems in their modern OS's. Around this time I started fiddling around with Linux, more specifically Ubuntu, to see what it could do.</p>
+<h2 id="linux">Linux</h2>
+<p>After getting fed up with some of Windows' more annoying design and organization problems I sought to try out the veteran-praised Linux. I started out with Ubuntu because I'd been told it was easy both to install and understand, which was perfect for someone new to the command-line like me. I installed it onto a partition on my Laptop, choosing to dual-boot with Windows because I wasn't sure I'd be ready to make the switch cold turkey. Once Ubuntu had very kindly walked me through the installation I excitedly began to study the BASH command line and some of the things it could do. I was amazed when I learned I could type a simple 'sudo apt-get' to have my system download, install, and update most common programs. Though it uses the command-line, this seems like a vastly superior method of installation. No need to hope you downloaded the right version for your system, installing it manually, then deleting the installation files afterwards.</p>
+<p>The Unix core's structure is very well defined, you know where to look for your programs, hard-drives, configuration files, etc. Your home folder is kept separate for your own personal use where you won't accidentally mess with anything important. Everything is properly modularized for easy organization and security. The 'root' permissions system seems much more secure than the Windows 'always administrator' approach that most people default to. Unfortunately, my laptop wasn't supported 100% in everything, so I had to do a little fiddling to get things like my function keys and headphone jack to work properly, but once configured it worked fine. Flash was an issue, my browsers couldn't load YouTube videos or listen to flash-based music players, but after installing a more recent version of Ubuntu most of those problems went away. Overall it worked great and I really enjoyed the system, but Linux still has fewer options available for software than the other OS's.</p>
+<h2 id="mac">Mac</h2>
+<p>I had never had an apple computer before, in fact prior to purchasing my macbook I had never purchased a single product from apple. I knew their reputation well however, &quot;It just works!&quot; my friends would exclaim. I liked the idea of it, but of course I used Windows with pride, sure it was a little tougher to do some things, but hey, I'm a Computer Science student so of course I can figure it out. Of course, I never stopped to ask myself weather I should actually have to put that work in. The philosophy and design of apple products eluded me, I just wasn't convinced. Then I started comparing bullet points.</p>
+<h2 id="proscons">Pros/Cons</h2>
+<h3 id="windows-1">Windows</h3>
+<p><strong>Pros</strong></p>
+<ul>
+<li>Familiarity</li>
+<li>Well-supported</li>
+<li>Inexpensive</li>
+</ul>
+<p><strong>Cons</strong></p>
+<ul>
+<li>Disorganized OS structure</li>
+<li>Difficulty with programming tools</li>
+<li>Bad command-line (bring on the hate-mail)</li>
+</ul>
+<h3 id="linux-ubuntu">Linux (Ubuntu)</h3>
+<p><strong>Pros</strong></p>
+<ul>
+<li>Open Source</li>
+<li>Constantly updated</li>
+<li>Free</li>
+<li>Unix command-line</li>
+<li>Unix system structure</li>
+</ul>
+<p><strong>Cons</strong></p>
+<ul>
+<li>Poorly supported on some hardware</li>
+<li>Less choice of software</li>
+</ul>
+<h3 id="osx">OSX</h3>
+<p><strong>Pros</strong></p>
+<ul>
+<li>Lots of software available</li>
+<li>Powerful and reliable hardware.</li>
+<li>Unix system structure</li>
+</ul>
+<p><strong>Cons</strong></p>
+<ul>
+<li>&quot;Hold your hand&quot; approach</li>
+<li>Expensive</li>
+<li>Stuck in apple's dictatorship</li>
+</ul>
+<p>After considering the pros and cons of each, I pulled out my yellow legal pad and began to rank things based on their importance to me. After a few minutes I realized that I was really quite fed up with the Windows file structure and sloppy organization/installation. The registry is really just a bad idea, made worse by every new iteration. That left me with two options, Linux or OSX. I really liked Ubuntu and how much control it gave me over everything, it was well organized, supports the free-software movement and was also free of charge. OSX is also very well organized, it limits control over some aspects, but in turn delivers a well designed experience that is intuitive and efficient. In the end, the combination of a large software ecosystem, well-built hardware, and good customer support won out in the end and I dove in head-first, purchasing a re-furbished 13&quot; macbook pro retina with a 2.6 GHz processor.</p>
+<p>Now that the dust has settled I'm very happy with my decision. There were a few bumps in the road of adapting to the new OS, but most things were just a matter of learning a slightly new way of doing things. I can confidently say that I'm very impressed with how OSX handles application installation (in most cases you simply drag application files onto your hard-drive and they work as-is). I haven't experienced a single crash or hang-up yet, and if one were to occur I know that time-machine would allow me to recover gracefully. I've been able to reconstruct most of my old Windows workflows, as well as develop some new ones. Overall I would say that choosing an OS is very much situational, something that's good for one person may be bad for another and in most cases doing research and trying out each OS you're considering is probably the best way to make a decision.</p>
+              ]]></content>
+      </entry>
+</feed>
