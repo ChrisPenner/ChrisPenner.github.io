@@ -2,6 +2,7 @@
 title: Vim vs. Emacs?
 author: Chris Penner
 date: Feb 6, 2015
+tags: [vim]
 image: vim-vs-emacs.png
 ---
 

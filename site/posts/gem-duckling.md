@@ -2,7 +2,7 @@
 title: "Gem: Duckling"
 author: Chris Penner
 date: Feb 21, 2015
-tags: [open-source, Clojure]
+tags: [open-source, clojure]
 categories: open-source-gems
 language: Clojure
 type: Dynamic Customizable Parser

@@ -2,7 +2,7 @@
 title: Legacy in Design
 author: Chris Penner
 date: Jul 26, 2014
-tags: [design, UX]
+tags: [design, ux]
 image: legacy-in-design.png
 ---
 
