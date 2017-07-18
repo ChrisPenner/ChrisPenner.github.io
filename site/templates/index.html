@@ -11,9 +11,7 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-<header>
-    <div id="theme-button">DAY</div>
-</header>
+    {{> templates/header.html}}
 
 <div id="page">
             <section class="table-of-contents">
@@ -31,12 +29,4 @@
         </section>
 </div>
 
-<footer>
-    &copy; 2014 Chris Penner - <a href="/atom.xml">RSS</a>
-</footer>
-
-<link href='http://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='http://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-<script src="/js/main.min.js"></script>
-</body>
-</html>
+{{> templates/footer.html}}

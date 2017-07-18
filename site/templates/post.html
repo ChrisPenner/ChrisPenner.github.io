@@ -13,16 +13,7 @@
     <link rel="stylesheet" href="/css/syntax.css">
 </head>
 <body>
-<header>
-    <nav>
-        <a id="beacon" href="/">
-            {{> templates/enso.svg}}
-        </a>
-    </nav>
-    <div id="theme-button">DAY</div>
-
-    <div id="theme-button">DAY</div>
-</header>
+    {{> templates/header.html}}
 
 <div id="page">
     <div class="wrapper">
@@ -47,7 +38,7 @@
                 <span class="tags">
                     Tags<br>
                     {{#tags}}
-                    <a class="tag" href="{{#tagUrl}}{{.}}{{/tagUrl}}">{{.}}</a>
+                    <a class="tag" href="/tag/{{.}}">{{.}}</a>
                     {{/tags}}
                 </span>
             </div>
@@ -85,12 +76,4 @@ var disqus_url = 'https://chrispenner.github.io$url$';
 
 </div>
 
-<footer>
-    &copy; 2014-2017 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-<script src="/js/main.min.js"></script>
-</body>
-</html>
+{{> templates/footer.html}}
