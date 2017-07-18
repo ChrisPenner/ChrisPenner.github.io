@@ -17,7 +17,7 @@ author = "Chris Penner"
 blogTitle = "Chris Penner"
 
 rfc3339 :: Maybe String
-rfc3339 = Just "%H:%M:%S"
+rfc3339 = Just "%H:%M:%SZ"
 
 main :: IO ()
 main = siteWithGlobals funcs $ do
@@ -50,12 +50,14 @@ stripPostsHTMLSuffix tag = tag
 
 formatDate :: Value -> Value
 formatDate post = post
-  & _Object . at "date" ?~ String (T.pack isoDate)
+  & _Object . at "date" ?~ String (T.pack (toIsoDate parsedTime))
   & _Object . at "humanDate" ?~ String (T.pack humanDate)
     where
       humanDate = post ^?! key "date" . _String . unpacked
       parsedTime = parseTimeOrError True defaultTimeLocale "%b %e, %Y" humanDate :: UTCTime
-      isoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339) parsedTime
+
+toIsoDate :: UTCTime -> String
+toIsoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339)
 
 mkIndexEnv :: [Value] -> [Value] -> Value
 mkIndexEnv posts tags =
@@ -74,13 +76,11 @@ staticAssets = copyFiles
 atomRssFeed :: [Value] -> SiteM ()
 atomRssFeed posts = do
   now <- liftIO getCurrentTime
-  let formatString = iso8601DateFormat (Just "%H:%M:%SZ")
-      formattedTime = formatTime defaultTimeLocale formatString now
-      atomEnv = object [ "title" .= blogTitle
+  let atomEnv = object [ "title" .= blogTitle
                        , "domain" .= domain
                        , "author" .= author
                        , "posts" .= posts
-                       , "currentTime" .= formattedTime
+                       , "currentTime" .= toIsoDate now
                        , "url" .= ("/atom.xml" :: T.Text)
                        ]
 
