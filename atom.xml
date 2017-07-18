@@ -2,12 +2,123 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-07-18T01:00:16Z</updated>
+  <updated>2017-07-18T04:29:37Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>http://chrispenner.ca/</id>
 
+  <entry>
+      <title>Zippers using Representable and Cofree</title>
+      <link href="http://chrispenner.ca/posts/representable-cofree-zippers.html"/>
+      <id>http://chrispenner.ca/posts/representable-cofree-zippers.html</id>
+      <updated>2017-07-05T00:00:00Z</updated>
+      <summary>Using Representable and Cofree to build a zipper datatype</summary>
+      <content type="html"><![CDATA[
+              <p>We're going to take a look at an alternative way to define a Zipper Comonad over a data type. Typically one would define a Zipper Comonad by defining a new datatype which represents the Zipper; then implementing <code>duplicate</code> and <code>extract</code> for it. <code>extract</code> is typically straightforward to write, but I've had some serious trouble writing <code>duplicate</code> for some more complex data-types like trees.</p>
+<p>We're looking at a different way of building a zipper, The advantages of this method are that we can build it up out of smaller instances piece by piece. Each piece is a easier to write, and we also gain several utility functions from the Typeclasses we'll be implementing along the way! It's not terribly practical, but it's a fun experiment.</p>
+<p>You can find this post as a literate haskell file <a href="https://gist.github.com/ChrisPenner/4527dd0d9c60983562e03c28731bb3bd">here</a> so that means you can load it up directly in GHC and play around with it if you want to follow along! Let's get started.</p>
+<p>First we'll need a few language extensions, In case you're wondering; TypeFamilies is used by the <code>Representable</code>.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language DeriveFunctor #-}</span>
+<span class="ot">{-# language TypeFamilies #-}</span>
+<span class="ot">{-# language InstanceSigs #-}</span></code></pre></div>
+<p>We're going to be writing a Zipper into a list. In case you're unfamiliar, a zipper is essentially a 'view' into a structure which is focused on a single element. We'll call our focused view into a list a 'Tape'</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">module</span> <span class="dt">Tape</span> <span class="kw">where</span></code></pre></div>
+<p>Go ahead and import everything we'll need:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- http://hackage.haskell.org/package/comonad-5/docs/Control-Comonad.html#t:Comonad</span>
+<span class="kw">import </span><span class="dt">Control.Comonad</span>
+<span class="co">-- http://hackage.haskell.org/package/free-4.12.4/docs/Control-Comonad-Cofree.html</span>
+<span class="kw">import </span><span class="dt">Control.Comonad.Cofree</span>
+<span class="co">-- https://hackage.haskell.org/package/distributive-0.5.0.2/docs/Data-Distributive.html#t:Distributive</span>
+<span class="kw">import </span><span class="dt">Data.Distributive</span>
+ <span class="co">-- https://hackage.haskell.org/package/adjunctions-4.3/docs/Data-Functor-Rep.html#t:Representable</span>
+<span class="kw">import </span><span class="dt">Data.Functor.Rep</span>
+<span class="co">-- https://hackage.haskell.org/package/containers-0.5.10.2/docs/Data-Sequence.html</span>
+<span class="kw">import qualified</span> <span class="dt">Data.Sequence</span> <span class="kw">as</span> <span class="dt">S</span>
+<span class="co">-- https://hackage.haskell.org/package/base-4.9.1.0/docs/Data-List-NonEmpty.html</span>
+<span class="kw">import qualified</span> <span class="dt">Data.List.NonEmpty</span> <span class="kw">as</span> <span class="dt">NE</span></code></pre></div>
+<p>Great! At this point one would typically define their zipper data type, which for lists would look like: <code>data Tape a = Tape [a] a [a]</code>, This represents the idea of having a single element of the list 'under focus' with other elements to the left and right.</p>
+<p>We're trying something different, we're going to define TWO types. One type which represents all of the POSSIBLE movements, and one which represents a CHOICE of a specific movement.</p>
+<p>First we'll define the possible movements in our tape using the PRODUCT tape <code>TPossible</code>, we'll have a slot in our structure for both leftward and rightward movements:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">TPossible</span> a <span class="fu">=</span> <span class="dt">TPossible</span>
+  {<span class="ot"> leftward ::</span> a
+  ,<span class="ot"> rightward ::</span> a
+  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)</code></pre></div>
+<p>We're deriving Functor here too, that'll come in handy later.</p>
+<p>Next we represent a choice of direction as a SUM type, i.e. we can choose to go either LEFT or RIGHT at any given focus in the list.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">TChoice</span> <span class="fu">=</span> <span class="dt">L</span> <span class="fu">|</span> <span class="dt">R</span>
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre></div>
+<p>Notice that each piece contains a different piece of the information we need, a value in <code>TPossible</code> knows what's to the left or right, a value in <code>TChoice</code> knows which way to move, but not what's there. This sort of relationship shows us that <code>TPossible</code> is a <code>Representable Functor</code>.</p>
+<p>Let's talk about what that means. A Representable Functor is any functor from which you can extract elements by giving it an index. That is; it's any functor that you can describe completely using a function from an index to a value. Given <code>Index -&gt; a</code> you can build up an <code>f a</code> if you have a relationship between <code>Index</code> and <code>f</code>!</p>
+<p>In our case we have such a relationship; and if we have a function <code>TChoice -&gt; a</code> we could build up a <code>TPossible a</code> by calling the function for the leftward and rightward slots using <code>L</code> and <code>R</code> respectively.</p>
+<p>But we're getting a bit ahead of ourselves; we'll need to build up a Distributive Instance first, it's a pre-requisite for the Representable class, and in fact every instance of Representable is also Distributive; If we like we can actually just implement Representative and use <code>distributeRep</code> from <code>Data.Functor.Rep</code> as your implementation of Distributive, but we'll do it the long way here.</p>
+<p>Distributive can seem strange if you haven't worked with it before, it's the dual of Traversable; Traversable can pull out other Applicative Effects from within its structure, and so Distributive can pull its own structure from any functor to the outside. You can define an instance by implementing either <code>distribute</code> or <code>collect</code>.</p>
+<p>Here're the signatures:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (g a) <span class="ot">-&gt;</span> g (f a)
+<span class="ot">collect ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> g b) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> g (f b)</code></pre></div>
+<p>Let's see a few examples to solidify the idea:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">distribute ::</span> [<span class="dt">Identity</span> a] <span class="ot">-&gt;</span> <span class="dt">Identity</span> [a]
+<span class="ot">distribute ::</span> [<span class="dt">Bool</span> <span class="ot">-&gt;</span> a] <span class="ot">-&gt;</span> (<span class="dt">Bool</span> <span class="ot">-&gt;</span> [a])
+<span class="ot">distribute ::</span> [<span class="dt">TPossible</span> a] <span class="ot">-&gt;</span> <span class="dt">TPossible</span> [a]</code></pre></div>
+<p>The list here could be ANY functor, I just used lists because it's something most people are familiar with. In many cases sequence and distribute are interchangeable since a lot of types have reasonableApplicative instances, but it's important to note that <code>distribute</code> pulls a distributive functor OUT from any wrapping functor while <code>sequence</code> from Data.Traversable pushes a traversable INTO a wrapping Applicative.</p>
+<p>A good intuition for determining whether a functor is distributive is to ask whether values of that functor (f a) always have the same number of elements of 'a'. If they do, and they don't have extra information aside from their structure, then it's probably distributive. Note that this means that we actually can't define Distributive for finite-length lists, give it a try if you don't believe me!</p>
+<p>We've got exactly two slots in EVERY <code>TPossible</code> so we can implement distribute by creating an outer <code>TPossible</code> where the left slot is the functor containing all the left values and likewise for the right slot.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Distributive</span> <span class="dt">TPossible</span> <span class="kw">where</span>
+<span class="ot">  distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (<span class="dt">TPossible</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> (f a)
+  distribute fga <span class="fu">=</span> <span class="dt">TPossible</span> (fmap leftward fga) (fmap rightward fga)</code></pre></div>
+<p>Now that's out of the way, let's get back to Representable! Remembering our previous definition <code>TPossible</code> is Representable because it has exactly two slots, a left and a right which can be indexed by <code>TChoice</code>! We need 3 things for an instance of Representable:</p>
+<ul>
+<li>A type which represents our index (called Rep)</li>
+<li><code>index</code> which pulls out the value at a given index.</li>
+<li><code>tabulate</code> which builds up an object from a function.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Representable</span> <span class="dt">TPossible</span> <span class="kw">where</span>
+  <span class="kw">type</span> <span class="dt">Rep</span> <span class="dt">TPossible</span> <span class="fu">=</span> <span class="dt">TChoice</span>
+
+<span class="ot">  index ::</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> a
+  index (<span class="dt">TPossible</span> l _) <span class="dt">L</span> <span class="fu">=</span> l
+  index (<span class="dt">TPossible</span> _ r) <span class="dt">R</span> <span class="fu">=</span> r
+
+<span class="ot">  tabulate ::</span> (<span class="dt">TChoice</span> <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> a
+  tabulate describe <span class="fu">=</span> <span class="dt">TPossible</span> (describe <span class="dt">L</span>) (describe <span class="dt">R</span>)</code></pre></div>
+<p>We're moving along quick! We've got the necessary tools to index into our <code>TPossible</code> structure, which we can use to follow a 'path' through the zipper to find an element, but currently we only have a way to represent a single choice of direction at once. We can say we want to move right using 'R', but then we're stuck! Similarly with <code>TPossible</code> we have places to store the value to the left and right, but can't check the value at the current position! We can solve the problem by wrapping our <code>TPossible</code> in Cofree!</p>
+<p>Cofree allows us to promote a functor that we have into a Comonad by ensuring we always have an element in focus and that we have a way to move around amongst possible options while still maintaining a focus. It does this by using an infinitely recursive structure which wraps around a given functor (in our case <code>TPossible</code>). Let's build up a few of these structures by combining <code>TPossible</code> with Cofree! (:&lt;) is the Cofree constructor and has the following structure: <code>a :&lt; f (Cofree f a)</code>.</p>
+<p>Lucky for us, if we have a Representable instance for a functor f, we get Representable of Cofree f for free! We can cheat a little and use our Representable class to build up the data structure for us by simply providing a describe function to 'tabulate' which returns the value we want to appear at any given index. Remember, the index we chose for <code>TPossible</code> is <code>TChoice</code>. The index for <code>Cofree TPossible</code> is a Sequence of <code>TChoice</code>!</p>
+<p>Let's build our first actual 'Tape' using tabulate with our Cofree Representable instance! Here's an infinite number-line going out in both directions from our focus:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">relativePosition ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>
+relativePosition <span class="fu">=</span> sum <span class="fu">.</span> fmap valOf
+  <span class="kw">where</span>
+    valOf <span class="dt">L</span> <span class="fu">=</span> (<span class="fu">-</span><span class="dv">1</span>)
+    valOf <span class="dt">R</span> <span class="fu">=</span> <span class="dv">1</span>
+
+<span class="ot">numberLine ::</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> <span class="dt">Int</span>
+numberLine <span class="fu">=</span> tabulate relativePosition</code></pre></div>
+<p>Kinda weird to look at eh? Effectively we're saying that if we move left the position is 1 less than whatever we were at before, and moving right adds one to the previous total. You could also write a recursive version of <code>describe</code> which calculates the result by pulling each index off of the sequence and returns the result! Let's look at another example where we want a zipper into a finite list!</p>
+<p>We'll define a function which 'projects' a list into an infinite Cofree; we define the behaviour such that moving left 'off the edge' just leaves you at the leftmost element and similar with the right. I'm going to re-use our previous helper 'relativePosition' here, but this time I'll use it to index into a list! We'll put some checks in place to ensure we never get an index which is out of bounds, if we're given an out of bounds index we'll just give the first or last element respectively; i.e. the zipper will never 'fall off the end'</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">project ::</span> <span class="dt">NE.NonEmpty</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a
+project l <span class="fu">=</span> tabulate describe
+  <span class="kw">where</span>
+    describe <span class="fu">=</span> (l <span class="fu">NE.!!</span>) <span class="fu">.</span> foldl go <span class="dv">0</span>
+    maxIndex <span class="fu">=</span> length l <span class="fu">-</span> <span class="dv">1</span>
+    minIndex <span class="fu">=</span> <span class="dv">0</span>
+    go n <span class="dt">L</span> <span class="fu">=</span> max minIndex (n <span class="fu">-</span> <span class="dv">1</span>)
+    go n <span class="dt">R</span> <span class="fu">=</span> min maxIndex (n <span class="fu">+</span> <span class="dv">1</span>)
+
+<span class="ot">elems ::</span> <span class="dt">NE.NonEmpty</span> <span class="dt">String</span>
+elems <span class="fu">=</span> <span class="st">&quot;one&quot;</span> <span class="fu">NE.:|</span> [<span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</code></pre></div>
+<p>Now we can write a sequence of directions to form a path and see where we end up! Remember, the zipper 'sticks' to the ends if we try and go off!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">path ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span>
+path <span class="fu">=</span> S.fromList [<span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">L</span>]</code></pre></div>
+<p>Now we can <code>index (project elems) path</code> to get &quot;two&quot;!</p>
+<p>All this talk and we still haven't mentioned Comonad yet! Well lucky us; the 'free' package describes an instance of Comonad for all <code>(Functor f =&gt; Cofree f a)</code>! So our <code>(Cofree TPossible a)</code> is a Comonad over a for free! Remember that a Comonad instance gives us access to <code>extend</code>, <code>extract</code> and <code>duplicate</code> functions. You can see their types in <a href="https://hackage.haskell.org/package/comonad-5/docs/Control-Co%20monad.html#t:Comonad">Control.Comonad</a>.</p>
+<p>We already have a way to extract an element at a given position via 'index', but don't really have a way to move our zipper WITHOUT extracting; don't fret though, we can describe this behaviour in terms of our new Comonad instance by using extend!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">moveTo ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a
+moveTo ind <span class="fu">=</span> extend (\cfr <span class="ot">-&gt;</span> index cfr ind)</code></pre></div>
+<p>Great! Extend works by duplicating the Comonad meaning we'll have a <code>(Cofree TPossible (Cofree TPossible a))</code>, then it fmaps over the duplicated parts with the given function. The function 'move' will move the element in each slot of the Cofree over by a given amount, which is the same result as 'scanning' our Tape over to a given position.</p>
+<p>Cool stuff! I hope you've learned a little about Distributive, Representable, Comonads, Cofree, and zippers! If you have any questions find me on twitter <span class="citation">@chrislpenner</span></p>
+<p>Cheers!</p>
+              ]]></content>
+      </entry>
   <entry>
       <title>Shipping Haskell via Homebrew</title>
       <link href="http://chrispenner.ca/posts/homebrew-haskell.html"/>
@@ -22,27 +133,27 @@
 <p>If you're content to build binaries using stack locally and upload them to Github yourself then you can skip down to the Homebrew Formula section.</p>
 <h2 id="building-binaries-with-travis-ci">Building Binaries with Travis-CI</h2>
 <p>Here's a look at my <code>.travis.yml</code>:</p>
-<pre class="yaml"><code>addons:
-  apt:
-    packages:
-    - libgmp-dev
-language: c
-sudo: false
-cache:
-  directories:
-  - $HOME/.local/bin
-  - $HOME/.stack
-os:
-- linux
-- osx
-before_install:
-- sh tools/install-stack.sh
-- sh tools/install-ghr.sh
-script:
-- stack setup
-- stack build --ghc-options -O2 --pedantic
-after_success:
-- sh tools/attach-binary.sh</code></pre>
+<div class="sourceCode"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span class="fu">addons:</span>
+  <span class="fu">apt:</span>
+    <span class="fu">packages:</span>
+    <span class="kw">-</span> libgmp-dev
+<span class="fu">language:</span><span class="at"> c</span>
+<span class="fu">sudo:</span><span class="at"> false</span>
+<span class="fu">cache:</span>
+  <span class="fu">directories:</span>
+  <span class="kw">-</span> $HOME/.local/bin
+  <span class="kw">-</span> $HOME/.stack
+<span class="fu">os:</span>
+<span class="kw">-</span> linux
+<span class="kw">-</span> osx
+<span class="fu">before_install:</span>
+<span class="kw">-</span> sh tools/install-stack.sh
+<span class="kw">-</span> sh tools/install-ghr.sh
+<span class="fu">script:</span>
+<span class="kw">-</span> stack setup
+<span class="kw">-</span> stack build --ghc-options -O2 --pedantic
+<span class="fu">after_success:</span>
+<span class="kw">-</span> sh tools/attach-binary.sh</code></pre></div>
 <p>This is just a basic setup for building haskell on Travis-CI; we need the additional package <code>libgmp-dev</code>, cache a few things, and specify to build for both linux and osx. This way we'll have both linux and osx binaries when we're done! In the pre-install hooks we install stack manually, then install <a href="https://github.com/tcnksm/ghr">ghr</a> a github resource management tool.</p>
 <p>You can find <a href="https://github.com/ChrisPenner/tempered/blob/master/tools/install-stack.sh">install-stack.sh</a> and <a href="https://github.com/ChrisPenner/tempered/blob/master/tools/install-ghr.sh">install-ghr.sh</a> scripts on my <a href="https://github.com/ChrisPenner/tempered">Tempered</a> project. They use Travis Env variables for everything, so you can just copy-paste them into your project.</p>
 <p>Inside <code>script</code> we build the project as normal you can do this however you like so long as a binary is produced.</p>
@@ -50,27 +161,27 @@ after_success:
 <p>The script assumes the binary has the same name as your repo, if that's not the case you can hard-code the script to something else. At this point whenever you upload a tagged release Travis-CI should run a mac and a linux build and upload the result of each to your Github Repo's releases page. You'll likely need to trouble-shoot one or two things to get it just right.</p>
 <h2 id="setting-up-a-homebrew-formula">Setting up a Homebrew Formula</h2>
 <p>You can follow <a href="http://octavore.com/posts/2016/02/15/distributing-go-apps-os-x">this guide by octavore</a> to set up your own homebrew tap; then we'll make a formula. Here's what mine for my tempered project looks like:</p>
-<pre class="ruby"><code>class Tempered &lt; Formula
-  desc &quot;A dead-simple templating utility for simple shell interpolation&quot;
-  homepage &quot;https://github.com/ChrisPenner/tempered&quot;
-  url &quot;https://github.com/ChrisPenner/tempered/releases/download/v0.1.0/tempered-v0.1.0-osx.tar.gz&quot;
-  sha256 &quot;9241be80db128ddcfaf9d2fc2520d22aab47935bcabc117ed874c627c0e1e0be&quot;
+<div class="sourceCode"><pre class="sourceCode ruby"><code class="sourceCode ruby"><span class="kw">class</span> <span class="dt">Tempered</span> &lt; <span class="dt">Formula</span>
+  desc <span class="st">&quot;A dead-simple templating utility for simple shell interpolation&quot;</span>
+  homepage <span class="st">&quot;https://github.com/ChrisPenner/tempered&quot;</span>
+  url <span class="st">&quot;https://github.com/ChrisPenner/tempered/releases/download/v0.1.0/tempered-v0.1.0-osx.tar.gz&quot;</span>
+  sha256 <span class="st">&quot;9241be80db128ddcfaf9d2fc2520d22aab47935bcabc117ed874c627c0e1e0be&quot;</span>
 
-  bottle :unneeded
+  bottle <span class="st">:unneeded</span>
 
-  def install
-    bin.install &quot;tempered&quot;
-  end
+  <span class="kw">def</span> install
+    bin.install <span class="st">&quot;tempered&quot;</span>
+  <span class="kw">end</span>
 
-  test do
-    system &quot;#{bin}/tempered&quot;
-  end
-end</code></pre>
+  test <span class="kw">do</span>
+    system <span class="st">&quot;</span><span class="ot">#{</span>bin<span class="ot">}</span><span class="st">/tempered&quot;</span>
+  <span class="kw">end</span>
+<span class="kw">end</span></code></pre></div>
 <p>You'll of course have to change the names, and you'll need to change the url to match the uploaded tar.gz file (for osx) on your github releases page from step one.</p>
 <p>Lastly we'll need to get the <code>sha 256</code> of the bundle; you can just download it and run <code>shasum -a 256 &lt;filename&gt;</code> if you like; or you can look in your Travis-CI logs for the osx build under the <code>attach-binary.sh</code> step; the script logs out the sha sum before uploading the binary.</p>
 <p>After you've pushed up your homebrew formula pointing to the latest binary then users can install it by running:</p>
-<pre class="sh"><code># Replace the names respectively
-brew update &amp;&amp; brew install githubuser/tapname/reponame</code></pre>
+<div class="sourceCode"><pre class="sourceCode sh"><code class="sourceCode bash"><span class="co"># Replace the names respectively</span>
+<span class="ex">brew</span> update <span class="kw">&amp;&amp;</span> <span class="ex">brew</span> install githubuser/tapname/reponame</code></pre></div>
 <p>Each time you release a new version you'll need to update the url and sha in the homebrew formula; you could automate this as a script to run in Travis if you like; I haven't been bothered enough to do it yet, but if you do it let me know and I'll update this post!</p>
 <p>This guide was inspired by (and guided by) <a href="http://taylor.fausak.me/2016/05/09/add-files-to-github-releases/">Taylor Fausak's post</a> on a similar topic; most of the scripts are adapted from his.</p>
 <p>Cheers and good luck!</p>
@@ -85,27 +196,27 @@ brew update &amp;&amp; brew install githubuser/tapname/reponame</code></pre>
       <content type="html"><![CDATA[
               <p>After listening to the latest <a href="https://twitter.com/MagicReadAlong">Magic Read-along</a> episode <a href="http://www.magicreadalong.com/episode/45">&quot;You should watch this&quot;</a> (which you should go listen to now) I got caught up thinking about Brian's idea of an Endomorphism version of Kleisli composition for use with <a href="https://github.com/reactjs/react-redux">Redux</a>, it's actually a very similar model to what I'm using in my <a href="github.com/chrispenner/eve">event framework</a> for event listeners so I figured I'd try to formalize the pattern and recognize some of the concepts involved. They talk about the idea of a Redux-reducer, which is usually of type <code>s -&gt; Action -&gt; s</code>, it takes a state and an action and returns a new state. He then re-arranged the arguments to <code>Action -&gt; s -&gt; s</code>. He then recognized this as <code>Action -&gt; Endo s</code> (an Endo-morphism is just any function from one type to itself: <code>a -&gt; a</code>). He would take his list of reducers and partially apply them with the <code>Action</code>, yielding a list of type <code>Endo s</code> where <code>s</code> is the state object the reducer operates over. At this point we can use the Monoid instance <code>Endo</code> has defined, so we foldmap with Endo to combine the list of reducers into a sort of pipeline where each function feeds into the next; the Endo instance of Monoid is just function composition over functions which return the same type as their input.</p>
 <p>This cleans up the interface of the reducers a fair amount, but what about an alternate kind of <code>Endo</code> which uses Kleisli composition instead of normal function composition? <a href="http://hackage.haskell.org/package/base-4.9.1.0/docs/Control-Monad.html#v:-62--61--62-">Kleisli composition</a> often referenced as (&gt;=&gt;); takes two functions which return monads and composes them together using the underlying bind/flatmap of the Monad. The type of Kleisli composition is: <code>(&gt;=&gt;) :: Monad m =&gt; (a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c</code>. If we could define a nice Endo-style monoid over this type then we could compose reducers like we did above, but also allow the functions to perform monadic effects (which is a bad idea in Redux, but there are other times this would be useful, imagine running a user through a pipeline of transformations which interact with a database or do some error handling). We can easily define this instance like so:</p>
-<pre class="haskell"><code>import Control.Monad
-newtype KEndo m a = KEndo
-  { getKEndo :: (a -&gt; m a) }
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import </span><span class="dt">Control.Monad</span>
+<span class="kw">newtype</span> <span class="dt">KEndo</span> m a <span class="fu">=</span> <span class="dt">KEndo</span>
+  {<span class="ot"> getKEndo ::</span> (a <span class="ot">-&gt;</span> m a) }
   
-instance Monad m =&gt; Monoid (KEndo m a) where
-  mempty = KEndo return
-  (KEndo a) `mappend` (KEndo b) = KEndo (a &gt;=&gt; b)  </code></pre>
+<span class="kw">instance</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">KEndo</span> m a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> <span class="dt">KEndo</span> return
+  (<span class="dt">KEndo</span> a) <span class="ot">`mappend`</span> (<span class="dt">KEndo</span> b) <span class="fu">=</span> <span class="dt">KEndo</span> (a <span class="fu">&gt;=&gt;</span> b)  </code></pre></div>
 <p>This is great, now if we have a list of functions of some type <code>[User -&gt; Writer Error User]</code> or something we can use foldmap to combine them into a single function! It works like this:</p>
-<pre class="haskell"><code>actions :: [User -&gt; Writer Error User]
-actions = [...]
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">actions ::</span> [<span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">Writer</span> <span class="dt">Error</span> <span class="dt">User</span>]
+actions <span class="fu">=</span> [<span class="fu">...</span>]
 
-pipeline :: User -&gt; Writer Error User
-pipeline = getKEndo . foldMap KEndo $ actions</code></pre>
+<span class="ot">pipeline ::</span> <span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">Writer</span> <span class="dt">Error</span> <span class="dt">User</span>
+pipeline <span class="fu">=</span> getKEndo <span class="fu">.</span> foldMap <span class="dt">KEndo</span> <span class="fu">$</span> actions</code></pre></div>
 <p>The whole Kleisli Endo thing is a cool idea; but this thing has actually been done before! It's actually the same as the <a href="http://hackage.haskell.org/package/mtl-2.2.1/docs/Control-Monad-State-Lazy.html#v:StateT"><code>StateT</code></a> state monad transformer from mtl; let's see how we can make the comparison. A generic Endo is of type <code>s -&gt; s</code>, this is isomorphic to <code>s -&gt; ((), s)</code>, aka <code>State s ()</code>. The trick is that the Kleisli Endo (<code>s -&gt; m s</code> or by isomorphism <code>s -&gt; m ((), s)</code>) can actually be generalized over the <code>()</code> to <code>s -&gt; m (a, s)</code> which incidentally matches <code>runStateT :: StateT s m a -&gt; s -&gt; m (a, s)</code> from mtl!</p>
 <p>So basically KEndo is isomorphic to StateT, but we'd still like a monoid instance for it, Gabriel shows a monoid over the IO monad in <a href="https://youtu.be/WsA7GtUQeB8">&quot;Applied category theory and abstract algebra&quot;</a>, the Monoid he shows actually generalizes to any monad as this instance:</p>
-<pre class="haskell"><code>instance (Monad m, Monoid a) =&gt; Monoid (m a) where
-  mempty = return mempty
-  ma `mappend` mb = do
-    a &lt;- ma
-    b &lt;- mb
-    return (a `mappend` b)</code></pre>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> (<span class="dt">Monad</span> m, <span class="dt">Monoid</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (m a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> return mempty
+  ma <span class="ot">`mappend`</span> mb <span class="fu">=</span> <span class="kw">do</span>
+    a <span class="ot">&lt;-</span> ma
+    b <span class="ot">&lt;-</span> mb
+    return (a <span class="ot">`mappend`</span> b)</code></pre></div>
 <p>So that means we can use this instance for StateT (which is a monad). Since <code>()</code> is a trivial monoid (where every mappend just returns <code>()</code>) the simple case is <code>State s ()</code> which was our <code>KEndo</code> of <code>s -&gt; ((), s)</code> but now we have the Monoid instance, which behaves the same as the <code>KEndo</code> instance, so we don't need <code>KEndo</code> anymore. If we want to allow arbitrary effects we use the Transformer version: <code>StateT s m ()</code> where <code>m</code> is a monad containing any additional effects we want. In addition to being able to add additional effects we also gain the ability to aggregate information as a monoid! If you decided you wanted your reducers to also aggregate some form of information, then they'd be: <code>Monoid a =&gt; Action -&gt; s -&gt; (a, s)</code>, which is <code>Action -&gt; State s a</code>, and if <code>a</code> is a monoid, then the monoid instance of <code>State</code> acts like Endo, but also aggregates the 'a's along the way!</p>
 <p>Lastly we recognize that in the case of the Redux Reducers, if we have a whole list of reducers: <code>Action -&gt; State s ()</code> then we can rephrase it as the ReaderT Monad: <code>ReaderT Action (State s) ()</code>, which maintains all of the nice monoids we've set up so far, and becomes even more composable!</p>
               ]]></content>

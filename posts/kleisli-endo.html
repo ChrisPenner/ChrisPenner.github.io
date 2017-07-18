@@ -743,27 +743,27 @@
     <article class="post">
         <p>After listening to the latest <a href="https://twitter.com/MagicReadAlong">Magic Read-along</a> episode <a href="http://www.magicreadalong.com/episode/45">&quot;You should watch this&quot;</a> (which you should go listen to now) I got caught up thinking about Brian's idea of an Endomorphism version of Kleisli composition for use with <a href="https://github.com/reactjs/react-redux">Redux</a>, it's actually a very similar model to what I'm using in my <a href="github.com/chrispenner/eve">event framework</a> for event listeners so I figured I'd try to formalize the pattern and recognize some of the concepts involved. They talk about the idea of a Redux-reducer, which is usually of type <code>s -&gt; Action -&gt; s</code>, it takes a state and an action and returns a new state. He then re-arranged the arguments to <code>Action -&gt; s -&gt; s</code>. He then recognized this as <code>Action -&gt; Endo s</code> (an Endo-morphism is just any function from one type to itself: <code>a -&gt; a</code>). He would take his list of reducers and partially apply them with the <code>Action</code>, yielding a list of type <code>Endo s</code> where <code>s</code> is the state object the reducer operates over. At this point we can use the Monoid instance <code>Endo</code> has defined, so we foldmap with Endo to combine the list of reducers into a sort of pipeline where each function feeds into the next; the Endo instance of Monoid is just function composition over functions which return the same type as their input.</p>
 <p>This cleans up the interface of the reducers a fair amount, but what about an alternate kind of <code>Endo</code> which uses Kleisli composition instead of normal function composition? <a href="http://hackage.haskell.org/package/base-4.9.1.0/docs/Control-Monad.html#v:-62--61--62-">Kleisli composition</a> often referenced as (&gt;=&gt;); takes two functions which return monads and composes them together using the underlying bind/flatmap of the Monad. The type of Kleisli composition is: <code>(&gt;=&gt;) :: Monad m =&gt; (a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c</code>. If we could define a nice Endo-style monoid over this type then we could compose reducers like we did above, but also allow the functions to perform monadic effects (which is a bad idea in Redux, but there are other times this would be useful, imagine running a user through a pipeline of transformations which interact with a database or do some error handling). We can easily define this instance like so:</p>
-<pre class="haskell"><code>import Control.Monad
-newtype KEndo m a = KEndo
-  { getKEndo :: (a -&gt; m a) }
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import </span><span class="dt">Control.Monad</span>
+<span class="kw">newtype</span> <span class="dt">KEndo</span> m a <span class="fu">=</span> <span class="dt">KEndo</span>
+  {<span class="ot"> getKEndo ::</span> (a <span class="ot">-&gt;</span> m a) }
   
-instance Monad m =&gt; Monoid (KEndo m a) where
-  mempty = KEndo return
-  (KEndo a) `mappend` (KEndo b) = KEndo (a &gt;=&gt; b)  </code></pre>
+<span class="kw">instance</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">KEndo</span> m a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> <span class="dt">KEndo</span> return
+  (<span class="dt">KEndo</span> a) <span class="ot">`mappend`</span> (<span class="dt">KEndo</span> b) <span class="fu">=</span> <span class="dt">KEndo</span> (a <span class="fu">&gt;=&gt;</span> b)  </code></pre></div>
 <p>This is great, now if we have a list of functions of some type <code>[User -&gt; Writer Error User]</code> or something we can use foldmap to combine them into a single function! It works like this:</p>
-<pre class="haskell"><code>actions :: [User -&gt; Writer Error User]
-actions = [...]
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">actions ::</span> [<span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">Writer</span> <span class="dt">Error</span> <span class="dt">User</span>]
+actions <span class="fu">=</span> [<span class="fu">...</span>]
 
-pipeline :: User -&gt; Writer Error User
-pipeline = getKEndo . foldMap KEndo $ actions</code></pre>
+<span class="ot">pipeline ::</span> <span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">Writer</span> <span class="dt">Error</span> <span class="dt">User</span>
+pipeline <span class="fu">=</span> getKEndo <span class="fu">.</span> foldMap <span class="dt">KEndo</span> <span class="fu">$</span> actions</code></pre></div>
 <p>The whole Kleisli Endo thing is a cool idea; but this thing has actually been done before! It's actually the same as the <a href="http://hackage.haskell.org/package/mtl-2.2.1/docs/Control-Monad-State-Lazy.html#v:StateT"><code>StateT</code></a> state monad transformer from mtl; let's see how we can make the comparison. A generic Endo is of type <code>s -&gt; s</code>, this is isomorphic to <code>s -&gt; ((), s)</code>, aka <code>State s ()</code>. The trick is that the Kleisli Endo (<code>s -&gt; m s</code> or by isomorphism <code>s -&gt; m ((), s)</code>) can actually be generalized over the <code>()</code> to <code>s -&gt; m (a, s)</code> which incidentally matches <code>runStateT :: StateT s m a -&gt; s -&gt; m (a, s)</code> from mtl!</p>
 <p>So basically KEndo is isomorphic to StateT, but we'd still like a monoid instance for it, Gabriel shows a monoid over the IO monad in <a href="https://youtu.be/WsA7GtUQeB8">&quot;Applied category theory and abstract algebra&quot;</a>, the Monoid he shows actually generalizes to any monad as this instance:</p>
-<pre class="haskell"><code>instance (Monad m, Monoid a) =&gt; Monoid (m a) where
-  mempty = return mempty
-  ma `mappend` mb = do
-    a &lt;- ma
-    b &lt;- mb
-    return (a `mappend` b)</code></pre>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> (<span class="dt">Monad</span> m, <span class="dt">Monoid</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (m a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> return mempty
+  ma <span class="ot">`mappend`</span> mb <span class="fu">=</span> <span class="kw">do</span>
+    a <span class="ot">&lt;-</span> ma
+    b <span class="ot">&lt;-</span> mb
+    return (a <span class="ot">`mappend`</span> b)</code></pre></div>
 <p>So that means we can use this instance for StateT (which is a monad). Since <code>()</code> is a trivial monoid (where every mappend just returns <code>()</code>) the simple case is <code>State s ()</code> which was our <code>KEndo</code> of <code>s -&gt; ((), s)</code> but now we have the Monoid instance, which behaves the same as the <code>KEndo</code> instance, so we don't need <code>KEndo</code> anymore. If we want to allow arbitrary effects we use the Transformer version: <code>StateT s m ()</code> where <code>m</code> is a monad containing any additional effects we want. In addition to being able to add additional effects we also gain the ability to aggregate information as a monoid! If you decided you wanted your reducers to also aggregate some form of information, then they'd be: <code>Monoid a =&gt; Action -&gt; s -&gt; (a, s)</code>, which is <code>Action -&gt; State s a</code>, and if <code>a</code> is a monoid, then the monoid instance of <code>State</code> acts like Endo, but also aggregates the 'a's along the way!</p>
 <p>Lastly we recognize that in the case of the Redux Reducers, if we have a whole list of reducers: <code>Action -&gt; State s ()</code> then we can rephrase it as the ReaderT Monad: <code>ReaderT Action (State s) ()</code>, which maintains all of the nice monoids we've set up so far, and becomes even more composable!</p>
 
@@ -783,8 +783,8 @@ pipeline = getKEndo . foldMap KEndo $ actions</code></pre>
         <div id="disqus_thread"></div>
         <script type="text/javascript">
             var disqus_shortname = 'chrispenner';
-var disqus_identifier = '$path$';
-var disqus_url = 'https://chrispenner.github.io$url$';
+            var disqus_identifier = '/posts/kleisli-endo.html';
+            var disqus_url = 'https://chrispenner.ca/posts/kleisli-endo.html';
 
 (function() {
     var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
