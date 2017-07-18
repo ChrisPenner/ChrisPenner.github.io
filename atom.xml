@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-07-18T04:37:30Z</updated>
+  <updated>2017-07-18T04:47:00Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -15,6 +15,7 @@
       <updated>2017-07-05T00:00:00Z</updated>
       <summary>Using Representable and Cofree to build a zipper datatype</summary>
       <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/math.jpeg" alt="Zippers using Representable and Cofree">
               <p>We're going to take a look at an alternative way to define a Zipper Comonad over a data type. Typically one would define a Zipper Comonad by defining a new datatype which represents the Zipper; then implementing <code>duplicate</code> and <code>extract</code> for it. <code>extract</code> is typically straightforward to write, but I've had some serious trouble writing <code>duplicate</code> for some more complex data-types like trees.</p>
 <p>We're looking at a different way of building a zipper, The advantages of this method are that we can build it up out of smaller instances piece by piece. Each piece is a easier to write, and we also gain several utility functions from the Typeclasses we'll be implementing along the way! It's not terribly practical, but it's a fun experiment.</p>
 <p>You can find this post as a literate haskell file <a href="https://gist.github.com/ChrisPenner/4527dd0d9c60983562e03c28731bb3bd">here</a> so that means you can load it up directly in GHC and play around with it if you want to follow along! Let's get started.</p>
