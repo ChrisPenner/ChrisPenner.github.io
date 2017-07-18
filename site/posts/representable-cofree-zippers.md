@@ -4,6 +4,7 @@ author: Chris Penner
 date: Jul 5, 2017
 tags: [haskell, programming]
 description: Using Representable and Cofree to build a zipper datatype
+image: math.jpeg
 ---
 
 We're going to take a look at an alternative way to define a Zipper Comonad
