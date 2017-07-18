@@ -1,7 +1,7 @@
 ---
 title: Semantic Versioning
 author: Chris Penner
-date: April 2nd 2015
+date: Apr 2, 2015
 tags: [programming, open-source]
 description:
 image: versioning.jpg

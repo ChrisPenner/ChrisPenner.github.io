@@ -1,7 +1,7 @@
 ---
 title: You Own Your Data
 author: Chris Penner
-date: September 26th 2014
+date: Sep 26, 2014
 tags: [open-source]
 image: security-vs-privacy.jpg
 ---

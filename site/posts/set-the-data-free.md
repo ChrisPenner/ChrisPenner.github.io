@@ -1,7 +1,7 @@
 ---
 title: Set the Data Free
 author: Chris Penner
-date: Aug 2nd 2014
+date: Aug 2, 2014
 tags: [open-source]
 image: set-the-data-free.png
 ---

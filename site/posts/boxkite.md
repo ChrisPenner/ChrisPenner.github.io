@@ -1,7 +1,7 @@
 ---
 title: "BoxKite: Open-Sourced"
 author: Chris Penner
-date: March 25th 2015
+date: Mar 25, 2015
 tags: [open-source, programming]
 description: I've open-sourced the code that I use to generate this blog.
 image: boxkite.png

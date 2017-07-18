@@ -1,7 +1,7 @@
 ---
 title: "Worth a Read #3 - Typography"
 author: Chris Penner
-date: Jan 13 2015
+date: Jan 13, 2015
 categories: Worth-a-read
 tags: [typography]
 image: typography-t.png

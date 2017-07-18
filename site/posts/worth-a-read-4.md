@@ -1,7 +1,7 @@
 ---
 title: "Worth a Read #4 - Unix Tools"
 author: Chris Penner
-date: Feb 13 2015
+date: Feb 13, 2015
 categories: worth-a-read
 tags: [Unix]
 image: unix-prompt.png

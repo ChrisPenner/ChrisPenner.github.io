@@ -1,7 +1,7 @@
 ---
 title: "Gem: Git"
 author: Chris Penner
-date: Jan 5 2015
+date: Jan 5, 2015
 tags: [open-source, git]
 categories: open-source-gems
 language: C, shell

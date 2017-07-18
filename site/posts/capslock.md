@@ -1,7 +1,7 @@
 ---
 title: Caps-lock
 author: Chris Penner
-date: May 25th 2014
+date: May 25, 2014
 tags: [design, UX]
 image: capslock.png
 ---

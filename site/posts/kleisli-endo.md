@@ -1,7 +1,7 @@
 ---
 title: Kleisli Endomorphisms
 author: Chris Penner
-date: April 8th, 2017
+date: Apr 8, 2017
 tags: [haskell, programming]
 description: Discovering an isomorphism between the Kleisli version of Endomorphisms to the mtl StateT transformer.
 ---

@@ -1,7 +1,7 @@
 ---
 title: The Future of Software
 author: Chris Penner
-date: September 24 2014
+date: Sep 24, 2014
 tags: [design]
 categories: thoughts
 image: modular.png

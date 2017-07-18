@@ -1,7 +1,7 @@
 ---
 title: The Switch To Mac
 author: Chris Penner
-date: May 19th, 2014
+date: May 19, 2014
 categories: thoughts
 image: the-switch-to-mac.png
 ---

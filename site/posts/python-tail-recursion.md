@@ -1,7 +1,7 @@
 ---
 title: Tail Recursion In Python
 author: Chris Penner
-date: July 26th 2016
+date: Jul 26, 2016
 tags: [python, programming]
 description: Tail Recursion in python without introspection
 image: ouroboros.jpg

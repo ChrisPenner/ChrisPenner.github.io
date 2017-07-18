@@ -1,7 +1,7 @@
 ---
 title: The Interface We Need
 author: Chris Penner
-date: February 15th 2016
+date: Feb 15, 2016
 categories: thoughts
 tags: [programming, python]
 description: Starting with the interface can make things easier for everyone

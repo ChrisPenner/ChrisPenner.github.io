@@ -1,7 +1,7 @@
 ---
 title: "Worth a Read #1"
 author: Chris Penner
-date: Oct. 31st 2014
+date: Oct 31, 2014
 categories: Worth-a-read
 tags: [CSS, Typography, Python, Design]
 ---

@@ -1,7 +1,7 @@
 ---
 title: Getting Schooled
 author: Chris Penner
-date: March 19th 2015
+date: Mar 19, 2015
 categories: thoughts
 description: When did schooling become more important than skill? Should we really be discriminating against people based on the school they went to?
 image: getting-schooled.png

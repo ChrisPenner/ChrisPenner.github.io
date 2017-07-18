@@ -1,7 +1,7 @@
 ---
 title: Let there be Truth
 author: Chris Penner
-date: Jan 2nd 2016
+date: Jan 2, 2016
 tags: [programming]
 description: Let's re-visit truthy/falsy.
 ---

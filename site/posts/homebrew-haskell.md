@@ -1,7 +1,7 @@
 ---
 title: Shipping Haskell via Homebrew
 author: Chris Penner
-date: April 24th, 2017
+date: Apr 24, 2017
 tags: [haskell, programming]
 description: How to set up your Haskell project to distribute via Homebrew
 image: homebrew.jpg
