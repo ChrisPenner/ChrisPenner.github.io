@@ -22,7 +22,6 @@ rfc3339 = Just "%H:%M:%SZ"
 main :: IO ()
 main = siteWithGlobals funcs $ do
   posts <- sortByDate . fmap formatDate <$> resourceLoader markdownReader ["posts/*.md"]
-  liftIO $ print posts
   let tags = getTags (setExt "html" . addPrefix "/tag/") posts
   writeTemplate "templates/index.html" [mkIndexEnv posts tags]
   writeTemplate "templates/post.html" (over (key "tags" . _Array . traverse) stripHTMLSuffix <$> posts)
