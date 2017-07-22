@@ -4,9 +4,10 @@ author: Chris Penner
 date: Jul 20, 2017
 tags: [haskell, programming]
 description: Building adjunctions from Free and Forgetful Functors
+image: books.jpg
 ---
 
-Today I'm going to continue a bit the previous topic of Adjunctions, [last
+Today I'm going to continue the previous topic of Adjunctions, [last
 time](/posts/adjunction-battleship) we talked about how
 you can build a sensible adjunction from any Representable functor, this time
 we're going to talk about a (semantically) different form of adjunction, one
