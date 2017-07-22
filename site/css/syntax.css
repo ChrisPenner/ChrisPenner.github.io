@@ -4,11 +4,11 @@ pre {
 
 code {
     background-color: #F5FCFF;
-    color: #268BD2;
+    color: #222;
 }
 
 /* KeyWordTok */
-.sourceCode .kw { color: #1F8A70; }
+.sourceCode .kw { color: #600095; }
 /* DataTypeTok */
 .sourceCode .dt { color: #268BD2; }
 
@@ -17,7 +17,7 @@ code {
 /* CharTok */
 .sourceCode .ch { color: #E6DB74; }
 /* StringTok */
-.sourceCode .st { color: #E6DB74; }
+.sourceCode .st { color: #37ad2d; }
 /* CommentTok */
 .sourceCode .co { color: #7E8E91; }
 /* OtherTok */
