@@ -91,6 +91,12 @@ ul, ol {
   list-style-position: inside;
   margin: 1em 0 1em 2em; }
 
+li {
+  margin-bottom: 0.7em;
+}
+
+
+
 em {
   font-weight: bold;
   font-style: italic; }
