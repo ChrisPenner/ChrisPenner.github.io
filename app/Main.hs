@@ -22,9 +22,11 @@ rfc3339 = Just "%H:%M:%SZ"
 main :: IO ()
 main = siteWithGlobals funcs $ do
   posts <- sortByDate . fmap formatDate <$> resourceLoader markdownReader ["posts/*.md"]
+  drafts <- sortByDate . fmap formatDate <$> resourceLoader markdownReader ["drafts/*.md"]
   let tags = getTags (setExt "html" . addPrefix "/tag/") posts
   writeTemplate "templates/index.html" [mkIndexEnv posts tags]
   writeTemplate "templates/post.html" (over (key "tags" . _Array . traverse) stripHTMLSuffix <$> posts)
+  writeTemplate "templates/post.html" (over (key "tags" . _Array . traverse) stripHTMLSuffix <$> drafts)
   writeTemplate "templates/tag.html" (stripPostsHTMLSuffix <$> tags)
   atomRssFeed posts
   staticAssets
