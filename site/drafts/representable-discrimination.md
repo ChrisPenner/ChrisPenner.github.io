@@ -1,26 +1,35 @@
 ---
-title: "Radix sorting with Representable Functors"
+title: "Radix Sort and Trie Trees with Representable Functors"
 author: Chris Penner
 date: Jul 23, 2017
 tags: [haskell, programming]
-description: Elements can be sorted into representable functors by embedding them in a monoid
+description: Representable Functors can be used to create Map-like data structures or perform Radix-like sorts.
 image: containers.jpg
 ---
 
-Looking at my recent posts it's clear I've been on a bit of a Representable kick lately; 
-turns out there's a lot of cool things you can do with it! We'll be adding 'sorting' to that list
-of things today. Representable Functors bring with them an intrinsic notion of sorting; not in the
-traditional 'ordered' sense, but rather a sense of 'structural' sorting. Since every 'slot' in a
-Representable Functor `r` can be uniquely identified by some `Rep r` we can talk about sorting
-items into some named slot in `r`. If we like we can also define `Ord (Rep r)` to get a total ordering
-over the slots, but it's not required.
+I recommend you follow along in ghci and experiment with things as you go;
+There's a Literate Haskell version of this post
+[here](https://gist.github.com/ChrisPenner/eb6a4efa0d57f39dc5f3c7bb2d31c2d7),
+you can load it straight into ghci!
 
-I'll preface this post by saying I'm more interested in exploring the structural 'form' of representable
-sorting than the performance of the functions we'll define, in fact the performance of some of them as they're
-written here is going to be quite poor as I'm sacrificing speed to gain simplicity for the sake of pedagogy.
-The intent is to observe the system from a high-level to see some interesting new patterns and shapes we gain
-from using Representable to do our sorting. Most of the structures we build could quite easily be optimized to
-perform reasonably if one was so inclined.
+Looking at my recent posts it's clear I've been on a bit of a Representable
+kick lately; turns out there's a lot of cool things you can do with it! We'll
+be adding 'sorting' to that list of things today. Representable Functors bring
+with them an intrinsic notion of sorting; not in the traditional 'ordered'
+sense, but rather a sense of 'structural' sorting. Since every 'slot' in a
+Representable Functor `r` can be uniquely identified by some `Rep r` we can
+talk about sorting items into some named slot in `r`. If we like we can also
+define `Ord (Rep r)` to get a total ordering over the slots, but it's not
+required.
+
+I'll preface this post by saying I'm more interested in exploring the
+structural 'form' of representable sorting than the performance of the
+functions we'll define, in fact the performance of some of them as they're
+written here is going to be quite poor as I'm sacrificing speed to gain
+simplicity for the sake of pedagogy. The intent is to observe the system from a
+high-level to see some interesting new patterns and shapes we gain from using
+Representable to do our sorting. Most of the structures we build could quite
+easily be optimized to perform reasonably if one was so inclined.
 
 I'll step through my thought process on this one:
 
