@@ -34,6 +34,7 @@ main = siteWithGlobals funcs $ do
 funcs :: MT.Value
 funcs = MT.object
   ["truncate" MT.~> MT.overText (T.take 30)
+  ,"stripExt" MT.~> MT.overText (T.pack . setExt "" . T.unpack)
   ]
 
 sortByDate :: [Value] -> [Value]
