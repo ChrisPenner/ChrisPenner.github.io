@@ -15,7 +15,7 @@ code {
 /* DecValTok (decimal value), BaseNTok, FloatTok */
 .sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: #AE81FF; }
 /* CharTok */
-.sourceCode .ch { color: #E6DB74; }
+.sourceCode .ch { color: #37ad2d; }
 /* StringTok */
 .sourceCode .st { color: #37ad2d; }
 /* CommentTok */
