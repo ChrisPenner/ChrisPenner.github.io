@@ -2,12 +2,169 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-07-25T05:07:58Z</updated>
+  <updated>2017-07-26T01:30:08Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>http://chrispenner.ca/</id>
 
+  <entry>
+      <title>Tabulating Radix Sort and Trie Trees with Representable Functors</title>
+      <link href="http://chrispenner.ca/posts/representable-discrimination.html"/>
+      <id>http://chrispenner.ca/posts/representable-discrimination.html</id>
+      <updated>2017-07-23T00:00:00Z</updated>
+      <summary>Representable Functors can be used to create Map-like data structures or perform Radix-like sorts.</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/containers.jpg" alt="Tabulating Radix Sort and Trie Trees with Representable Functors">
+              <p>I recommend you follow along in ghci and experiment with things as you go; There's a Literate Haskell version of this post <a href="https://gist.github.com/ChrisPenner/eb6a4efa0d57f39dc5f3c7bb2d31c2d7">here</a>, you can load it straight into ghci!</p>
+<p>Looking at my recent posts it's clear I've been on a bit of a Representable kick lately; turns out there's a lot of cool things you can do with it! We'll be adding 'sorting' to that list of things today. Representable Functors bring with them an intrinsic notion of sorting; not in the traditional 'ordered' sense, but rather a sense of 'structural' sorting. Since every 'slot' in a Representable Functor <code>r</code> can be uniquely identified by some <code>Rep r</code> we can talk about sorting items into some named slot in <code>r</code>. If we like we can also define <code>Ord (Rep r)</code> to get a total ordering over the slots, but it's not required.</p>
+<p>I'll preface this post by saying I'm more interested in exploring the structural 'form' of representable sorting than the performance of the functions we'll define, in fact the performance of some of them as they're written here is going to be quite poor as I'm sacrificing speed to gain simplicity for the sake of pedagogy. The intent is to observe the system from a high-level to see some interesting new patterns and shapes we gain from using Representable to do our sorting. Most of the structures we build could quite easily be optimized to perform reasonably if one was so inclined.</p>
+<p>I'll step through my thought process on this one:</p>
+<p>We've got a Representable Functor <code>r</code>; If we have a <code>Rep r</code> for some <code>a</code> we know which slot to put it into in an <code>r a</code>. We can get a <code>Rep r</code> for every <code>a</code> by using a function <code>a -&gt; Rep r</code>. Now we want to embed the <code>a</code> into an <code>r a</code> using the <code>Rep r</code>, the tool we have for this is <code>tabulate</code>, in order to know which index is which and put it into the right slot we'll need to require <code>Eq (Rep r)</code>. We know which slot our one element goes to, but we need something to put into all the other slots. If <code>a</code> were a Monoid we could use <code>mempty</code> for the other slots, so if we assume that we now we have the pieces to build something like:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">(<span class="dt">Representable</span> r, <span class="dt">Monoid</span> a, <span class="dt">Eq</span> (<span class="dt">Rep</span> r)) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Rep</span> r) <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [r a]</code></pre></div>
+<p>We want a single <code>r a</code> as a result, so we need to collapse <code>[r a]</code>. We could use a Monoid if <code>r a</code> is a Monoid! We can actually write a monoid instance for any representable if the inner values are also monoids, so we can define a custom newtype wrapper with that instance! This gives:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">(<span class="dt">Representable</span> r, <span class="dt">Monoid</span> a, <span class="dt">Eq</span> (<span class="dt">Rep</span> r)) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Rep</span> r) <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> r a</code></pre></div>
+<p>We can generalize the list to any foldable and get:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">(<span class="dt">Representable</span> r, <span class="dt">Monoid</span> a, <span class="dt">Foldable</span> f, <span class="dt">Eq</span> (<span class="dt">Rep</span> r)) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Rep</span> r) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> r a</code></pre></div>
+<p>Nifty! But this requires that every type we want is also a Monoid, we can increase the utility by allowing the caller to specifying a way to build a Monoid from an <code>a</code>:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">(<span class="dt">Representable</span> r, <span class="dt">Monoid</span> m, <span class="dt">Foldable</span> f, <span class="dt">Eq</span> (<span class="dt">Rep</span> r)) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Rep</span> r) <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> m) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> r m</code></pre></div>
+<p>And that's our final fully generalized type signature!</p>
+<p>We're going to need a bunch of imports for this, prepare yourself:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language DeriveFunctor #-}</span>
+<span class="ot">{-# language TypeFamilies #-}</span>
+<span class="ot">{-# language MultiParamTypeClasses #-}</span>
+<span class="ot">{-# language FlexibleInstances #-}</span>
+<span class="ot">{-# language ScopedTypeVariables #-}</span>
+<span class="ot">{-# language FlexibleContexts #-}</span>
+
+<span class="ot">{-# OPTIONS_GHC -fno-warn-orphans #-}</span>
+
+<span class="kw">module</span> <span class="dt">RepSort</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Data.Distributive</span> (<span class="dt">Distributive</span>(..))
+<span class="kw">import </span><span class="dt">Data.Functor.Rep</span> (<span class="dt">Representable</span>(..), <span class="dt">Co</span>(..), distributeRep)
+<span class="kw">import </span><span class="dt">Data.Monoid</span> (<span class="dt">Sum</span>(..))
+<span class="kw">import qualified</span> <span class="dt">Data.Stream.Infinite</span> <span class="kw">as</span> <span class="dt">S</span> (<span class="dt">Stream</span>, iterate)
+<span class="kw">import </span><span class="dt">Control.Comonad.Cofree</span> (<span class="dt">Cofree</span>)
+<span class="kw">import qualified</span> <span class="dt">Data.Sequence</span> <span class="kw">as</span> <span class="dt">Seq</span> (<span class="dt">Seq</span>, fromList)</code></pre></div>
+<p>So here's my implementation for <code>repSort</code>:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">repSort ::</span> (<span class="dt">Representable</span> r, <span class="dt">Monoid</span> m, <span class="dt">Foldable</span> f, <span class="dt">Eq</span> (<span class="dt">Rep</span> r)) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Rep</span> r) <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> m) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> r m
+<span class="co">-- gives us a Monoid for our Representable iff the contained values are Monoids</span>
+repSort indOf toM <span class="fu">=</span> unMRep <span class="fu">.</span> foldMap (<span class="dt">MRep</span> <span class="fu">.</span> tabulate <span class="fu">.</span> desc)
+  <span class="kw">where</span>
+    <span class="co">-- desc takes an &#39;a&#39; from the foldable and returns a descriptor function which can be passed to &#39;tabulate&#39;,</span>
+    <span class="co">-- The descriptor just returns mempty unless we&#39;re on the slot where the &#39;a&#39;s result is supposed to end up.</span>
+    desc a i
+      <span class="fu">|</span> i <span class="fu">==</span> indOf a <span class="fu">=</span> toM a
+      <span class="fu">|</span> otherwise <span class="fu">=</span> mempty
+
+
+<span class="co">-- Here&#39;s our newtype with a Monoid over Representables</span>
+<span class="kw">newtype</span> <span class="dt">MRep</span> r a <span class="fu">=</span> <span class="dt">MRep</span> {<span class="ot">unMRep ::</span>r a}
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="kw">instance</span> (<span class="dt">Monoid</span> a, <span class="dt">Representable</span> r) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">MRep</span> r a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> <span class="dt">MRep</span> <span class="fu">$</span> tabulate (const mempty)
+  <span class="co">-- We can just tabulate a new representable where the value is the `mappend` of</span>
+  <span class="co">-- the other two representables. BTW `index a `mapend` index b` depends on</span>
+  <span class="co">-- the monoid instance for functions, so go check that out if you haven&#39;t seen it!</span>
+  (<span class="dt">MRep</span> a) <span class="ot">`mappend`</span> (<span class="dt">MRep</span> b) <span class="fu">=</span> <span class="dt">MRep</span> <span class="fu">.</span> tabulate <span class="fu">$</span> index a <span class="ot">`mappend`</span> index b</code></pre></div>
+<p>Great! Let's see some examples so we can get a handle on what this does! First I'll set up a super simple but useful Representable for Pair:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Pair</span> a <span class="fu">=</span> <span class="dt">Pair</span> a a
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="co">-- This instance is required, but we can just lean on our Representable instance</span>
+<span class="kw">instance</span> <span class="dt">Distributive</span> <span class="dt">Pair</span> <span class="kw">where</span>
+  distribute <span class="fu">=</span> distributeRep
+
+<span class="kw">instance</span> <span class="dt">Representable</span> <span class="dt">Pair</span> <span class="kw">where</span>
+  <span class="co">-- Bool is a great index for this!</span>
+  <span class="kw">type</span> <span class="dt">Rep</span> <span class="dt">Pair</span> <span class="fu">=</span> <span class="dt">Bool</span>
+  index (<span class="dt">Pair</span> a _) <span class="dt">True</span> <span class="fu">=</span> a
+  index (<span class="dt">Pair</span> _ b) <span class="dt">False</span> <span class="fu">=</span> b
+
+  tabulate desc <span class="fu">=</span> <span class="dt">Pair</span> (desc <span class="dt">True</span>) (desc <span class="dt">False</span>)</code></pre></div>
+<p>So since Pair is indexed by a Bool the <code>a -&gt; Rep Pair</code> is actually just a predicate <code>a -&gt; Bool</code>! Let's try sorting out some odd and even integers!</p>
+<p>Remember that <code>repSort</code> needs a function from <code>a -&gt; Rep r</code>, in this case <code>Rep r ~ Bool</code> (<code>~</code> means 'is equal to' when we're talking about types), so we can use <code>odd</code> to split the odd and even integers up! Next it needs a function which transforms an <code>a</code> into a monoid! The simplest one of these is <code>(:[])</code> which just puts the element into a list! Let's see what we get!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">sortedInts ::</span> <span class="dt">Pair</span> [<span class="dt">Int</span>]
+sortedInts <span class="fu">=</span> repSort odd (<span class="fu">:</span>[]) [<span class="dv">1</span><span class="fu">..</span><span class="dv">10</span>]
+
+λ<span class="fu">&gt;</span> sortedInts
+<span class="dt">Pair</span> [<span class="dv">1</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">9</span>] [<span class="dv">2</span>,<span class="dv">4</span>,<span class="dv">6</span>,<span class="dv">8</span>,<span class="dv">10</span>]</code></pre></div>
+<p>We used lists in the last exmaple, but remember that the function is generalized over that parameter so we can acutally choose any Monoid we like! Let's say we wanted the sums of all odd and even ints respectively between 1 and 10:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">oddEvenSums ::</span> <span class="dt">Pair</span> (<span class="dt">Sum</span> <span class="dt">Int</span>)
+oddEvenSums <span class="fu">=</span> repSort odd <span class="dt">Sum</span> [<span class="dv">1</span><span class="fu">..</span><span class="dv">10</span>]
+
+λ<span class="fu">&gt;</span> oddEvenSums
+<span class="dt">Pair</span> (<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">25</span>}) (<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">30</span>})</code></pre></div>
+<p>Choosing our own monoid and index function gives us a lot of flexibility and power!</p>
+<p>This pattern generalizes to any Representable you can think of, and most Representables which have an interesting <code>Rep r</code> will have some cool features!</p>
+<p>Let's try another Functor and see what happens, here we'll go with an infinite <code>Stream</code> from <a href="http://hackage.haskell.org/package/streams-3.3/docs/Data-Stream-Infinite.html">Data.Stream.Infinite</a> in the <a href="http://hackage.haskell.org/package/streams">streams package</a>, whose representation is <code>Int</code>.</p>
+<p>With a representation type of <code>Int</code> we could do all sorts of things! Note here how the Functor (<code>Stream</code>) is infinite, but the representable is actually bounded by the size of Int. This is fine as long as we don't try fold the result or get every value out of it in some way, we'll primarily be using the <code>index</code> function from <code>Representable</code> so it should work out okay.</p>
+<p>Though the streams are infinite Haskell's inherent laziness helps us out, not only can we represent infinite things without a problem, Haskell won't actually calculate the values stored in any slots where we don't look, and since the whole thing is a data structure any computations that do occur are automatically memoized! This also means that you don't pay the cost for any value transformation or monoidal append unless you actually look inside the bucket. Only the initial <code>a -&gt; Rep r</code> must be computed for each element.</p>
+<p>Let's sort some stuff! See if you can figure this one out:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">byLength ::</span> <span class="dt">S.Stream</span> [<span class="dt">String</span>]
+byLength <span class="fu">=</span> repSort length (<span class="fu">:</span>[]) [<span class="st">&quot;javascript&quot;</span>, <span class="st">&quot;purescript&quot;</span>, <span class="st">&quot;haskell&quot;</span>, <span class="st">&quot;python&quot;</span>]
+
+λ<span class="fu">&gt;</span> index byLength <span class="dv">10</span>
+[<span class="st">&quot;javascript&quot;</span>,<span class="st">&quot;purescript&quot;</span>]
+λ<span class="fu">&gt;</span> index byLength <span class="dv">7</span>
+[<span class="st">&quot;haskell&quot;</span>]
+λ<span class="fu">&gt;</span> index byLength <span class="dv">3</span>
+[]</code></pre></div>
+<p>We didn't have to change our implementation of repSort at all! <code>index</code> knows how to find values in a <code>Stream</code> from an <code>Int</code> and all of that complexity is taken care of for us in the instance of <code>Representable</code>.</p>
+<p>The fact that <code>Int</code> is the <code>Rep</code> for Stream provides us with a few quick wins, any Enumerable type can be injected into <code>Int</code> via <code>fromEnum</code> from the Prelude: <code>fromEnum: (Enum e) =&gt; e -&gt; Int</code>. This means we can turn any Enumerable type into an index into <code>Stream</code> without much trouble and we gain a whole new set of possibilities:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">byFirstChar ::</span> <span class="dt">S.Stream</span> [<span class="dt">String</span>]
+<span class="co">-- We get the Int value from the first char of a string and use that as the index!</span>
+byFirstChar <span class="fu">=</span> repSort (fromEnum <span class="fu">.</span> head) (<span class="fu">:</span>[]) [<span class="st">&quot;cats&quot;</span>, <span class="st">&quot;antelope&quot;</span>, <span class="st">&quot;crabs&quot;</span>, <span class="st">&quot;aardvarks&quot;</span>]
+
+λ<span class="fu">&gt;</span> index byFirstChar <span class="fu">.</span> fromEnum <span class="fu">$</span> <span class="ch">&#39;c&#39;</span>
+[<span class="st">&quot;cats&quot;</span>,<span class="st">&quot;crabs&quot;</span>]
+λ<span class="fu">&gt;</span> index byFirstChar <span class="fu">.</span> fromEnum <span class="fu">$</span> <span class="ch">&#39;a&#39;</span>
+[<span class="st">&quot;antelope&quot;</span>,<span class="st">&quot;aardvarks&quot;</span>]
+λ<span class="fu">&gt;</span> index byFirstChar <span class="fu">.</span> fromEnum <span class="fu">$</span> <span class="ch">&#39;z&#39;</span>
+[]</code></pre></div>
+<p>So that's all pretty cool, but working with a single infinite stream gets unwieldy quickly when we start dealing with indexes in the thousands! <code>Stream</code> is effectively a linked list, so we need to traverse the whole thing every time! Straying a bit from sorting into the idea of data storage let's say we wanted to store values in a structure where they're keyed by a <code>String</code>. The first step would be to find a Representable where the index could be a <code>String</code>. Hrmm, our <code>Stream</code> representation can index by <code>Char</code>, which is close; what if we nested further representables and used a 'path' to the value as the index? Something like <code>Stream (Stream (Stream ...))</code>, We have an infinite tree of trees at this point, but we'll never reach the end to get a value! Whenever I think of tagging a tree-like structure with values I go straight to Cofree!</p>
+<p>One way you can think of Cofree is as a Tree where every branch and node has a value <code>a</code> and the branching structure is determined by some Functor! For example, a simple Rose tree is isomorphic to <code>Cofree [] a</code>, a binary tree is isomorphic to <code>Cofree Pair a</code>, etc.</p>
+<p>We want a tree where the branching structure is indexed by a <code>String</code>, so let's give <code>Cofree Stream a</code> a try! Effectively this creates an infinite number of branches at every level of the tree, but in practice we'll only actually index paths which are represented by some string, the rest of the structure will be filled with boring old <code>mempty</code>s.</p>
+<p>As it turns out, we made a good choice! <code>Cofree r a</code> is Representable whenever <code>r</code> is Representable! But what's the type which indexes into it? It relies on the underlying Representable Index, but since the tree could have multiple layers it needs a sequence of those indexes! That's why the index type for <code>Cofree</code> of a Representable is <code>Seq (Rep r)</code>. Under the hood the <code>Rep</code> for our structure is going to be specialized to <code>Seq Int</code>, but we can easily write <code>mkInd :: String -&gt; Seq Int</code> to index by Strings!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">mkInd ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Seq.Seq</span> <span class="dt">Int</span>
+mkInd <span class="fu">=</span> Seq.fromList <span class="fu">.</span> fmap fromEnum</code></pre></div>
+<p>Great! Now we can 'sort' values by strings and index into a tree structure performantly! If this whole sort of structure is looking a bit familiar you've probably seen it by the name of a <a href="https://en.wikipedia.org/wiki/Trie">&quot;Trie Tree&quot;</a>, a datastructure often used in <a href="https://en.wikipedia.org/wiki/Radix_sort">Radix sorts</a> and search problems. Its advantage is that it gives <code>O(m)</code> lookups where <code>m</code> is the length of the key string, in our case it will be slightly slower than the traditional method since we don't have <code>O(1)</code> random memory access, and have to move through each child tree to the appropriate place before diving deeper, but you could fix that pretty easily by using a proper <code>Vector</code> as the underlying representation rather than <code>Stream</code>. I'll leave that one as an exercise for the reader.</p>
+<p>That's a whole lot of explaining without any practical examples, so I bet you're itching to try out our new Trie-based Sorter/Map! With a few helpers we can build something quickly!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- I&#39;m going to specialize the signature to `Cofree Stream` to make it a bit more</span>
+<span class="co">-- readable, but you could re-generalize this idea if you wanted to.</span>
+<span class="ot">trieSort ::</span> (<span class="dt">Monoid</span> m, <span class="dt">Foldable</span> f) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">String</span>) <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> m) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">S.Stream</span> m
+trieSort getInd <span class="fu">=</span> repSort (mkInd <span class="fu">.</span> getInd)
+
+<span class="co">-- Build a map out of some key and a Monoidal value!</span>
+<span class="ot">trieMap ::</span> <span class="dt">Monoid</span> m <span class="ot">=&gt;</span> [(<span class="dt">String</span>, m)] <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">S.Stream</span> m
+trieMap <span class="fu">=</span> trieSort fst snd
+
+<span class="ot">get ::</span> <span class="dt">Cofree</span> <span class="dt">S.Stream</span> a <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> a
+get r ind <span class="fu">=</span> index r (mkInd ind)
+
+<span class="ot">bankAccounts ::</span> <span class="dt">Cofree</span> <span class="dt">S.Stream</span> (<span class="dt">Sum</span> <span class="dt">Int</span>)
+bankAccounts <span class="fu">=</span> trieMap [(<span class="st">&quot;Bob&quot;</span>, <span class="dt">Sum</span> <span class="dv">37</span>), (<span class="st">&quot;Sally&quot;</span>, <span class="dv">5</span>)]
+
+λ<span class="fu">&gt;</span> get bankAccounts <span class="st">&quot;Bob&quot;</span>
+<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">37</span>}
+λ<span class="fu">&gt;</span> get bankAccounts <span class="st">&quot;Sally&quot;</span>
+<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">5</span>}
+<span class="co">-- Empty keys are mempty</span>
+λ<span class="fu">&gt;</span> get bankAccounts <span class="st">&quot;Edward&quot;</span>
+<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">0</span>}
+
+<span class="ot">withdrawals ::</span> <span class="dt">Cofree</span> <span class="dt">S.Stream</span> (<span class="dt">Sum</span> <span class="dt">Int</span>)
+withdrawals <span class="fu">=</span> trieMap [(<span class="st">&quot;Bob&quot;</span>, <span class="dt">Sum</span> (<span class="fu">-</span><span class="dv">10</span>))]
+
+<span class="co">-- And of course we can still make use of our MRep helper to combine maps!</span>
+λ<span class="fu">&gt;</span> get (unMRep <span class="fu">$</span> <span class="dt">MRep</span> bankAccounts <span class="ot">`mappend`</span> <span class="dt">MRep</span> withdrawals ) <span class="st">&quot;Bob&quot;</span>
+<span class="dt">Sum</span> {getSum <span class="fu">=</span> <span class="dv">27</span>}</code></pre></div>
+<p>There are TONS of other possibilities here, we can swap out the underlying Representable to get new behaviour and performance, we can use <code>Data.Functor.Compose</code> to nest multiple <code>Representable</code>s to build new and interesting structures! We can sort, store, lookup and search using <code>repSort</code>!</p>
+<p>Let me know which interesting ideas you come up with! Either leave a comment here or find me on Twitter <a href="https://twitter.com/chrislpenner">@chrislpenner</a>.</p>
+              ]]></content>
+      </entry>
   <entry>
       <title>Free and Forgetful Functors</title>
       <link href="http://chrispenner.ca/posts/free-forgetful-functors.html"/>
