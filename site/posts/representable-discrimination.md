@@ -1,5 +1,5 @@
 ---
-title: "Radix Sort and Trie Trees with Representable Functors"
+title: "Radix Sort, Trie Trees, and Maps from Representable Functors"
 author: Chris Penner
 date: Jul 23, 2017
 tags: [haskell, programming]
@@ -36,13 +36,15 @@ I'll step through my thought process on this one:
 We've got a Representable Functor `r`; If we have a `Rep r` for some `a` we
 know which slot to put it into in an `r a`. We can get a `Rep r` for every `a`
 by using a function `a -> Rep r`. Now we want to embed the `a` into an `r a`
-using the `Rep r`, the tool we have for this is `tabulate`. We know which slot
-our one element goes to, but we need something to put into all the other slots.
-If `a` were a Monoid we could use `mempty` for the other slots, so if we assume
-that we now we have the pieces to build something like:
+using the `Rep r`, the tool we have for this is `tabulate`, in order to know
+which index is which and put it into the right slot we'll need to require
+`Eq (Rep r)`. We know which slot our one element goes to, but we need something
+to put into all the other slots. If `a` were a Monoid we could use `mempty` for
+the other slots, so if we assume that we now we have the pieces to build
+something like:
 
 ```haskell
-(Representable r, Monoid a) => (a -> Rep r) -> [a] -> [r a]
+(Representable r, Monoid a, Eq (Rep r)) => (a -> Rep r) -> [a] -> [r a]
 ```
 
 We want a single `r a` as a result, so we need to collapse `[r a]`. We
@@ -51,23 +53,23 @@ instance for any representable if the inner values are also monoids, so we
 can define a custom newtype wrapper with that instance! This gives:
 
 ```haskell
-(Representable r, Monoid a) => (a -> Rep r) -> [a] -> r a
+(Representable r, Monoid a, Eq (Rep r)) => (a -> Rep r) -> [a] -> r a
 ```
 
 We can generalize the list to any foldable and get:
 
 ```haskell
-(Representable r, Monoid a, Foldable f) => (a -> Rep r) -> f a -> r a
+(Representable r, Monoid a, Foldable f, Eq (Rep r)) => (a -> Rep r) -> f a -> r a
 ```
 
 Nifty! But this requires that every type we want is also a Monoid, we can
-increase the utility by specifying a way to build a Monoid from an `a`:
+increase the utility by allowing the caller to specifying a way to build a Monoid from an `a`:
 
 ```haskell
-(Representable r, Monoid m, Foldable f) => (a -> m) -> (a -> Rep r) -> f a -> r m
+(Representable r, Monoid m, Foldable f, Eq (Rep r)) => (a -> Rep r) -> (a -> m) -> f a -> r m
 ```
 
-
+And that's our final fully generalized type signature! 
 
 We're going to need a bunch of imports for this, prepare yourself:
 
@@ -95,7 +97,7 @@ import qualified Data.Sequence as Seq (Seq, fromList)
 So here's my implementation for `repSort`:
 
 ```haskell
-repSort :: (Monoid m, Representable r,  Foldable f, Eq (Rep r)) => (a -> Rep r) -> (a -> m) -> f a -> r m
+repSort :: (Representable r, Monoid m, Foldable f, Eq (Rep r)) => (a -> Rep r) -> (a -> m) -> f a -> r m
 -- gives us a Monoid for our Representable iff the contained values are Monoids
 repSort indOf toM = unMRep . foldMap (MRep . tabulate . desc)
   where
@@ -142,10 +144,10 @@ So since Pair is indexed by a Bool the `a -> Rep Pair` is actually just a
 predicate `a -> Bool`! Let's try sorting out some odd and even integers!
 
 Remember that `repSort` needs a function from `a -> Rep r`, in this case
-`Rep r ~ Bool`, so we can use `odd` to split the odd and even integers up! Next
-it needs a function which transforms an `a` into a monoid! The simplest one of
-these is `(:[])` which just puts the element into a list! Let's see what we
-get!
+`Rep r ~ Bool` (`~` means 'is equal to' when we're talking about types), so we
+can use `odd` to split the odd and even integers up! Next it needs a function
+which transforms an `a` into a monoid! The simplest one of these is `(:[])`
+which just puts the element into a list! Let's see what we get!
 
 
 ```haskell
@@ -257,10 +259,12 @@ paths which are represented by some string, the rest of the structure will
 be filled with boring old `mempty`s.
 
 As it turns out, we made a good choice! `Cofree r a` is Representable whenever
-`r` is Representable, and `Rep (Cofree r a) ~ Seq (Rep r)` (`~` means 'is equal
-to' at the type level). Under the hood the `Rep` for our structure is going to
-be `Seq Int`, but we can easily write `mkInd :: String -> Seq Int` to index by
-Strings!
+`r` is Representable! But what's the type which indexes into it? It relies on
+the underlying Representable Index, but since the tree could have multiple
+layers it needs a sequence of those indexes! That's why the index type for
+`Cofree` of a Representable is `Seq (Rep r)`. Under the hood the `Rep` for our
+structure is going to be specialized to `Seq Int`, but we can easily write
+`mkInd :: String -> Seq Int` to index by Strings!
 
 ```haskell
 mkInd :: String -> Seq.Seq Int
