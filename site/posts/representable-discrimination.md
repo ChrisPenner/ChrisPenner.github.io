@@ -267,10 +267,10 @@ straight to Cofree, let's see how it can help.
 
 ## Diving into Tries using Cofree
 
-One way you could think of Cofree is as a Tree where every branch and node has an
-annotation `a` and the branching structure is determined by some Functor! For
-example, a simple Rose tree is isomorphic to `Cofree [] a`, a binary tree is
-isomorphic to `Cofree Pair a`, etc.
+One way you could think of Cofree is as a Tree where every branch and node has
+an annotation `a` and the branching structure is determined by some Functor!
+For example, a simple Rose tree is isomorphic to `Cofree [] a`,
+`Cofree Maybe a` makes a degenerate tree with only single branches, etc.
 
 We want a tree where the branching structure is indexed by a `String`, so let's
 give `Cofree Stream a` a try! Effectively this creates an infinite number of
