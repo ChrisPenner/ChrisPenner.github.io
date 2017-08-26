@@ -272,10 +272,12 @@ Bleh, a little ugly, but now we can write some well-typed `play` functions:
 {-# language ViewPatterns #-}
 
 playX :: (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'X b) PieceT
-playX (coordVal -> x, coordVal -> y) (Board b) = Board $ overTrip y (overTrip x (const X)) b
+playX (coordVal -> x, coordVal -> y) (Board b) 
+        = Board $ overTrip y (overTrip x (const X)) b
 
 playO :: (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'O b) PieceT
-playO (coordVal -> x, coordVal -> y) (Board b) = Board $ overTrip y (overTrip x (const O)) b
+playO (coordVal -> x, coordVal -> y) (Board b) 
+        = Board $ overTrip y (overTrip x (const O)) b
 ```
 
 If ViewPatterns are new to you, check out [Oliver Charles'
@@ -311,9 +313,11 @@ either `'True` or `'False`.
 Let's use this to write constraints for our play functions:
 
 ```haskell
-playX :: (Played x y b ~ 'False) => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'X b) PieceT
+playX :: (Played x y b ~ 'False) 
+      => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'X b) PieceT
 
-playO :: (Played x y b ~ 'False) => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'O b) PieceT
+playO :: (Played x y b ~ 'False) 
+      => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'O b) PieceT
 ```
 
 Now we're asserting that in order to call this function the board must not have
@@ -450,11 +454,13 @@ type family Turn (b :: BoardRep) :: PieceT where
 -- | Play a piece on square (x, y) if it's valid to do so
 playX :: (Played x y b ~ 'False, Turn b ~ 'X)
       => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'X b) PieceT
-playX (coordVal -> x, coordVal -> y) (Board b) = Board $ overTrip y (overTrip x (const X)) b
+playX (coordVal -> x, coordVal -> y) (Board b) 
+      = Board $ overTrip y (overTrip x (const X)) b
 
 playO :: (Played x y b ~ 'False, Turn b ~ 'O)
       => (Coord x, Coord y) -> Board b PieceT -> Board ('Cons x y 'O b) PieceT
-playO (coordVal -> x, coordVal -> y) (Board b) = Board $ overTrip y (overTrip x (const O)) b
+playO (coordVal -> x, coordVal -> y) (Board b) 
+      = Board $ overTrip y (overTrip x (const O)) b
 
 game = newBoard
      & playX (A', B')
