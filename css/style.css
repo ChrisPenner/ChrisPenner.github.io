@@ -246,7 +246,7 @@ a.tag, a.category {
           flex-flow: column nowrap;
   width: auto;
   min-width: 100px;
-  max-width: 600px;
+  max-width: 720px;
   /*min-height: 100%;*/
   padding: 0px 20px;
   margin: 3em auto;

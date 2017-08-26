@@ -868,10 +868,12 @@ coordVal <span class="dt">C&#39;</span> <span class="fu">=</span> <span class="d
 <span class="ot">{-# language ViewPatterns #-}</span>
 
 <span class="ot">playX ::</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
-playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
+playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) 
+        <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
 
 <span class="ot">playO ::</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span>
-playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b</code></pre></div>
+playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) 
+        <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b</code></pre></div>
 <p>If ViewPatterns are new to you, check out <a href="https://ocharles.org.uk/blog/posts/2014-12-02-view-patterns.html">Oliver Charles' post</a> to learn more.</p>
 <p>Now we get both the type level coordinates AND the value level coordinates! Awesome. We're storing the played pieces in the type list now, but we still need to check that it's an unplayed square! We wouldn't be type programming without type functions, let's dive in! In Haskell type functions are called Type Families, but really they're just functions on types:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Another pragma &gt;_&gt;</span>
@@ -887,9 +889,11 @@ playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;
   <span class="dt">Played</span> x y (<span class="ch">&#39;Cons _ _ _ rest) = Played x y rest</span></code></pre></div>
 <p>This is implemented as a linear search through the list looking for a match. If we ever find a matching set of coordinates in the list then we know we've played there already. Notice that type families also return a type, so we specify the Kind of that return value, in this case <code>Bool</code>, so the returned type will be either <code>'True</code> or <code>'False</code>.</p>
 <p>Let's use this to write constraints for our play functions:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) =&gt; (Coord x, Coord y) -&gt; Board b PieceT -&gt; Board (&#39;</span><span class="dt">Cons</span> x y <span class="ch">&#39;X b) PieceT</span>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) </span>
+      <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
 
-<span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) =&gt; (Coord x, Coord y) -&gt; Board b PieceT -&gt; Board (&#39;</span><span class="dt">Cons</span> x y <span class="ch">&#39;O b) PieceT</span></code></pre></div>
+<span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) </span>
+      <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span></code></pre></div>
 <p>Now we're asserting that in order to call this function the board must not have played on those coordinates yet! If you haven't seen it before, <code>~</code> does an equality check on two types and creates a constraint which requires them to be equal.</p>
 <p>We're close to done, but unfortunately in our upgrade we forgot to ensure that <code>X</code> and <code>O</code> always alternate!</p>
 <h2 id="rechecking-alterating-turns">Rechecking Alterating Turns</h2>
@@ -1001,11 +1005,13 @@ newBoard <span class="fu">=</span> <span class="dt">Board</span> <span class="fu
 <span class="co">-- | Play a piece on square (x, y) if it&#39;s valid to do so</span>
 <span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">X</span>)
       <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
-playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
+playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) 
+      <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
 
 <span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">O</span>)
       <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span>
-playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b
+playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) 
+      <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b
 
 game <span class="fu">=</span> newBoard
      <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
