@@ -82,8 +82,7 @@ runtime inside the function, but that would mean throwing runtime exceptions
 those are all boring and involve runtime checks so lets see how types can help
 do this work at compile-time!
 
-Alternating Turns
------------------
+## Alternating Turns
 
 To start simple and see if there's a way we could make `X` and `O` alternate
 turns! In order to do that we're going to need types which represent `X` and
@@ -199,8 +198,7 @@ error:
 
 Pretty cool!
 
-Preventing Replays
-------------------
+## Preventing Replays
 
 Now the real fun starts! Let's see if we can ensure that people don't play
 on a space that's already been played!
