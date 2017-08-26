@@ -5,10 +5,17 @@
     <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
     <meta name="author" content="Chris Penner">
     <meta name=viewport content="width=device-width, initial-scale=1">
-    <title>Chris Penner's FP</title>
-    <link rel="alternative" type="application/rss+xml" title="Chris Penner RSS Feed" href="/atom.xml" />
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@chrislpenner">
+    <meta name="twitter:creator" content="@chrislpenner">
+    <meta name="twitter:title" content="Type Tac Toe: Advanced Type Safety">
+    <meta name="twitter:description" content="Upgrading your type programming game">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/tictactoe.png">
+    <title>Type Tac Toe: Advanced Type Safety</title>
+    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/syntax.css">
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -719,127 +726,319 @@
     </header>
 
 <div id="page">
-            <section class="table-of-contents">
-                <h1>All Posts</h1>
-                <div class="metadata">
-                    <br>
-                    <span class="tags">
-                        Tags<br>
-                            <a class="tag" href="/tag/clojure">clojure</a>
-                            <a class="tag" href="/tag/css">css</a>
-                            <a class="tag" href="/tag/design">design</a>
-                            <a class="tag" href="/tag/git">git</a>
-                            <a class="tag" href="/tag/haskell">haskell</a>
-                            <a class="tag" href="/tag/open-source">open-source</a>
-                            <a class="tag" href="/tag/programming">programming</a>
-                            <a class="tag" href="/tag/python">python</a>
-                            <a class="tag" href="/tag/ruby">ruby</a>
-                            <a class="tag" href="/tag/typography">typography</a>
-                            <a class="tag" href="/tag/unix">unix</a>
-                            <a class="tag" href="/tag/ux">ux</a>
-                            <a class="tag" href="/tag/vim">vim</a>
-                            <a class="tag" href="/tag/workflow">workflow</a>
-                    </span>
-                </div>
-                <ul>
-                        <li>
-            <a href="/posts/type-tac-toe">Type Tac Toe: Advanced Type Safety <span class="date">Aug 25, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/conways-game-of-life">Conway&#39;s Game of Life using Representable and Comonads <span class="date">Aug 8, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/representable-discrimination">Radix Sort, Trie Trees, and Maps from Representable Functors <span class="date">Jul 23, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/free-forgetful-functors">Free and Forgetful Functors <span class="date">Jul 20, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/adjunction-battleship">Adjunctions and Battleship <span class="date">Jul 19, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/representable-cofree-zippers">Zippers using Representable and Cofree <span class="date">Jul 5, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/homebrew-haskell">Shipping Haskell via Homebrew <span class="date">Apr 24, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/kleisli-endo">Kleisli Endomorphisms <span class="date">Apr 8, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/python-tail-recursion">Tail Recursion In Python <span class="date">Jul 26, 2016</span> </a>
-        </li>
-        <li>
-            <a href="/posts/dont-argue">The Interface We Need <span class="date">Feb 15, 2016</span> </a>
-        </li>
-        <li>
-            <a href="/posts/let-there-be-truth">Let there be Truth <span class="date">Jan 2, 2016</span> </a>
-        </li>
-        <li>
-            <a href="/posts/auto-env-trick">Autoenv Trick <span class="date">Sep 4, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/use-semantic-versioning">Semantic Versioning <span class="date">Apr 2, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/boxkite">BoxKite: Open-Sourced <span class="date">Mar 25, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/getting-schooled">Getting Schooled <span class="date">Mar 19, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/gem-duckling">Gem: Duckling <span class="date">Feb 21, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/worth-a-read-4">Worth a Read #4 - Unix Tools <span class="date">Feb 13, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/vim-vs-emacs">Vim vs. Emacs? <span class="date">Feb 6, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/gem-font-awesome">Gem: Font-Awesome <span class="date">Jan 21, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/worth-a-read-3">Worth a Read #3 - Typography <span class="date">Jan 13, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/gem-git">Gem: Git <span class="date">Jan 5, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/procedural-content">Procedural Generation is the Future <span class="date">Jan 3, 2015</span> </a>
-        </li>
-        <li>
-            <a href="/posts/worth-a-read-2">Worth a Read #2 - CSS <span class="date">Nov 10, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/gem-jekyll">Gem: Jekyll <span class="date">Nov 3, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/worth-a-read-1">Worth a Read #1 <span class="date">Oct 31, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/gem-neovim">Gem: Neovim <span class="date">Oct 15, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/you-own-your-data">You Own Your Data <span class="date">Sep 26, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/modular-software">The Future of Software <span class="date">Sep 24, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/set-the-data-free">Set the Data Free <span class="date">Aug 2, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/legacy-in-design">Legacy in Design <span class="date">Jul 26, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/capslock">Caps-lock <span class="date">May 25, 2014</span> </a>
-        </li>
-        <li>
-            <a href="/posts/switch-to-mac">The Switch To Mac <span class="date">May 19, 2014</span> </a>
-        </li>
-</ul>
-        </section>
+    <div class="wrapper">
+        <div class="masthead">
+            <span class="title">
+                Type Tac Toe: Advanced Type Safety
+            </span>
+            <br>
+
+            <img class="post-image" src="/images/tictactoe.png">
+            <br>
+            <span class="byline">by Chris Penner</span>
+            <br>
+            <span class="date">Aug 25, 2017</span>
+            <br>
+            <div class="metadata">
+                <br>
+                <span class="tags">
+                    Tags<br>
+                    <a class="tag" href="/tag/haskell">haskell</a>
+                    <a class="tag" href="/tag/programming">programming</a>
+                </span>
+            </div>
+        </div>
+    </div>
+    <article class="post">
+        <p>Today we'll be looking at type programming in Haskell. Programming in type-land allows us to teach the compiler a few new tricks and to verify additional constraints at compile-time rather than run-time. The canonical example is that you can encode the length of a list as a type so that you can verify that appending an element to a list of <code>n</code> elements yields a list of <code>n + 1</code> elements. If you haven't read about or experimented with an example like that before I'd say to check out <a href="http://www.parsonsmatt.org/2017/04/26/basic_type_level_programming_in_haskell.html">Matt Parson's post on type programming</a> first. We're going to go a step further and we'll actually encode the rules of a game of Tic Tac Toe into types so that we can statically guarantee that nobody cheats!</p>
+<p>Type programming is a newly popularized idea, so the tools for it are still a bit rough (in Haskell at least), check out <a href="https://www.idris-lang.org/">Idris</a> if you'd like to see something a bit more polished.</p>
+<p>Let's get moving!</p>
+<p>Here's a representation of the de-facto 3x3 Tic Tac Toe board:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- | Either X, O, or Nothing</span>
+<span class="kw">data</span> <span class="dt">PieceT</span> <span class="fu">=</span> <span class="dt">X</span> <span class="fu">|</span> <span class="dt">O</span> <span class="fu">|</span> <span class="dt">N</span>
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="kw">data</span> <span class="dt">Trip</span> a <span class="fu">=</span> <span class="dt">Trip</span> a a a
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="kw">newtype</span> <span class="dt">Board</span> a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="ot">newBoard ::</span> <span class="dt">Board</span> <span class="dt">PieceT</span>
+newBoard <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> <span class="dt">Trip</span> (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)
+                        (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)
+                        (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)</code></pre></div>
+<p>Note that we'll need the <code>{-# language DeriveFunctor #-}</code> pragma for this.</p>
+<p>We'll need a way to refer to individual squares in the grid so our player can say where they'd like to move. Let's just use simple <code>(x, y)</code> coordinates. We'll use a custom datatype rather than <code>Int</code> so that we know the coordinates are in bounds.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">CoordT</span> <span class="fu">=</span> <span class="dt">A</span> <span class="fu">|</span> <span class="dt">B</span> <span class="fu">|</span> <span class="dt">C</span>
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre></div>
+<p>Here's a quick function which lets us change a slot inside a Triple:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- | Utility function to alter a value inside a triple</span>
+<span class="co">-- Can build get / set using `flip const ()` and `const x` respectively</span>
+<span class="ot">overTrip ::</span> <span class="dt">CoordT</span> <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Trip</span> a <span class="ot">-&gt;</span> <span class="dt">Trip</span> a
+overTrip <span class="dt">A</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> (f a) b c
+overTrip <span class="dt">B</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> a (f b) c
+overTrip <span class="dt">C</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> a b (f c)</code></pre></div>
+<p>And that gives us everything we need to place pieces on the board:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">play ::</span> <span class="dt">PieceT</span> <span class="ot">-&gt;</span> (<span class="dt">CoordT</span>, <span class="dt">CoordT</span>) <span class="ot">-&gt;</span> <span class="dt">Board</span> <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> <span class="dt">PieceT</span>
+play p (x, y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const p)) b</code></pre></div>
+<p>Looking good! But wait, there's really no validation going on here! Players could play on the same square over and over again! Or maybe player <code>X</code> just keeps on playing without giving <code>O</code> a turn! We could do error handling at runtime inside the function, but that would mean throwing runtime exceptions (Yikes!), running things inside an error monad, or returning an Either. But those are all boring and involve runtime checks so lets see how types can help do this work at compile-time!</p>
+<h2 id="alternating-turns">Alternating Turns</h2>
+<p>To start simple and see if there's a way we could make <code>X</code> and <code>O</code> alternate turns! In order to do that we're going to need types which represent <code>X</code> and <code>O</code>!</p>
+<p>Here's a first attempt:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">X</span>
+<span class="kw">data</span> <span class="dt">O</span>
+<span class="kw">data</span> <span class="dt">N</span></code></pre></div>
+<p>Now we'd have types for each, but we get a conflict! We have duplicate definitions of <code>X</code>, <code>O</code> and <code>N</code> because of <code>PieceT</code>! Let's introduce our next GHC extension: <code>{-# language DataKinds #-}</code>! DataKinds takes a bit of fiddling with to understand, don't worry if you have a hard time understanding where the boundaries are. I still have to shake my head and think it through most of the time.</p>
+<p>DataKinds let's you use constructors from any datatypes (defined with <code>data</code> or <code>newtype</code>) as types! To reference the 'type' version of a data constructor you prefix it with an apostrophe. Since we already defined <code>PieceT</code>, by enabling DataKinds we now have <code>'X</code>, <code>'O</code>, <code>'N</code> in scope at the type level! Technically you can leave off the <code>'</code> if it's clear to the compiler that you're referring to a type, but I like to be explicit about it for readability.</p>
+<p>There's one more bonus that DataKinds gives us, it creates a new <code>Kind</code> for each family of constructors. Kinds are kind of like types for types, most Haskell types are of Kind <code>*</code>, and higher order kinds are <code>* -&gt; *</code>, you can check it in ghci:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">λ<span class="fu">&gt;</span> <span class="fu">:</span>k <span class="dt">Int</span>
+<span class="dt">Int</span><span class="ot"> ::</span> <span class="fu">*</span>
+λ<span class="fu">&gt;</span> <span class="fu">:</span>k <span class="dt">Maybe</span>
+<span class="dt">Maybe</span><span class="ot"> ::</span> <span class="fu">*</span> <span class="ot">-&gt;</span> <span class="fu">*</span>
+λ<span class="fu">&gt;</span> <span class="fu">:</span>k <span class="dt">Maybe</span> <span class="dt">Int</span>
+<span class="dt">Maybe</span> <span class="dt">Int</span><span class="ot"> ::</span> <span class="fu">*</span>
+λ<span class="fu">&gt;</span> <span class="fu">:</span>k <span class="ch">&#39;X</span>
+<span class="ch">&#39;X :: PieceT</span></code></pre></div>
+<p>That last one is interesting! GHC notices that <code>'X</code> isn't quite like other types, but that it was defined as part of the PieceT data group. This means that when we're writing functions on types we can actually specify what Kind of types we want to allow.</p>
+<p>The first and easiest thing we could require of our game is that <code>X</code> and <code>O</code> always alternate turns. In order to that we'll need to store who's turn it is as part of the type of our board. Let's edit our <code>Board</code> type to have an additional parameter called <code>t</code> for <code>turn</code>, we don't actually have to have the type in our data-structure though, the compiler will do the check at runtime so we won't need to store this info at the value level. A type which is used only on the left side of a data definition is called a &quot;Phantom type&quot;. They're useful for specifying type constraints.</p>
+<p>We'll also edit the signature of <code>newBoard</code> to show that <code>X</code> goes first; we don't need to change the definition at all though!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Board</span> t a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="co">-- | New empty board</span>
+<span class="ot">newBoard ::</span> <span class="dt">Board</span> <span class="ch">&#39;X PieceT</span>
+newBoard <span class="fu">=</span> <span class="co">-- Unchanged</span></code></pre></div>
+<p>When we do this we'll get a compiler error that GHC was expecting a type, but we gave it something of Kind <code>PieceT</code>. GHC usually expects basic types of kind <code>*</code>, so if we do anything fancy we need to let it know what we're thinking. In this case we can add a type annotation to the <code>Board</code> type:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Add this new pragma at the top:</span>
+<span class="ot">{-# language KindSignatures #-}</span>
+
+<span class="kw">newtype</span> <span class="dt">Board</span> (<span class="ot">t ::</span> <span class="dt">PieceT</span>) a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)</code></pre></div>
+<p>The KindSignatures pragma lets say what 'kind' we want all our types to be. This makes GHC happy, and helps us too by allowing us to specify that the 't' parameter should always be one of our pieces rather than some arbitrary type.</p>
+<p>Unfortunately, changing the type of <code>Board</code> has broken our <code>play</code> function. We need to put something in as a 'turn' parameter there too. For now it's easiest to split it up into a <code>playX</code> and <code>playY</code> function which can specify their types more concretely.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">playX ::</span> (<span class="dt">CoordT</span>, <span class="dt">CoordT</span>) <span class="ot">-&gt;</span> <span class="dt">Board</span> <span class="ch">&#39;X PieceT -&gt; Board &#39;</span><span class="dt">O</span> <span class="dt">PieceT</span>
+playX (x, y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
+
+<span class="ot">playO ::</span> (<span class="dt">CoordT</span>, <span class="dt">CoordT</span>) <span class="ot">-&gt;</span> <span class="dt">Board</span> <span class="ch">&#39;O PieceT -&gt; Board &#39;</span><span class="dt">X</span> <span class="dt">PieceT</span>
+playO (x, y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b</code></pre></div>
+<p>Don't worry about the duplication, we'll clean that up later. Now you can only <code>playX</code> on a board when it's X's turn! Huzzah! If you try it the wrong way around GHC will complain:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">λ<span class="fu">&gt;</span> playO (<span class="dt">A</span>, <span class="dt">B</span>) newBoard
+error<span class="fu">:</span>
+    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="ch">&#39;X’ with ‘&#39;</span><span class="dt">O</span>’
+      <span class="dt">Expected</span> <span class="kw">type</span><span class="fu">:</span> <span class="dt">Board</span> <span class="ch">&#39;O PieceT</span>
+        <span class="dt">Actual</span> <span class="kw">type</span><span class="fu">:</span> <span class="dt">Board</span> <span class="ch">&#39;X PieceT</span>
+    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘playO’, namely ‘newBoard’
+      <span class="dt">In</span> the expression<span class="fu">:</span> playO (<span class="dt">A</span>, <span class="dt">B</span>) newBoard
+      <span class="dt">In</span> an equation for ‘it’<span class="fu">:</span> it <span class="fu">=</span> playO (<span class="dt">A</span>, <span class="dt">B</span>) Prog.newBoard</code></pre></div>
+<p>Pretty cool!</p>
+<h2 id="preventing-replays">Preventing Replays</h2>
+<p>Now the real fun starts! Let's see if we can ensure that people don't play on a space that's already been played!</p>
+<p>A simple <code>X</code> or <code>O</code> in our type isn't going to cut it anymore, let's bulk up our representation of the board state. Let's keep track of each place someone has played! We can do this by writing a type level list of coordinates and piece types:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- | Keep a list of each Piece played and its location</span>
+<span class="kw">data</span> <span class="dt">BoardRep</span> <span class="fu">=</span> <span class="dt">Empty</span>
+              <span class="fu">|</span> <span class="dt">Cons</span> <span class="dt">CoordT</span> <span class="dt">CoordT</span> <span class="dt">PieceT</span> <span class="dt">BoardRep</span></code></pre></div>
+<p>Remember that we're using DataKinds, so now <code>BoardRep</code> is a kind and <code>Empty</code> is a type and so is <code>Cons</code> when it's applied to two Coordinates, a Piece type and another <code>BoardRep</code>. It'll keep recursing until we hit an <code>'Empty</code>.</p>
+<p>Now that we have a board representation, let's replace the <code>t</code> in our datatype with the type level representation of the board:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Board</span> (<span class="ot">b ::</span> <span class="dt">BoardRep</span>) a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="co">-- New boards are &#39;Empty now</span>
+<span class="ot">newBoard ::</span> <span class="dt">Board</span> <span class="ch">&#39;Empty PieceT</span></code></pre></div>
+<p>Now every time we play a piece we'll also represent the change at the type level, in order to do that we need to be able to get the &quot;type&quot; of the coordinates of each move. This is a bit tricky, since the coordinate values themselves are all of the same type <code>CoordT</code> and <em>NOTHING</em> is a member of the <em>types</em> A, B, or C.</p>
+<p>This is where we start to introduce some <em>hacks</em> to get things to work. Say hello to GADTs!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- New pragma for the top</span>
+<span class="ot">{-# language GADTs #-}</span>
+
+<span class="co">-- | A proxy type which represents a coordinate</span>
+<span class="kw">data</span> <span class="dt">Coord</span> (<span class="ot">a ::</span> <span class="dt">CoordT</span>) <span class="kw">where</span>
+  <span class="dt">A&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;A</span>
+  <span class="dt">B&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;B</span>
+  <span class="dt">C&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;C</span>
+
+<span class="co">-- | Get the coord&#39;s actual value from a wrapper type</span>
+<span class="ot">coordVal ::</span> <span class="dt">Coord</span> a <span class="ot">-&gt;</span> <span class="dt">CoordT</span>
+coordVal <span class="dt">A&#39;</span> <span class="fu">=</span> <span class="dt">A</span>
+coordVal <span class="dt">B&#39;</span> <span class="fu">=</span> <span class="dt">B</span>
+coordVal <span class="dt">C&#39;</span> <span class="fu">=</span> <span class="dt">C</span></code></pre></div>
+<p>This is going to look weird and strangely verbose to most of you; it's unfortunate that we need to do things this way, maybe someday we'll find a better way. You can also look into using the <code>Proxy</code> type from <code>Data.Proxy</code>, but it suffers similar verbosity issues.</p>
+<p>Let me explain how this works, we've written a new type <code>Coord</code> which has a constructor for each of our Coordinate values, but each constructur also sets the phantom type parameter of the <code>Coord</code> to the appropriate type-level version of the coordinate. We've also written a function <code>coordVal</code> which translates from our wrapper type into the matching <code>CoordT</code> value.</p>
+<p>Bleh, a little ugly, but now we can write some well-typed <code>play</code> functions:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- View patterns help us clean up our definitions a lot:</span>
+<span class="ot">{-# language ViewPatterns #-}</span>
+
+<span class="ot">playX ::</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
+playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
+
+<span class="ot">playO ::</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span>
+playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b</code></pre></div>
+<p>If ViewPatterns are new to you, check out <a href="https://ocharles.org.uk/blog/posts/2014-12-02-view-patterns.html">Oliver Charles' post</a> to learn more.</p>
+<p>Now we get both the type level coordinates AND the value level coordinates! Awesome. We're storing the played pieces in the type list now, but we still need to check that it's an unplayed square! We wouldn't be type programming without type functions, let's dive in! In Haskell type functions are called Type Families, but really they're just functions on types:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- Another pragma &gt;_&gt;</span>
+<span class="ot">{-# language TypeFamilies #-}</span>
+
+<span class="co">-- | Has a square been played already?</span>
+<span class="kw">type</span> family <span class="dt">Played</span> (<span class="ot">x ::</span> <span class="dt">CoordT</span>) (<span class="ot">y ::</span> <span class="dt">CoordT</span>) (<span class="ot">b ::</span> <span class="dt">BoardRep</span>)<span class="ot"> ::</span> <span class="dt">Bool</span> <span class="kw">where</span>
+   <span class="co">--  Nothing is played on the &#39;Empty board</span>
+  <span class="dt">Played</span> _ _ <span class="ch">&#39;Empty = &#39;</span><span class="dt">False</span>
+   <span class="co">--  We found a match, so the square has already been played</span>
+  <span class="dt">Played</span> x y (<span class="ch">&#39;Cons x y _ _) = &#39;</span><span class="dt">True</span>
+   <span class="co">--  No match yet, but there might be one in the rest of the list</span>
+  <span class="dt">Played</span> x y (<span class="ch">&#39;Cons _ _ _ rest) = Played x y rest</span></code></pre></div>
+<p>This is implemented as a linear search through the list looking for a match. If we ever find a matching set of coordinates in the list then we know we've played there already. Notice that type families also return a type, so we specify the Kind of that return value, in this case <code>Bool</code>, so the returned type will be either <code>'True</code> or <code>'False</code>.</p>
+<p>Let's use this to write constraints for our play functions:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) =&gt; (Coord x, Coord y) -&gt; Board b PieceT -&gt; Board (&#39;</span><span class="dt">Cons</span> x y <span class="ch">&#39;X b) PieceT</span>
+
+<span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False) =&gt; (Coord x, Coord y) -&gt; Board b PieceT -&gt; Board (&#39;</span><span class="dt">Cons</span> x y <span class="ch">&#39;O b) PieceT</span></code></pre></div>
+<p>Now we're asserting that in order to call this function the board must not have played on those coordinates yet! If you haven't seen it before, <code>~</code> does an equality check on two types and creates a constraint which requires them to be equal.</p>
+<p>We're close to done, but unfortunately in our upgrade we forgot to ensure that <code>X</code> and <code>O</code> always alternate!</p>
+<h2 id="rechecking-alterating-turns">Rechecking Alterating Turns</h2>
+<p>Checking whose turn it is with our new representation is easier than you might think; if the last play was <code>X</code> then it's <code>O</code>s turn, and in all other cases it's <code>X</code>s turn!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> family <span class="dt">Turn</span> (<span class="ot">b ::</span> <span class="dt">BoardRep</span>)<span class="ot"> ::</span> <span class="dt">PieceT</span> <span class="kw">where</span>
+  <span class="dt">Turn</span> (<span class="ch">&#39;Cons _ _ &#39;</span><span class="dt">X</span> _) <span class="fu">=</span> <span class="ch">&#39;O</span>
+  <span class="dt">Turn</span> _ <span class="fu">=</span> <span class="ch">&#39;X</span>
+
+<span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">X</span>) <span class="ot">=&gt;</span>
+         (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
+
+<span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">O</span>) <span class="ot">=&gt;</span> 
+         (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span></code></pre></div>
+<p>We also altered the constraints of playX and playO to reflect the requirement!</p>
+<p>We're in good shape now! We can play a game!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">λ<span class="fu">&gt;</span> <span class="kw">import </span><span class="dt">Data.Function</span> ((&amp;))
+λ<span class="fu">&gt;</span> newBoard
+    <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
+    <span class="fu">&amp;</span> playO (<span class="dt">C&#39;</span>, <span class="dt">C&#39;</span>)
+    <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">A&#39;</span>)
+<span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> <span class="dt">X</span> <span class="dt">N</span> <span class="dt">N</span>) (<span class="dt">Trip</span> <span class="dt">X</span> <span class="dt">N</span> <span class="dt">N</span>) (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">O</span>))
+
+λ<span class="fu">&gt;</span> newBoard
+    <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
+    <span class="fu">&amp;</span> playX (<span class="dt">C&#39;</span>, <span class="dt">C&#39;</span>)
+
+error<span class="fu">:</span>
+    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="ch">&#39;O’ with ‘&#39;</span><span class="dt">X</span>’ arising from a use <span class="kw">of</span> ‘playX’
+    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="fu">&amp;</span>)’, namely ‘playX (<span class="dt">C&#39;</span>, <span class="dt">C&#39;</span>)’
+      <span class="dt">In</span> the expression<span class="fu">:</span> newBoard <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>) <span class="fu">&amp;</span> playX (<span class="dt">C&#39;</span>, <span class="dt">C&#39;</span>)
+
+λ<span class="fu">&gt;</span> newBoard
+    <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
+    <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
+
+error<span class="fu">:</span>
+    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="ch">&#39;True’ with ‘&#39;</span><span class="dt">False</span>’
+        arising from a use <span class="kw">of</span> ‘playO’
+    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="fu">&amp;</span>)’, namely ‘playO (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)’
+      <span class="dt">In</span> the expression<span class="fu">:</span> newBoard <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>) <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)</code></pre></div>
+<p>Looks good to me! As an exercise try combining <code>playX</code> and <code>playO</code> into a more general <code>play</code>! Here's a hint, you'll want to make another wrapper type like we did with <code>Coord</code>!</p>
+<p>Here's the finished product all at once:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language DeriveFunctor #-}</span>
+<span class="ot">{-# language KindSignatures #-}</span>
+<span class="ot">{-# language DataKinds #-}</span>
+<span class="ot">{-# language ViewPatterns #-}</span>
+<span class="ot">{-# language GADTs #-}</span>
+<span class="ot">{-# language TypeFamilies #-}</span>
+<span class="kw">module</span> <span class="dt">Prog</span> <span class="kw">where</span>
+
+<span class="kw">import </span><span class="dt">Data.Function</span> ((&amp;))
+
+<span class="co">-- | Either X, O, or Nothing</span>
+<span class="kw">data</span> <span class="dt">PieceT</span> <span class="fu">=</span> <span class="dt">X</span> <span class="fu">|</span> <span class="dt">O</span> <span class="fu">|</span> <span class="dt">N</span>
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="kw">data</span> <span class="dt">CoordT</span> <span class="fu">=</span> <span class="dt">A</span> <span class="fu">|</span> <span class="dt">B</span> <span class="fu">|</span> <span class="dt">C</span>
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="co">-- | A proxy type which represents a coordinate</span>
+<span class="kw">data</span> <span class="dt">Coord</span> (<span class="ot">a ::</span> <span class="dt">CoordT</span>) <span class="kw">where</span>
+  <span class="dt">A&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;A</span>
+  <span class="dt">B&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;B</span>
+  <span class="dt">C&#39;</span><span class="ot"> ::</span> <span class="dt">Coord</span> <span class="ch">&#39;C</span>
+
+<span class="co">-- | Get the coord&#39;s actual value from a wrapper type</span>
+<span class="ot">coordVal ::</span> <span class="dt">Coord</span> a <span class="ot">-&gt;</span> <span class="dt">CoordT</span>
+coordVal <span class="dt">A&#39;</span> <span class="fu">=</span> <span class="dt">A</span>
+coordVal <span class="dt">B&#39;</span> <span class="fu">=</span> <span class="dt">B</span>
+coordVal <span class="dt">C&#39;</span> <span class="fu">=</span> <span class="dt">C</span>
+
+<span class="kw">data</span> <span class="dt">Trip</span> a <span class="fu">=</span> <span class="dt">Trip</span> a a a
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="co">-- | Utility function to alter a value inside a triple</span>
+<span class="co">-- Can build get / set using `flip const ()` and `const x` respectively</span>
+<span class="ot">overTrip ::</span> <span class="dt">CoordT</span> <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Trip</span> a <span class="ot">-&gt;</span> <span class="dt">Trip</span> a
+overTrip <span class="dt">A</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> (f a) b c
+overTrip <span class="dt">B</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> a (f b) c
+overTrip <span class="dt">C</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> a b (f c)
+
+<span class="co">-- | Keep a list of each Piece played and its location</span>
+<span class="kw">data</span> <span class="dt">BoardRep</span> <span class="fu">=</span> <span class="dt">Empty</span>
+              <span class="fu">|</span> <span class="dt">Cons</span> <span class="dt">CoordT</span> <span class="dt">CoordT</span> <span class="dt">PieceT</span> <span class="dt">BoardRep</span>
+
+
+<span class="co">-- A board is a 3x3 grid alongside its type representation</span>
+<span class="kw">newtype</span> <span class="dt">Board</span> (<span class="ot">b ::</span> <span class="dt">BoardRep</span>) a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
+  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
+
+<span class="co">-- | New empty board</span>
+<span class="ot">newBoard ::</span> <span class="dt">Board</span> <span class="ch">&#39;Empty PieceT</span>
+newBoard <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> <span class="dt">Trip</span> (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)
+                        (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)
+                        (<span class="dt">Trip</span> <span class="dt">N</span> <span class="dt">N</span> <span class="dt">N</span>)
+
+<span class="co">-- | Has a square been played already?</span>
+<span class="kw">type</span> family <span class="dt">Played</span> (<span class="ot">x ::</span> <span class="dt">CoordT</span>) (<span class="ot">y ::</span> <span class="dt">CoordT</span>) (<span class="ot">b ::</span> <span class="dt">BoardRep</span>)<span class="ot"> ::</span> <span class="dt">Bool</span> <span class="kw">where</span>
+  <span class="dt">Played</span> _ _ <span class="ch">&#39;Empty = &#39;</span><span class="dt">False</span>
+  <span class="dt">Played</span> x y (<span class="ch">&#39;Cons x y _ _) = &#39;</span><span class="dt">True</span>
+  <span class="dt">Played</span> x y (<span class="ch">&#39;Cons _ _ _ rest) = Played x y rest</span>
+
+
+<span class="co">-- | Get who&#39;s turn it is</span>
+<span class="kw">type</span> family <span class="dt">Turn</span> (<span class="ot">b ::</span> <span class="dt">BoardRep</span>)<span class="ot"> ::</span> <span class="dt">PieceT</span> <span class="kw">where</span>
+  <span class="dt">Turn</span> (<span class="ch">&#39;Cons _ _ &#39;</span><span class="dt">X</span> _) <span class="fu">=</span> <span class="ch">&#39;O</span>
+  <span class="dt">Turn</span> _ <span class="fu">=</span> <span class="ch">&#39;X</span>
+
+<span class="co">-- | Play a piece on square (x, y) if it&#39;s valid to do so</span>
+<span class="ot">playX ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">X</span>)
+      <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">X</span> b) <span class="dt">PieceT</span>
+playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">X</span>)) b
+
+<span class="ot">playO ::</span> (<span class="dt">Played</span> x y b <span class="fu">~</span> <span class="ch">&#39;False, Turn b ~ &#39;</span><span class="dt">O</span>)
+      <span class="ot">=&gt;</span> (<span class="dt">Coord</span> x, <span class="dt">Coord</span> y) <span class="ot">-&gt;</span> <span class="dt">Board</span> b <span class="dt">PieceT</span> <span class="ot">-&gt;</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons x y &#39;</span><span class="dt">O</span> b) <span class="dt">PieceT</span>
+playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b
+
+game <span class="fu">=</span> newBoard
+     <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
+     <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">A&#39;</span>)</code></pre></div>
+<p>Thanks for joining me, let me know if you found anything confusing; hope you learned something!</p>
+
+        <br>
+        <br>
+
+        <!--Share buttons-->
+        <div class="social-buttons">
+            <a href="https://twitter.com/share" class="twitter-share-button"
+                data-url="http://chrispenner.ca/posts/type-tac-toe" data-text="Check out: Type Tac Toe: Advanced Type Safety - " data-via="chrislpenner">Tweet</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <div class="fb-like" data-href="http://chrispenner.ca/posts/type-tac-toe" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+        </div>
+        <!-- Disqus Comments -->
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            var disqus_shortname = 'chrispenner';
+            var disqus_identifier = '/posts/type-tac-toe';
+            var disqus_url = 'http://chrispenner.ca/posts/type-tac-toe';
+
+(function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+</article>
+
 </div>
 
 <footer>
