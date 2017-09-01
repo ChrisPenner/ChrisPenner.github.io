@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-09-01T01:13:01Z</updated>
+  <updated>2017-09-01T01:26:36Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -16,7 +16,7 @@
       <summary>Upgrading your type programming game</summary>
       <content type="html"><![CDATA[
           <img src="http://chrispenner.ca/images/tictactoe.png" alt="Type Tac Toe: Advanced Type Safety">
-              <p>Today we'll be looking at type programming in Haskell. Programming in type-land allows us to teach the compiler a few new tricks and to verify additional constraints at compile-time rather than run-time. The canonical example is that you can encode the length of a list as a type so that you can verify that appending an element to a list of <code>n</code> elements yields a list of <code>n + 1</code> elements. If you haven't read about or experimented with an example like that before I'd say to check out <a href="http://www.parsonsmatt.org/2017/04/26/basic_type_level_programming_in_haskell.html">Matt Parson's post on type programming</a> first. We're going to go a step further and we'll actually encode the rules of a game of Tic Tac Toe into types so that we can statically guarantee that nobody cheats!</p>
+              <p>Today we'll be looking at type programming in Haskell. Programming in type-land allows us to teach the compiler a few new tricks and to verify additional constraints at compile-time rather than run-time. The canonical example is that you can encode the length of a list as a type so that you can verify that appending an element to a list of <code>n</code> elements yields a list of <code>n + 1</code> elements. If you haven't read about or experimented with an example like that before I'd say to check out <a href="http://www.parsonsmatt.org/2017/04/26/basic_type_level_programming_in_haskell.html">Matt Parson's post on type programming</a> first. We're going to go a step further and we'll actually encode the rules of a game of Tic Tac Toe into types so that we can statically guarantee that nobody cheats! If you're into spoilers you can see the finished code at the <a href="https://github.com/ChrisPenner/Type-Tac-Toe">git repo here</a>.</p>
 <p>Type programming is a newly popularized idea, so the tools for it are still a bit rough (in Haskell at least), check out <a href="https://www.idris-lang.org/">Idris</a> if you'd like to see something a bit more polished.</p>
 <p>There are some libraries popping up in the Haskell ecosystem which are making the ideas presented here easier to work with, most notably the <a href="http://hackage.haskell.org/package/singletons">singletons</a> library which can generate a lot of the type-level primitives we write here. Check it out if you like, but I find it's a bit confusing for people new to this stuff, so I'll be spelling most things out in long-hand.</p>
 <p>Let's get moving!</p>
@@ -202,14 +202,14 @@ error<span class="fu">:</span>
     • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="fu">&amp;</span>)’, namely ‘playO (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)’
       <span class="dt">In</span> the expression<span class="fu">:</span> newBoard <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>) <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)</code></pre></div>
 <p>Looks good to me! As an exercise try combining <code>playX</code> and <code>playO</code> into a more general <code>play</code>! Here's a hint, you'll want to make another wrapper type like we did with <code>Coord</code>!</p>
-<p>Here's the finished product all at once:</p>
+<p>Here's the finished product all at once, it's also available as a stack project in a <a href="https://github.com/ChrisPenner/Type-Tac-Toe">git repo here</a>.:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language DeriveFunctor #-}</span>
 <span class="ot">{-# language KindSignatures #-}</span>
 <span class="ot">{-# language DataKinds #-}</span>
 <span class="ot">{-# language ViewPatterns #-}</span>
 <span class="ot">{-# language GADTs #-}</span>
 <span class="ot">{-# language TypeFamilies #-}</span>
-<span class="kw">module</span> <span class="dt">Prog</span> <span class="kw">where</span>
+<span class="kw">module</span> <span class="dt">TypeTacToe</span> <span class="kw">where</span>
 
 <span class="kw">import </span><span class="dt">Data.Function</span> ((&amp;))
 
@@ -285,7 +285,9 @@ game <span class="fu">=</span> newBoard
      <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
      <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">A&#39;</span>)</code></pre></div>
 <p>That last type there is a doozy! The type actually includes the entire game board, and it'll only grow as we add moves! This exposes some issues with using this approach for a real-life tic-tac-toe game. Not only are the types unwieldy if you ever need to specify them, but the type is actually so well defined that we can't really write a function to use user input!</p>
-<p>Give it a try if you don't believe me, we'd want something along the lines of <code>String -&gt; Board b PieceT -&gt; Board ? PieceT</code> where we parse the string into a move. It's really tough to decide what would go into the <code>?</code> though, we can't give it a type because we don't know what the Coords will be until after we've already parsed the string! This is the sort of thing that's sometimes possible in Idris' dependent types, but is pretty tricky in Haskell. Here you can see Brian McKenna show how to build a <a href="https://www.youtube.com/watch?v=fVBck2Zngjo">type-safe <code>printf</code></a> in Idris if you're interested.</p>
+<p>Give it a try if you don't believe me, we'd want something along the lines of:</p>
+<pre><code>String -&gt; Board b PieceT -&gt; Board ? PieceT</code></pre>
+<p>We'd parse the string into the coords for a move. It's really tough to decide what would go into the <code>?</code> though, we can't give it a type because we don't know what the Coords will be until after we've already parsed the string! This is the sort of thing that's sometimes possible in Idris' dependent types, but is pretty tricky in Haskell. You can see Brian McKenna show how to build a <a href="https://www.youtube.com/watch?v=fVBck2Zngjo">type-safe <code>printf</code></a> in Idris if you're interested.</p>
 <p>Thanks for joining me, let me know if you found anything confusing; hope you learned something!</p>
               ]]></content>
       </entry>
