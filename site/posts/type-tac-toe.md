@@ -17,7 +17,8 @@ before I'd say to check out [Matt Parson's post on type
 programming](http://www.parsonsmatt.org/2017/04/26/basic_type_level_programming_in_haskell.html)
 first. We're going to go a step further and we'll actually encode the rules of
 a game of Tic Tac Toe into types so that we can statically guarantee that
-nobody cheats!
+nobody cheats! If you're into spoilers you can see the finished code at the 
+[git repo here](https://github.com/ChrisPenner/Type-Tac-Toe).
 
 Type programming is a newly popularized idea, so the tools for it are still a
 bit rough (in Haskell at least), check out [Idris](https://www.idris-lang.org/)
@@ -387,7 +388,9 @@ Looks good to me! As an exercise try combining `playX` and `playO` into a more
 general `play`! Here's a hint, you'll want to make another wrapper type like we
 did with `Coord`!
 
-Here's the finished product all at once:
+Here's the finished product all at once, it's also available as a stack project
+in a [git repo here](https://github.com/ChrisPenner/Type-Tac-Toe).:
+
 
 ```haskell
 {-# language DeriveFunctor #-}
@@ -396,7 +399,7 @@ Here's the finished product all at once:
 {-# language ViewPatterns #-}
 {-# language GADTs #-}
 {-# language TypeFamilies #-}
-module Prog where
+module TypeTacToe where
 
 import Data.Function ((&))
 
@@ -479,13 +482,17 @@ this approach for a real-life tic-tac-toe game. Not only are the types unwieldy 
 you ever need to specify them, but the type is actually so well
 defined that we can't really write a function to use user input!
 
-Give it a try if you don't believe me, we'd want something along the lines of
-`String -> Board b PieceT -> Board ? PieceT` where we parse the string into a
-move. It's really tough to decide what would go into the `?` though, we can't
-give it a type because we don't know what the Coords will be until after we've
-already parsed the string! This is the sort of thing that's sometimes possible
-in Idris' dependent types, but is pretty tricky in Haskell. Here you can see
-Brian McKenna show how to build a [type-safe
+Give it a try if you don't believe me, we'd want something along the lines of:
+
+```
+String -> Board b PieceT -> Board ? PieceT
+```
+
+We'd parse the string into the coords for a move. It's really tough to decide what would go
+into the `?` though, we can't give it a type because we don't know what the
+Coords will be until after we've already parsed the string! This is the sort of
+thing that's sometimes possible in Idris' dependent types, but is pretty tricky
+in Haskell. You can see Brian McKenna show how to build a [type-safe
 `printf`](https://www.youtube.com/watch?v=fVBck2Zngjo) in Idris if you're
 interested.
 
