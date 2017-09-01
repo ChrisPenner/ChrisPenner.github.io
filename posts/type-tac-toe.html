@@ -752,6 +752,7 @@
     <article class="post">
         <p>Today we'll be looking at type programming in Haskell. Programming in type-land allows us to teach the compiler a few new tricks and to verify additional constraints at compile-time rather than run-time. The canonical example is that you can encode the length of a list as a type so that you can verify that appending an element to a list of <code>n</code> elements yields a list of <code>n + 1</code> elements. If you haven't read about or experimented with an example like that before I'd say to check out <a href="http://www.parsonsmatt.org/2017/04/26/basic_type_level_programming_in_haskell.html">Matt Parson's post on type programming</a> first. We're going to go a step further and we'll actually encode the rules of a game of Tic Tac Toe into types so that we can statically guarantee that nobody cheats!</p>
 <p>Type programming is a newly popularized idea, so the tools for it are still a bit rough (in Haskell at least), check out <a href="https://www.idris-lang.org/">Idris</a> if you'd like to see something a bit more polished.</p>
+<p>There are some libraries popping up in the Haskell ecosystem which are making the ideas presented here easier to work with, most notably the <a href="http://hackage.haskell.org/package/singletons">singletons</a> library which can generate a lot of the type-level primitives we write here. Check it out if you like, but I find it's a bit confusing for people new to this stuff, so I'll be spelling most things out in long-hand.</p>
 <p>Let's get moving!</p>
 <p>Here's a representation of the de-facto 3x3 Tic Tac Toe board:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- | Either X, O, or Nothing</span>
@@ -774,7 +775,7 @@ newBoard <span class="fu">=</span> <span class="dt">Board</span> <span class="fu
   <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre></div>
 <p>Here's a quick function which lets us change a slot inside a Triple:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- | Utility function to alter a value inside a triple</span>
-<span class="co">-- Can build get / set using `flip const ()` and `const x` respectively</span>
+<span class="co">-- Can set values using `const x`</span>
 <span class="ot">overTrip ::</span> <span class="dt">CoordT</span> <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Trip</span> a <span class="ot">-&gt;</span> <span class="dt">Trip</span> a
 overTrip <span class="dt">A</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> (f a) b c
 overTrip <span class="dt">B</span> f (<span class="dt">Trip</span> a b c) <span class="fu">=</span> <span class="dt">Trip</span> a (f b) c
@@ -801,7 +802,7 @@ play p (x, y) (<span class="dt">Board</span> b) <span class="fu">=</span> <span 
 λ<span class="fu">&gt;</span> <span class="fu">:</span>k <span class="ch">&#39;X</span>
 <span class="ch">&#39;X :: PieceT</span></code></pre></div>
 <p>That last one is interesting! GHC notices that <code>'X</code> isn't quite like other types, but that it was defined as part of the PieceT data group. This means that when we're writing functions on types we can actually specify what Kind of types we want to allow.</p>
-<p>The first and easiest thing we could require of our game is that <code>X</code> and <code>O</code> always alternate turns. In order to that we'll need to store who's turn it is as part of the type of our board. Let's edit our <code>Board</code> type to have an additional parameter called <code>t</code> for <code>turn</code>, we don't actually have to have the type in our data-structure though, the compiler will do the check at runtime so we won't need to store this info at the value level. A type which is used only on the left side of a data definition is called a &quot;Phantom type&quot;. They're useful for specifying type constraints.</p>
+<p>The first and easiest thing we could require of our game is that <code>X</code> and <code>O</code> always alternate turns. In order to that we'll need to store who's turn it is as part of the type of our board. Let's edit our <code>Board</code> type to have an additional parameter called <code>t</code> for <code>turn</code>, we don't actually have to have the type in our data-structure though, the compiler will do the check at compile-time so we won't need to store this info at the value level. A type which is used only on the left side of a data definition is called a &quot;Phantom type&quot;. They're useful for specifying type constraints.</p>
 <p>We'll also edit the signature of <code>newBoard</code> to show that <code>X</code> goes first; we don't need to change the definition at all though!</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Board</span> t a <span class="fu">=</span> <span class="dt">Board</span> (<span class="dt">Trip</span> (<span class="dt">Trip</span> a))
   <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)
@@ -1013,9 +1014,12 @@ playX (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;
 playO (coordVal <span class="ot">-&gt;</span> x, coordVal <span class="ot">-&gt;</span> y) (<span class="dt">Board</span> b) 
       <span class="fu">=</span> <span class="dt">Board</span> <span class="fu">$</span> overTrip y (overTrip x (const <span class="dt">O</span>)) b
 
+<span class="ot">game ::</span> <span class="dt">Board</span> (<span class="ch">&#39;Cons &#39;</span><span class="dt">A</span> <span class="ch">&#39;A &#39;</span><span class="dt">O</span> (<span class="ch">&#39;Cons &#39;</span><span class="dt">A</span> <span class="ch">&#39;B &#39;</span><span class="dt">X</span> <span class="ch">&#39;Empty)) PieceT</span>
 game <span class="fu">=</span> newBoard
      <span class="fu">&amp;</span> playX (<span class="dt">A&#39;</span>, <span class="dt">B&#39;</span>)
      <span class="fu">&amp;</span> playO (<span class="dt">A&#39;</span>, <span class="dt">A&#39;</span>)</code></pre></div>
+<p>That last type there is a doozy! The type actually includes the entire game board, and it'll only grow as we add moves! This exposes some issues with using this approach for a real-life tic-tac-toe game. Not only are the types unwieldy if you ever need to specify them, but the type is actually so well defined that we can't really write a function to use user input!</p>
+<p>Give it a try if you don't believe me, we'd want something along the lines of <code>String -&gt; Board b PieceT -&gt; Board ? PieceT</code> where we parse the string into a move. It's really tough to decide what would go into the <code>?</code> though, we can't give it a type because we don't know what the Coords will be until after we've already parsed the string! This is the sort of thing that's sometimes possible in Idris' dependent types, but is pretty tricky in Haskell. Here you can see Brian McKenna show how to build a <a href="https://www.youtube.com/watch?v=fVBck2Zngjo">type-safe <code>printf</code></a> in Idris if you're interested.</p>
 <p>Thanks for joining me, let me know if you found anything confusing; hope you learned something!</p>
 
         <br>
