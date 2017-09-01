@@ -23,6 +23,11 @@ Type programming is a newly popularized idea, so the tools for it are still a
 bit rough (in Haskell at least), check out [Idris](https://www.idris-lang.org/)
 if you'd like to see something a bit more polished.
 
+There are some libraries popping up in the Haskell ecosystem which are making the ideas
+presented here easier to work with, most notably the [singletons](http://hackage.haskell.org/package/singletons)
+library which can generate a lot of the type-level primitives we write here. Check it out if you like, 
+but I find it's a bit confusing for people new to this stuff, so I'll be spelling most things out in long-hand.
+
 Let's get moving!
 
 Here's a representation of the de-facto 3x3 Tic Tac Toe board:
@@ -60,7 +65,7 @@ Here's a quick function which lets us change a slot inside a Triple:
 
 ```haskell
 -- | Utility function to alter a value inside a triple
--- Can build get / set using `flip const ()` and `const x` respectively
+-- Can set values using `const x`
 overTrip :: CoordT -> (a -> a) -> Trip a -> Trip a
 overTrip A f (Trip a b c) = Trip (f a) b c
 overTrip B f (Trip a b c) = Trip a (f b) c
@@ -134,7 +139,7 @@ The first and easiest thing we could require of our game is that `X` and `O`
 always alternate turns. In order to that we'll need to store who's turn it is
 as part of the type of our board. Let's edit our `Board` type to have an
 additional parameter called `t` for `turn`, we don't actually have to have the
-type in our data-structure though, the compiler will do the check at runtime so
+type in our data-structure though, the compiler will do the check at compile-time so
 we won't need to store this info at the value level. A type which is used only
 on the left side of a data definition is called a "Phantom type". They're
 useful for specifying type constraints.
@@ -462,10 +467,27 @@ playO :: (Played x y b ~ 'False, Turn b ~ 'O)
 playO (coordVal -> x, coordVal -> y) (Board b) 
       = Board $ overTrip y (overTrip x (const O)) b
 
+game :: Board ('Cons 'A 'A 'O ('Cons 'A 'B 'X 'Empty)) PieceT
 game = newBoard
      & playX (A', B')
      & playO (A', A')
 ```
+
+That last type there is a doozy! The type actually includes the entire game
+board, and it'll only grow as we add moves! This exposes some issues with using
+this approach for a real-life tic-tac-toe game. Not only are the types unwieldy if
+you ever need to specify them, but the type is actually so well
+defined that we can't really write a function to use user input!
+
+Give it a try if you don't believe me, we'd want something along the lines of
+`String -> Board b PieceT -> Board ? PieceT` where we parse the string into a
+move. It's really tough to decide what would go into the `?` though, we can't
+give it a type because we don't know what the Coords will be until after we've
+already parsed the string! This is the sort of thing that's sometimes possible
+in Idris' dependent types, but is pretty tricky in Haskell. Here you can see
+Brian McKenna show how to build a [type-safe
+`printf`](https://www.youtube.com/watch?v=fVBck2Zngjo) in Idris if you're
+interested.
 
 Thanks for joining me, let me know if you found anything confusing; hope you
 learned something!
