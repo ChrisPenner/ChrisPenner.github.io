@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-09-12T02:35:14Z</updated>
+  <updated>2017-09-12T02:43:42Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -17,8 +17,8 @@
       <content type="html"><![CDATA[
           <img src="http://chrispenner.ca/images/cables.jpg" alt="Don&#39;t use IO (or MonadIO)">
               <p>Now that we've got the click-bait out of the way (sorry about that) we can have a nice chat! Here's my point: the IO monad, and by proxy MonadIO, is too general. This isn't news really, it's has been addressed in many ways by many people. Options presented in the past include using Free or Free-er monads (e.g. the <a href="https://leanpub.com/purescript/read#leanpub-auto-the-eff-monad">Eff Monad</a>), and these tend to work pretty well, but they're all-encompassing and intrusive, they can be pretty tough to work into legacy projects; converting all uses of a given effect into a Free monad can be tricky and time consuming (though certainly can be worthwhile!).</p>
-<p>What I'm going to talk about here is an alternative which provides most of the benefits with a very low barrier to entry: splitting up IO into granular monad type classes. First a quick recap;</p>
-<h1 id="monad-classes"><code>Monad\*</code> classes</h1>
+<p>What I'm going to talk about here is an alternative which provides most of the benefits with a very low barrier to entry: splitting up IO into granular monad type classes. First a quick recap:</p>
+<h2 id="monad-classes"><code>Monad*</code> classes</h2>
 <p>I'm going to assume that most readers are at least passively familiar with <a href="http://hackage.haskell.org/package/mtl">mtl</a>; if not then maybe come back to this post later on. <a href="http://hackage.haskell.org/package/mtl">mtl</a> popularized the idea of the <code>Monad*</code> typeclasses e.g. <code>MonadReader</code>, <code>MonadState</code>, and of course <code>MonadIO</code>. This pattern has been adopted by most modern monad-based libraries because it allows abstracting away the concrete monad which is used in a function to allow greater portability and re-usability.</p>
 <p>Here's an example of an action written using type signatures using both concrete monad types and abstract monad typeclasses:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">concreteUserIncrement ::</span> <span class="dt">StateT</span> <span class="dt">Int</span> <span class="dt">IO</span> <span class="dt">Int</span>
@@ -41,8 +41,8 @@ concreteReset <span class="fu">=</span> put <span class="dv">0</span>
 <span class="ot">classbasedReset ::</span> <span class="dt">MonadState</span> <span class="dt">Int</span> m <span class="ot">=&gt;</span> m ()
 classbasedReset <span class="fu">=</span> put <span class="dv">0</span></code></pre></div>
 <p>Again, both implementations are the same, but what do the types tell us? Well, the class-based approach tells us clearly that <code>classbasedReset</code> intends to (and in fact can only) interact with the Int which we've got stored in <code>StateT</code>. We're not allowed to do IO or check Options in there without adding it to the signature. In the concrete case we're not given any hints. We know which monad the action is intended to be used in; but for all we know the implementation could take advantage of the <code>IO</code> at the base and alter the file-system or do logging, or read from stdIn, who knows?</p>
-<p>Okay, so I think I've made my case that <code>Monad*</code> classes improve both code re-usability and code clarity, but if I'm not supposed to use IO or even MonadIO then how am I supposed to get anything done? Good question, glad you asked!</p>
-<h1 id="breaking-up-monadio">Breaking up MonadIO</h1>
+<p>Okay, so I think I've made my case that <code>Monad*</code> classes improve both code re-usability and code clarity, but if I'm not supposed to use <code>IO</code> or even <code>MonadIO</code> then how am I supposed to get anything done? Good question, glad you asked!</p>
+<h2 id="breaking-up-monadio">Breaking up MonadIO</h2>
 <p>Having a <code>MonadState Int m</code> in the signature was great because it limited the scope of what the monad could do, allowing us to see the action's intent. <code>MonadIO m</code> is a <code>Monad*</code> class, but what does it tell us? Unfortunately it's so general it tells us pretty much zilch. It says that we need access to IO, but are we printing something? Reading from the filesystem? Writing to a database? Launching nuclear missiles? Who knows!? It's making my head spin! <code>MonadIO</code> is too general, its only method is <code>liftIO</code> which has absolutely zero semantic meaning. Compare this to <code>ask</code> from <code>MonadReader</code> or <code>modify</code> from <code>MonadState</code>. We can tell that these transformers have a clear scope because they have meaningful function names.</p>
 <p>Let's bring some semantic meaning into our MonadIO by defining a new, more meaningful class:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">class</span> <span class="dt">MonadFiles</span> m <span class="kw">where</span>
@@ -55,7 +55,7 @@ classbasedReset <span class="fu">=</span> put <span class="dv">0</span></code></
 <p>Now instead of tossing around a <code>MonadIO</code> everywhere we can clearly specify that all we really need is to work with the file system. We've implemented the interface in the IO monad so we can still use it just like we did before.</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">getDiary ::</span> <span class="dt">MonadFiles</span> m <span class="ot">=&gt;</span> m <span class="dt">String</span>
 getDiary <span class="fu">=</span> readAFile <span class="st">&quot;my-diary.txt&quot;</span></code></pre></div>
-<p>Now no-one can launch those pesky nukes when all I want to do is read my diary! As a bonus this lets us choose a different underlying <code>MonadFiles</code> whenever we like! For instance wWe probably don't need our tests to be writing files all over our system:</p>
+<p>Now no-one can launch those pesky nukes when all I want to do is read my diary! As a bonus this lets us choose a different underlying <code>MonadFiles</code> whenever we like! For instance we probably don't need our tests to be writing files all over our system:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">MonadFiles</span> (<span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span>)) <span class="kw">where</span>
   readAFile fileName <span class="fu">=</span> <span class="kw">do</span>
     files <span class="ot">&lt;-</span> get
@@ -71,7 +71,7 @@ getDiary <span class="fu">=</span> readAFile <span class="st">&quot;my-diary.txt
 
 <span class="kw">class</span> <span class="dt">MonadFileWriter</span> m <span class="kw">where</span>
 <span class="ot">  writeAFile ::</span> FilePath <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> m ()</code></pre></div>
-<p>We can get back our <code>MonadFiles</code> type class pretty easily using the <code>ConstraintKinds</code> GHC extension:</p>
+<p>We can get back our <code>MonadFiles</code> type class pretty easily using the <a href="https://kseo.github.io/posts/2017-01-13-constraint-kinds.html"><code>ConstraintKinds</code></a> GHC extension:</p>
 <div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language ConstraintKinds #-}</span>
 <span class="kw">type</span> <span class="dt">MonadFiles</span> m <span class="fu">=</span> (<span class="dt">MonadFileReader</span> m, <span class="dt">MonadFileWriter</span> m)</code></pre></div>
 <p>As an aside, feel free to implement an instance of your interfaces for your Free Algebras too!</p>
