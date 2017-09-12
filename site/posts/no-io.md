@@ -20,11 +20,9 @@ certainly can be worthwhile!).
 
 What I'm going to talk about here is an alternative which provides most of the
 benefits with a very low barrier to entry: splitting up IO into granular monad
-type classes. First a quick recap;
+type classes. First a quick recap:
 
-
-`Monad\*` classes
-=================
+## `Monad*` classes
 
 I'm going to assume that most readers are at least passively familiar with
 [mtl](http://hackage.haskell.org/package/mtl); if not then maybe come back to
@@ -86,10 +84,10 @@ implementation could take advantage of the `IO` at the base and alter the
 file-system or do logging, or read from stdIn, who knows? 
 
 Okay, so I think I've made my case that `Monad*` classes improve both code
-re-usability and code clarity, but if I'm not supposed to use IO or even MonadIO
+re-usability and code clarity, but if I'm not supposed to use `IO` or even `MonadIO`
 then how am I supposed to get anything done? Good question, glad you asked!
 
-# Breaking up MonadIO
+## Breaking up MonadIO
 
 Having a `MonadState Int m` in the signature was great because it limited the
 scope of what the monad could do, allowing us to see the action's intent.
@@ -126,7 +124,7 @@ getDiary = readAFile "my-diary.txt"
 
 Now no-one can launch those pesky nukes when all I want to do is read my diary!
 As a bonus this lets us choose a different underlying `MonadFiles` whenever we
-like! For instance wWe probably don't need our tests to be writing files all
+like! For instance we probably don't need our tests to be writing files all
 over our system:
 
 ```haskell
@@ -155,7 +153,8 @@ class MonadFileWriter m where
   writeAFile :: FilePath -> String -> m ()
 ```
 
-We can get back our `MonadFiles` type class pretty easily using the `ConstraintKinds`
+We can get back our `MonadFiles` type class pretty easily using the
+[`ConstraintKinds`](https://kseo.github.io/posts/2017-01-13-constraint-kinds.html)
 GHC extension:
 
 ```haskell
