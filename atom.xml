@@ -2,21 +2,21 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2017-09-12T02:43:42Z</updated>
+  <updated>2017-09-12T02:49:20Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>http://chrispenner.ca/</id>
 
   <entry>
-      <title>Don&#39;t use IO (or MonadIO)</title>
-      <link href="http://chrispenner.ca/posts/no-io.html"/>
-      <id>http://chrispenner.ca/posts/no-io.html</id>
+      <title>MonadIO Considered Harmful</title>
+      <link href="http://chrispenner.ca/posts/monadio-considered-harmful.html"/>
+      <id>http://chrispenner.ca/posts/monadio-considered-harmful.html</id>
       <updated>2017-09-11T00:00:00Z</updated>
-      <summary>Avoid using the IO or even MonadIO directly</summary>
+      <summary>Avoid using IO or MonadIO directly</summary>
       <content type="html"><![CDATA[
-          <img src="http://chrispenner.ca/images/cables.jpg" alt="Don&#39;t use IO (or MonadIO)">
-              <p>Now that we've got the click-bait out of the way (sorry about that) we can have a nice chat! Here's my point: the IO monad, and by proxy MonadIO, is too general. This isn't news really, it's has been addressed in many ways by many people. Options presented in the past include using Free or Free-er monads (e.g. the <a href="https://leanpub.com/purescript/read#leanpub-auto-the-eff-monad">Eff Monad</a>), and these tend to work pretty well, but they're all-encompassing and intrusive, they can be pretty tough to work into legacy projects; converting all uses of a given effect into a Free monad can be tricky and time consuming (though certainly can be worthwhile!).</p>
+          <img src="http://chrispenner.ca/images/cables.jpg" alt="MonadIO Considered Harmful">
+              <p>Now that we've got the click-bait out of the way (sorry about that) we can have a nice chat! Here's my point: MonadIO, and of course IO, are too general. This isn't news really, it's has been addressed in many ways by many people. Options presented in the past include using Free or Free-er monads (e.g. the <a href="https://leanpub.com/purescript/read#leanpub-auto-the-eff-monad">Eff Monad</a>), and these tend to work pretty well, but they're all-encompassing and intrusive, they can be pretty tough to work into legacy projects; converting all uses of a given effect into a Free monad can be tricky and time consuming (though certainly can be worthwhile!).</p>
 <p>What I'm going to talk about here is an alternative which provides most of the benefits with a very low barrier to entry: splitting up IO into granular monad type classes. First a quick recap:</p>
 <h2 id="monad-classes"><code>Monad*</code> classes</h2>
 <p>I'm going to assume that most readers are at least passively familiar with <a href="http://hackage.haskell.org/package/mtl">mtl</a>; if not then maybe come back to this post later on. <a href="http://hackage.haskell.org/package/mtl">mtl</a> popularized the idea of the <code>Monad*</code> typeclasses e.g. <code>MonadReader</code>, <code>MonadState</code>, and of course <code>MonadIO</code>. This pattern has been adopted by most modern monad-based libraries because it allows abstracting away the concrete monad which is used in a function to allow greater portability and re-usability.</p>
