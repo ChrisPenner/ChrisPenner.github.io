@@ -1,14 +1,14 @@
 ---
-title: "Don't use IO (or MonadIO)"
+title: "MonadIO Considered Harmful"
 author: Chris Penner
 date: Sep 11, 2017
 tags: [haskell, programming]
-description: Avoid using the IO or even MonadIO directly
+description: Avoid using IO or MonadIO directly
 image: cables.jpg
 ---
 
 Now that we've got the click-bait out of the way (sorry about that) we can have
-a nice chat! Here's my point: the IO monad, and by proxy MonadIO, is too
+a nice chat! Here's my point: MonadIO, and of course IO, are too
 general. This isn't news really, it's has been addressed in many ways by many
 people. Options presented in the past include using Free or Free-er monads
 (e.g. the [Eff
