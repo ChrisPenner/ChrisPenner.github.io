@@ -483,6 +483,11 @@ a.tag, a.category {
     opacity: 1;
     text-decoration: none; }
 
+#home-text {
+  font-size: 0.3em;
+  margin-top: -4.2em;
+}
+
 #leftarrow {
   position: fixed;
   left: 5px;
