@@ -3,6 +3,7 @@
 
 module Main where
 
+import Control.Monad
 import Data.Function (on)
 import Data.List (sortBy)
 import qualified Data.Text as T
@@ -26,7 +27,7 @@ main :: IO ()
 main =
   siteWithGlobals funcs $ do
     posts <-
-      sortByDate . fmap formatDate <$>
+      neighbouringPosts . sortByDate . fmap formatDate <$>
       resourceLoader markdownReader ["posts/*.md"]
     drafts <-
       sortByDate . fmap formatDate <$>
@@ -76,6 +77,17 @@ formatDate post =
 toIsoDate :: UTCTime -> String
 toIsoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339)
 
+neighbouringPosts :: [Value] -> [Value]
+neighbouringPosts posts =
+  zipWith3 addNeighbours (Nothing : mPosts) posts (tail mPosts ++ [Nothing])
+  where
+    mPosts :: [Maybe Value]
+    mPosts = pure . stripHTMLSuffix <$> posts
+    addNeighbours :: Maybe Value -> Value -> Maybe Value -> Value
+    addNeighbours mPrevPost post mNextPost =
+      post & _Object . at "prevPost" .~ mPrevPost & _Object . at "nextPost" .~
+      mNextPost
+
 mkIndexEnv :: [Value] -> [Value] -> Value
 mkIndexEnv posts tags =
   object
@@ -85,7 +97,7 @@ mkIndexEnv posts tags =
     ]
 
 staticAssets :: SiteM ()
-staticAssets = copyFiles ["css", "js", "images"]
+staticAssets = void $ copyFiles ["css", "js", "images"]
 
 atomRssFeed :: [Value] -> SiteM ()
 atomRssFeed posts = do

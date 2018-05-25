@@ -16,6 +16,9 @@
 <body>
     {{> templates/header.html}}
 
+    {{#prevPost}} <a id="leftarrow" class="arrow" href="{{prevPost.url}}">&larr;</a> {{/prevPost}}
+    {{#nextPost}} <a id="rightarrow" class="arrow" href="{{nextPost.url}}">&rarr;</a> {{/nextPost}}
+
 <div id="page">
     <div class="wrapper">
         <div class="masthead">

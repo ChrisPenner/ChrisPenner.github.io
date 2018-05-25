@@ -23,5 +23,6 @@ executable build-site
                      , mustache >= 2.2.3
                      , lens
                      , time
+                     , aeson
   default-language:    Haskell2010
 
