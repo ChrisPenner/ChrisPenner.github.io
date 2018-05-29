@@ -448,9 +448,6 @@ a.tag, a.category {
   font-family: "Quicksand", helvetica, sans-serif;
   font-size: 1.5em;
   font-weight: bold;
-  position: absolute;
-  top: 0.75em;
-  right: 0.7em;
   text-align: right;
   cursor: pointer;
   -webkit-transition: opacity 0.5s, color 2s;
@@ -546,5 +543,21 @@ a.tag, a.category {
 @media only screen and (max-height: 450px) {
   .masthead {
     min-height: 350px; } }
+
+.ext-link img {
+  width: 32px;
+  height: 32px;
+}
+
+.right-sidebar {
+  position: absolute;
+  top: 0.75em;
+  right: 0.7em;
+  display: flex;
+}
+
+.right-sidebar > * {
+  margin-left: 12px;
+}
 
 /*# sourceMappingURL=style.css.map */
