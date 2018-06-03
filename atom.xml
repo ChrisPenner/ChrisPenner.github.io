@@ -2,12 +2,133 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2018-05-29T00:53:43Z</updated>
+  <updated>2018-06-03T00:15:15Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>http://chrispenner.ca/</id>
 
+  <entry>
+      <title>Postman API Explorer: You&#39;ve got mail!</title>
+      <link href="http://chrispenner.ca/posts/postman.html"/>
+      <id>http://chrispenner.ca/posts/postman.html</id>
+      <updated>2018-06-02T00:00:00Z</updated>
+      <summary>A guide to using Postman for API exploration and testing</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/postman/mail.jpg" alt="Postman API Explorer: You&#39;ve got mail!">
+              <p>For those who haven't heard of it, postman is a tool for interacting with and exploring API's. Effectively it's a pretty UI on top of curl; but it makes a big difference when figuring out how exactly to structure an API call, or testing what the response from an api might look like.</p>
+<p>Let's get started, first go ahead and <a href="https://www.getpostman.com/">GET POSTMAN</a>;</p>
+<p>Here's roughly what you'll see when you start it up:</p>
+<div class="figure">
+<img src="/images/postman/overview.png" alt="Overview" />
+<p class="caption">Overview</p>
+</div>
+<h1 id="requests">Requests</h1>
+<p>Let's walk through the Request interface (in order of importance, stop when you get bored)</p>
+<div class="figure">
+<img src="/images/postman/request.png" alt="Requests" />
+<p class="caption">Requests</p>
+</div>
+<ol style="list-style-type: decimal">
+<li>URL
+<ul>
+<li>This bit's pretty important, put a URL in here, click the SEND button. Now you can use Postman.</li>
+</ul></li>
+<li>HTTP VERB
+<ul>
+<li>Here you can choose what type of request to make; GET, POST, PATCH, DELETE, etc.</li>
+<li>This choice effects which other options are available; for instance you can't set a BODY on a GET request.</li>
+</ul></li>
+<li>SEND
+<ul>
+<li>Hit this button to make the magic happen and actually send off your request.</li>
+</ul></li>
+<li>Params
+<ul>
+<li>This gives you a nice interface for editing GET parameters as keys and values. Don't get it confused with the idea of sending keys and values with a POST request.</li>
+</ul></li>
+<li>Body
+<ul>
+<li>Only available on non-GET requests</li>
+<li>Can choose your body type and it'll encode it for you</li>
+<li>Use 'raw' and use the dropdown on the right to set the content-type to JSON for most APIs</li>
+<li>Use form-data if you're simulating an old-school form submission or some older-style APIs</li>
+</ul></li>
+<li>Headers
+<ul>
+<li>Set any HTTP headers you need here;</li>
+<li>Typically just used for Authentication headers; You can put a jwt auth header in here for instance.</li>
+</ul></li>
+<li>Authorization
+<ul>
+<li>Sometimes helpful for interacting with 3rd party APIs</li>
+<li>Choosing Basic Auth will encode a username and password into the request for you.</li>
+</ul></li>
+</ol>
+<h1 id="responses">Responses</h1>
+<div class="figure">
+<img src="/images/postman/response.png" alt="Responses" />
+<p class="caption">Responses</p>
+</div>
+<p>Cool stuff; we can set up our request. Now let's say we hit the big blue SEND button and we have a response!</p>
+<ol style="list-style-type: decimal">
+<li>Body
+<ul>
+<li>We're probably most interested in the Body of the response</li>
+</ul></li>
+<li>Headers
+<ul>
+<li>If you want to check the headers of the response this's where you'll find'em</li>
+</ul></li>
+<li>Response Type
+<ul>
+<li>Postman can pretty print the response if we tell it to; set this to JSON and it'll nicely format the response for you.</li>
+</ul></li>
+<li>Utilities
+<ul>
+<li>First one is &quot;Copy to Clipboard&quot;; handy for sharing with your helpful co-workers</li>
+<li>Second opens a search in the response</li>
+<li>Third let's you save it for later</li>
+</ul></li>
+<li>Stats
+<ul>
+<li>Here we can see Response Time, Status Code and response size.</li>
+</ul></li>
+</ol>
+<p>So that's pretty much it for making simple requests, but I've missed a few of the more useful things about postman; you can save collections of requests to share with people; and also save lists of environment variables which can be interpolated into requests.</p>
+<h2 id="history">History</h2>
+<div class="figure">
+<img src="/images/postman/history.png" alt="History" />
+<p class="caption">History</p>
+</div>
+<p>You can see your request history via the tab at the top and load up any past requests, which is handy if you've edited a request and want to get back to a previous version of it; or you're like me and you can't remember anything that happened more than 15 minutes ago.</p>
+<h2 id="collections">Collections</h2>
+<div class="figure">
+<img src="/images/postman/collections.png" alt="Collections" />
+<p class="caption">Collections</p>
+</div>
+<p>This panel on the left will probably have nothing in it when you start. At any time you can hit the 'save' button to the right of the URL bar to save a request for later.</p>
+<p>I keep collections of requests around when I'm testing, and I often make collections to share with my team.</p>
+<h1 id="environments">Environments</h1>
+<div class="figure">
+<img src="/images/postman/environments.png" alt="Environments" />
+<p class="caption">Environments</p>
+</div>
+<p>Here we can set a context to execute our requests in. An environment can contain a set of key-value settings which we can use anywhere in our request. This is great if you're testing api's as different users, or if you have to test the same calls against several different hosts.</p>
+<p>If you set up some environment variables you can interpolate them into your requests using double curly braces. For example you might make a request to <code>example.com/my-endpoint?apiKey={{apiKey}}&amp;apiUser={{apiUser}}</code>, now if you have postman environments set up for each user and key you can switch between them easily. You can use <code>{{}}</code> anywhere it would make sense; e.g. urls, params, POST bodies, etc.</p>
+<h1 id="need-a-session-with-the-site-use-interceptor">Need a session with the site? Use Interceptor</h1>
+<p>Interceptor is one of Postman's cooler features; it allows the Postman app to route the requests through your chrome instance; this means they'll include any cookies (and therefore sessions) you have in chrome.</p>
+<div class="figure">
+<img src="/images/postman/interceptor.png" alt="Interceptor" />
+<p class="caption">Interceptor</p>
+</div>
+<p>NOTE! Interceptor is currently only available in the chrome Postman plugin, NOT the desktop app; so if you don't see this icon, you're probably using the desktop app and will need to switch over to <a href="https://chrome.google.com/webstore/detail/postman/fhbjgbiflinjbdggehcddcbncdddomop">Postman chrome app</a> to use it. You'll also need to install the <a href="https://chrome.google.com/webstore/detail/postman-interceptor/aicmkgpgakddgnaphhhpliifpcfhicfo?hl=en">Postman Interceptor Chrome Extension</a>.</p>
+<p>Now if we click to enable the chrome interceptor plugin, all our requests will pick up any cookies that exist in our chrome session! Handy! You can also flip a switch in the browser extension and have it track requests happening in your browser through Postman's history.</p>
+<h1 id="importingexporting">Importing/Exporting</h1>
+<p>Postman has the ability to import curl requests using the &quot;import&quot; button on the top left, but you can also export code for each request in a language of your choice using the &quot;code&quot; button on the right. You can export as Python, HTTP, curl, Go, Java, Node, etc.</p>
+<p>That's pretty much it for Postman. Tip your <em><em>servers</em></em>, I'm here all week.</p>
+              ]]></content>
+      </entry>
   <entry>
       <title>ASTs with Fix and Free</title>
       <link href="http://chrispenner.ca/posts/asts-with-fix-and-free.html"/>

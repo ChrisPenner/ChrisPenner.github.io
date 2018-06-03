@@ -281,6 +281,12 @@ a.tag, a.category {
               hyphens: auto;
       word-break: break-word; }
 
+.post img {
+  max-width: 100%;
+  margin: auto;
+  display: block;
+}
+
 .table-of-contents {
   clear: both;
   width: 100%; }
