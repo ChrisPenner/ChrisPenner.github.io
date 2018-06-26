@@ -7,23 +7,150 @@ description: Description and implementation of a Monoid to effeciently count ele
 image: flux-monoid/flux.jpg
 ---
 
-Monoids are incredibly useful; the more I learn about Category Theory the more
-applications I find for monoidal structures. Some time ago when I was writing
-my [text editor](https://github.com/ChrisPenner/rasa) I spent a lot of time
-working with [Finger Trees](https://en.wikipedia.org/wiki/Finger_tree). Since
-most people probably haven't needed to do much reading on Finger Trees here's a
-quick summary. Basically they use the properties of a Monoid to provide
-efficient monoidal `summing` or `splitting` based on a monoid over an ordered
-collection which is undergoing mutations. In my case the monoid in questions
-was text; where the text was being `summed` via concatenation and was often
-`split` into various selections of lines, paragraphs, words, etc. This is a
-common approach to working with text (See the
-[Rope](https://en.wikipedia.org/wiki/Rope_(data_structure)) data structure);
-but since the Finger Tree uses a monoid as its interface to the data contained
-inside it can be applied to any and all monoids you could dream up!
+This is going to be a post about monoids, finger trees, efficiently splitting up text, and the unending change
+of the world that surrounds us; but mostly the monoid bit.
 
-Finger Trees use monoidal sums to query a data structure and 
-perform operations like splitting the sequence at a particular point or searching
+# Monoids
+
+If you're entirely unfamiliar with the concept of monoids, or just need a
+refresher, it would be a good idea to get a solid grounding there first;
+[here's a good place to
+start](https://www.schoolofhaskell.com/user/mgsloan/monoids-tour).
+
+Monoids are incredibly useful; and the more I learn about Category Theory the
+more applications I find for monoidal structures. Once you start to think in
+monoids you start to realize how many things you once thought were unique and
+interesting problems are actually just a monoid and a fold away from some other
+well-solved problem. We're going to start off by introducing a new tool
+(i.e. data structure) which employs monoids to do amazing things! Enter [Finger
+Trees](https://en.wikipedia.org/wiki/Finger_tree)! Finger Trees are an
+adaptable purely functional data structure; they're actually an extremely general structure which makes it a bit
+difficult to explain without a concrete use case. This is because they utilize a Monoid in the foundation of the data
+structure, and the Monoid you choose can drastically affect how the structure behaves. Here's a glance at the sort of
+things you could do by choosing different Monoids:
+
+- Random access/sequence slicing using [`Sum`](https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Sum): see [Data.Sequence](https://hackage.haskell.org/package/containers-0.6.0.1/docs/Data-Sequence.html)
+-  Heap using [`Max/Min`](https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Semigroup.html#t:Max): see [Data.PriorityQueue.FingerTree](https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-PriorityQueue-FingerTree.html)
+- Ordered Sequence slicing using [Last](https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Last): see the section on [Ordered Sequences](http://www.staff.city.ac.uk/~ross/papers/FingerTree.pdf)
+- Interval Searching using a custom interval expansion Monoid: see [Data.IntervalMap.FingerTree](https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-IntervalMap-FingerTree.html)
+- Text slicing and dicing using a product of `Sum`s: see [Yi.Rope](https://hackage.haskell.org/package/yi-rope)
+- Performant merge sort using a custom merge monoid: blog post coming eventually!
+- Many more! Just use your imagination!
+
+How does it all work? Let's take a quick look at doing a simple random-access
+\*air-quotes\* Array \*/air-quotes\* using a Finger Tree so we can see how it all works.
+
+## Random Access Array using a Finger Trees
+
+Let's implement a simple random access list using a Finger Tree! After a quick
+glance through the [Data.FingerTree
+Docs](https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-FingerTree.html)
+it's a bit tough to tell where we might start! The workhorse of the Finger Tree library is
+the `split` function:
+
+```haskell
+split :: Measured v a => (v -> Bool) -> FingerTree v a -> (FingerTree v a, FingerTree v a)
+```
+
+Yikes, let's break this down:
+
+-   `Measured v a`: Measured is a simple typeclass which given an `a` can
+    convert it into some monoid `v`
+-   `(v -> Bool)`: This is our search predicate, `split` will use it to split a
+    sequence into two smaller subsequences: The longest
+    subsequence such that running the predicate on the measure of this
+    subsequence `False`, and the everything that's left-over.
+- `FingerTree v a`: This is the tree we want to split, with a monoidal measure `v` and elements of type `a`.
+- `(FingerTree v a, FingerTree v a)`: The two (possibly empty) subsequences split based on the predicate
+
+That's all great, but how can we actually use it to solve our problem? What
+does splitting up a sequence actually have to do with indexing into a list?
+Finger Trees get their performance characterics by searching through subtrees
+using a strategy very similar to a binary search, they run the predicate on
+cached "measures" of subtrees recursively honing in on the **inflection point**
+where the predicate flips from `False` to `True`. So what we need to do is find
+some pairing of a monoid and a predicate on that monoid which finds the place
+in the sequence we're looking for. Getting the first or last element of a
+Finger Tree is a simple `O(1)` operation, so if we can split the list either
+directly *before* or directly *after* the index we're looking for, then we're
+pretty much done! 
+
+Building a predicate for this is pretty simple, we just need to be able to
+determine whether the index we're looking for is within some prefix of our
+total sequence, which phrased simply is just: `length sequence > index`; we can
+use this predicate to recursively hone in on the point where adding a single
+element inflects the predicate from false to true, and we've found our index!
+We do however need this predicate to run on a monoid; so we need to represent
+the length of our sequence as a monoid, the combination of the monoidal measure
+of two sequences must also match the measure of the combination of the
+sequences themselves! Luckily for us the length of the combination of two lists
+is just the sum of the lengths! This gives us the hint that we can use the
+[`Sum`
+Monoid](https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Sum) as our measure!
+
+A great first step is to find a
+monoid which matches our problem! 
+
+when mappended gives us some information about the problem we're
+trying to solve. For random access we're really only concerned with the
+**count** of objects in the sequence. When choosing your monoid it's helpful to
+think about how the monoidal **sum** of **sequences** interact, not just
+individual elements. What if we could keep track of the number of elements in
+any given subsequence? The size of the combination of any subsequences would
+simply be the sum of the counts of the subsequences.
+
+`split`, `dropUntil`, and
+`search` all kind of seem like they might help though!
+
+```haskell
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
+import Data.FingerTree
+import Data.Monoid
+newtype Size a = Size
+  { getSize :: a
+  } deriving (Show, Eq)
+
+instance Measured (Sum Int) (Size a) where
+  measure _ = Sum 1
+
+alphabet :: FingerTree (Sum Int) (Size Char)
+alphabet = fromList (fmap Size "abcdefghijklmnopqrstuvwxyz")
+
+atIndex :: Int -> FingerTree (Sum Int) (Size Char) -> Maybe Char
+atIndex n t =
+  case viewl . snd $ split (> Sum n) t of
+    Size c :< _ -> Just c
+    _ -> Nothing
+```
+
+Some time ago when I was
+writing my [text editor](https://github.com/ChrisPenner/rasa) I spent a lot of
+time working with . Since most people probably haven't needed to do much
+reading on Finger Trees here's a quick summary:
+
+Finger Trees use the properties of a Monoid to provide efficient monoidal
+`summing` or `splitting` based on a monoid over an ordered collection which is
+undergoing mutations. When working with Finger Trees you provide a predicate
+over the sum for the underlying monoid of the Finger Tree. In my case the
+monoid in questions was text; where the text was being `summed` via
+concatenation and was often `split` into lines based on a predicate over the
+`Sum` monoid of the line-count. This is a common approach to working with text
+(See the [Rope](https://en.wikipedia.org/wiki/Rope_(data_structure)) data
+structure, and the haskell implementation of a Rope using Finger Trees
+[here](https://hackage.haskell.org/package/yi-rope)). Since Finger Trees use a
+monoid as the interface you get a free implementation for any monoids you dream
+up!
+
+Let's take a look at the `split` operation for a Finger Tree; this method takes a predicate over
+the "Measure" (i.e. Monoid) of the tree and descends through the tree using cached monoidal sums of subtrees to do something
+akin to a binary search. Because we cache the sum of our monoids it's important that the predicate we provide is
+'monotonically increasing' over the monoid of the tree; which is just a fancy way of saying it should only have a
+**single inflection point**; otherwise it would be possible for inflection points to be hidden within a subtree by
+accident.
+
+Elements of the tree will be `mappend`ed together 
 for an inflection point in the monoid. If `Sum` was our monoid we could for instance
 find the point in a sequence where the sum goes from below 10 to 10 or higher. Or for our
 tree over text we could find the spot in the text where the number of newline characters goes
