@@ -61,8 +61,12 @@ import Data.Char
 import Data.Monoid
 -- We'll wrap char for our Measured instance to avoid any issues with functional dependencies
 newtype CaseChar = CaseChar Char
-instance Measured Any Char where
-    measure c = Any (isUpper c)
+instance Show CaseChar where
+  show (CaseChar c) = [c]
+
+instance Measured Any (CaseChar Char) where
+    measure (CaseChar c) = Any (isUpper c)
+
 ```
 
 Let's take a moment to think about how this monoid will behave as we sum across our input;
@@ -70,11 +74,68 @@ assuming we scan from left to right we would get the following monoid sum:
 
 ```
 abCDeF 
-ffTTTT
+fftttt
 ```
 
-Our function **appears** to be monotonic; but we have to remember that monoids are expected to be associative, so
-in our case the 
+Cool! So in theory we can run `split` over this finger tree and split the tree into the leading lower-case chars and the
+rest.
+
+```haskell
+import Data.FingerTree
+
+tree :: FingerTree Any CaseChar
+tree = fromList (CaseChar <$> "abCDeF")
+```
+
+Now let's try splitting it up!
+
+```haskell
+> split getAny tree
+(fromList [a,b],fromList [C,D,e,F])
+```
+
+Cool; so we're properly splitting off the first section; what happens if we want to keep splitting by case? Let's try
+splitting the leftovers again:
+
+```haskell
+> split getAny (fromList . fmap CaseChar $ "CDeF")
+(fromList [],fromList [C,D,e,F])
+```
+
+Hrmm, not quite what we wanted. Since our predicate is based on each individual value and not its **relationship** to
+its neighbours we actually have to flip the predicate each time we run `split`! This would work, but it's a bit of a
+pain and IMHO ruins the elegance of using a monoid for this.
+
+Don't fear though; Flux monoid to the rescue!
+
+The Flux monoid is unique among most monoids in that it has a **memory** of previous `mappend` operations but still
+follows the monoid laws! This means that using the Flux monoid we can construct a predicate based on the
+**relationships** of elements in a sequence; allowing us to construct a single predicate which will always yield
+another chunk of our sequence! 
+
+Let's define a little helper to run `split` repeatedly for as long as we get new results:
+
+```haskell
+splits :: Measured m v => (m -> Bool) -> FingerTree m v -> [FingerTree m v]
+splits p = unfoldr expand
+  where
+    expand t =
+      case split p t of
+        (FT.null -> True, _) -> Nothing
+        (a, b) -> Just (a, b)
+```
+
+Here's how we'd use it to split a tree based on the **case** of the characters:
+
+```haskell
+> splits ((>= 1) . getFlux ) tree
+[fromList [a,b],fromList [C,D],fromList [e],fromList [F]]
+```
+
+That's all there is to it!
+
+
+
 
 All of the above is background for why we might ever want the monoid we're
 about to explore. The "Flux" monoid (as I've deemed it) allows us to keep track of the times a value has CHANGED 
@@ -82,7 +143,7 @@ about to explore. The "Flux" monoid (as I've deemed it) allows us to keep track 
 
 
 
-```
+```haskell
 -- | 'Flux' is a monoid which counts the number of times an element changes
 -- values (according to its Eq instance)
 -- This is useful for gaining associativity (and its associated performance improvements)
