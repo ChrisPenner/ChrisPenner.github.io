@@ -19,7 +19,7 @@ array-like structure with reasonable performance characteristics.
 This data structure stands on the shoulders of giants, it uses a structure called a `Monoid`
 at its core.
 
-# Monoids
+## Monoids
 
 If you're entirely unfamiliar with the concept of monoids, or just need a
 refresher, it would be a good idea to get a solid grounding there first;
@@ -47,7 +47,7 @@ things you could do by choosing different Monoids:
 - Many more! Just use your imagination!
 
 How does it all work? Let's learn how to build a simple random-access
-\*air-quotes\* Array \*/air-quotes\* using a Finger Tree so we can get a sense of things
+\<air-quotes\> Array \</air-quotes\> using a Finger Tree so we can get a sense of things
 
 ## Random Access Array using a Finger Trees
 
@@ -126,7 +126,7 @@ alphabet :: FingerTree (Sum Int) (Size Char)
 alphabet = fromList (fmap Size "abcdefghijklmnopqrstuvwxyz")
 
 -- Get a given index from the tree if it exists
-atIndex :: Int -> FingerTree (Sum Int) (Size Char) -> Maybe Char
+atIndex :: Int -> FingerTree (Sum Int) (Size a) -> Maybe a
 atIndex n t =
   case viewl . snd $ split (> Sum n) t of
     Size c :< _ -> Just c
@@ -147,7 +147,7 @@ last elements then we're down to pretty much constant time!
 
 There we go! We've used 'Sum' as a measure within a finger tree to get
 efficient indexing into a sequence! We can also notice that the length of the whole sequence
-is computed in O(1) if we use `length = measure`; and that we can concat two sequences relatively efficiently
+is computed in `O(1)` if we use `length = measure`; and that we can concat two sequences relatively efficiently
 using `(><)`; listed in `Data.FingerTree` as time complexity `O(log(min(n1, n2)))` where n1 and n2 are the length
 of each sequence  respectively.
 

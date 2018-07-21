@@ -29,7 +29,7 @@ alphabet :: FingerTree (Sum Int) (Size Char)
 alphabet = fromList (fmap Size "abcdefghijklmnopqrstuvwxyz")
 
 -- Get a given index from the tree if it exists
-atIndex :: Int -> FingerTree (Sum Int) (Size Char) -> Maybe Char
+atIndex :: Int -> FingerTree (Sum Int) (Size a) -> Maybe a
 atIndex n t =
   case viewl . snd $ split (> Sum n) t of
     Size c :< _ -> Just c
