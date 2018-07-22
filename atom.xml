@@ -2,12 +2,61 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2018-07-21T22:47:35Z</updated>
+  <updated>2018-07-22T17:29:11Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>http://chrispenner.ca/</id>
 
+  <entry>
+      <title>Monoidal Sorting</title>
+      <link href="http://chrispenner.ca/posts/monoid-sort.html"/>
+      <id>http://chrispenner.ca/posts/monoid-sort.html</id>
+      <updated>2018-07-22T00:00:00Z</updated>
+      <summary>We explore a merge-sort monoid</summary>
+      <content type="html"><![CDATA[
+          <img src="http://chrispenner.ca/images/monoid-sort/sorting.jpg" alt="Monoidal Sorting">
+              <p>As I dive deeper into functional programming I'm beginning to think that monoids can solve most problems. In general monoids work well in combination with other structures and algorithms, for instance <a href="/posts/intro-to-finger-trees">Finger Trees</a>, and folds!</p>
+<p>This post is just yet-another-demonstration of how adaptable monoids can really be by solving a problem most people wouldn't immediately associate with monoids.</p>
+<h2 id="sorting">Sorting</h2>
+<p>We're going to write a wrapper around lists which rather than the traditional monoid for lists (concat) instead sorts the two into each other; not much to talk about really, lets see the code!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE DeriveFunctor #-}</span>
+<span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="fu">=</span>
+    <span class="dt">Sort</span> {
+<span class="ot">        getSorted ::</span> [a]
+    } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+
+<span class="co">-- So long as the elements can be ordered we can combine two sorted lists using mergeSort</span>
+<span class="kw">instance</span> (<span class="dt">Ord</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Sort</span> a) <span class="kw">where</span>
+  mempty <span class="fu">=</span> <span class="dt">Sort</span> []
+  mappend (<span class="dt">Sort</span> a) (<span class="dt">Sort</span> b) <span class="fu">=</span> <span class="dt">Sort</span> <span class="fu">$</span> mergeSort a b
+
+<span class="co">-- simple merge sort implementation</span>
+<span class="ot">mergeSort ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [a]
+mergeSort [] xs <span class="fu">=</span> xs
+mergeSort xs [] <span class="fu">=</span> xs
+mergeSort (x<span class="fu">:</span>xs) (y<span class="fu">:</span>ys)
+  <span class="fu">|</span> y <span class="fu">&lt;</span> x <span class="fu">=</span> y <span class="fu">:</span> mergeSort (x <span class="fu">:</span> xs) ys
+mergeSort (x<span class="fu">:</span>xs) ys <span class="fu">=</span> x <span class="fu">:</span> mergeSort xs ys
+
+<span class="co">-- We&#39;ll keep the &#39;Sort&#39; constructor private and expose this smart constructor instead so we can</span>
+<span class="co">-- guarantee that every list inside a `Sort` is guaranteed to be sorted.</span>
+<span class="co">-- We could use a simple sort function for this, but might as well use mergeSort since </span>
+<span class="co">-- we already wrote it.</span>
+<span class="ot">toSort ::</span> [a] <span class="ot">-&gt;</span> <span class="dt">Sort</span> a
+toSort <span class="fu">=</span> foldMap (<span class="dt">Sort</span> <span class="fu">.</span> pure)</code></pre></div>
+<p>Let's try it out:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">&gt;</span> toSort [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="ot">`mappend`</span> toSort [<span class="dv">10</span>, <span class="dv">7</span>, <span class="dv">8</span>, <span class="dv">4</span>]
+<span class="dt">Sort</span> {getSorted <span class="fu">=</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">8</span>,<span class="dv">10</span>]}
+
+<span class="fu">&gt;</span> foldMap (toSort <span class="fu">.</span> pure) [<span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">8</span>]
+<span class="dt">Sort</span> {getSorted <span class="fu">=</span> [<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">8</span>]}</code></pre></div>
+<p>Nothing too complicated really! <code>mappend</code> over sorted lists just sorts the combined list; we have the benefit in this case of knowing that any list within a <code>Sort</code> is guaranteed to be sorted already so we can an efficient merge sort algorithm. This doesn't make much difference when we're appending small sets of values together, but in particular cases like FingerTrees where intermediate monoidal sums are cached it can really speed things up!</p>
+<p>Just like that we've got a cool monoid which sorts lists for us, and by combining it with <code>foldMap</code> we can easily sort the values from any foldable structure. One other benefit here is that since we know monoids are associative, if we have a huge list of elements we need sorted we can actually split up the list, sort chunks in parallel and combine them all and we have a guarantee that it'll all work out.</p>
+<p>Anyways, that's about it for this one, nothing to write home about, but I think it's fun to discover new monoids!</p>
+              ]]></content>
+      </entry>
   <entry>
       <title>A Practical Introduction to Finger Trees</title>
       <link href="http://chrispenner.ca/posts/intro-to-finger-trees.html"/>
