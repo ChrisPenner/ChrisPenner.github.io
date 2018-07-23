@@ -23,11 +23,10 @@ sorts the two into each other; not much to talk about really, lets see the code!
 
 
 ```haskell
-{-# LANGUAGE DeriveFunctor #-}
 newtype Sort a =
     Sort {
         getSorted :: [a]
-    } deriving (Functor, Show, Eq)
+    } deriving (Show, Eq)
 
 
 -- So long as the elements can be ordered we can combine two sorted lists using mergeSort

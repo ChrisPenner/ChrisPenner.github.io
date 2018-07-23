@@ -1,12 +1,9 @@
 #!/usr/bin/env stack
 {- stack --resolver lts-11.15 --install-ghc runghc
 -}
-{-# LANGUAGE DeriveFunctor #-}
-newtype Sort a =
-    Sort {
-        getSorted :: [a]
-    } deriving (Functor, Show, Eq)
-
+newtype Sort a = Sort
+  { getSorted :: [a]
+  } deriving (Show, Eq)
 
 -- So long as the elements can be ordered we can combine two sorted lists using mergeSort
 instance (Ord a) => Monoid (Sort a) where
@@ -28,6 +25,5 @@ mergeSort (x:xs) ys = x : mergeSort xs ys
 toSort :: Ord a => [a] -> Sort a
 toSort = foldMap (Sort . pure)
 
-main :: IO () 
+main :: IO ()
 main = print (foldMap (toSort . pure) [5, 2, 3, 1, 0, 8])
-
