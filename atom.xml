@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="http://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2018-07-22T17:29:11Z</updated>
+  <updated>2018-07-23T23:43:46Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -20,11 +20,10 @@
 <p>This post is just yet-another-demonstration of how adaptable monoids can really be by solving a problem most people wouldn't immediately associate with monoids.</p>
 <h2 id="sorting">Sorting</h2>
 <p>We're going to write a wrapper around lists which rather than the traditional monoid for lists (concat) instead sorts the two into each other; not much to talk about really, lets see the code!</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE DeriveFunctor #-}</span>
-<span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="fu">=</span>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="fu">=</span>
     <span class="dt">Sort</span> {
 <span class="ot">        getSorted ::</span> [a]
-    } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Show</span>, <span class="dt">Eq</span>)
+    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
 
 
 <span class="co">-- So long as the elements can be ordered we can combine two sorted lists using mergeSort</span>
