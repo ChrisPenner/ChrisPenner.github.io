@@ -8,10 +8,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="Monoidal Sorting">
-    <meta name="twitter:description" content="We explore a merge-sort monoid">
-    <meta name="twitter:image" content="http://chrispenner.ca/images/monoid-sort/sorting.jpg">
-    <title>Monoidal Sorting</title>
+    <meta name="twitter:title" content="Typesafe Versioned APIs">
+    <meta name="twitter:description" content="Exploring writing multiple versions of your application in a typesafe way using data-kinds and functional dependencies">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/typesafe-api-versioning/numbers.jpg">
+    <title>Typesafe Versioned APIs</title>
     <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <link rel="stylesheet" href="/css/style.css">
@@ -736,22 +736,22 @@
         </div>
     </header>
 
-     <a id="leftarrow" class="arrow" href="/posts/typesafe-api-versioning">&larr;</a> 
-     <a id="rightarrow" class="arrow" href="/posts/intro-to-finger-trees">&rarr;</a> 
+    
+     <a id="rightarrow" class="arrow" href="/posts/monoid-sort">&rarr;</a> 
 
 <div id="page">
     <div class="wrapper">
         <div class="masthead">
             <span class="title">
-                Monoidal Sorting
+                Typesafe Versioned APIs
             </span>
             <br>
 
-            <img class="post-image" src="/images/monoid-sort/sorting.jpg">
+            <img class="post-image" src="/images/typesafe-api-versioning/numbers.jpg">
             <br>
             <span class="byline">by Chris Penner</span>
             <br>
-            <span class="date">Jul 22, 2018</span>
+            <span class="date">Aug 4, 2018</span>
             <br>
             <div class="metadata">
                 <br>
@@ -764,44 +764,215 @@
         </div>
     </div>
     <article class="post">
-        <p>As I dive deeper into functional programming I'm beginning to think that monoids can solve most problems. In general monoids work well in combination with other structures and algorithms, for instance <a href="/posts/intro-to-finger-trees">Finger Trees</a>, and folds!</p>
-<p>This post is just yet-another-demonstration of how adaptable monoids can really be by solving a problem most people wouldn't immediately associate with monoids.</p>
-<h2 id="sorting">Sorting</h2>
-<p>We're going to write a wrapper around lists which rather than the traditional monoid for lists (concat) instead sorts the two into each other; not much to talk about really, lets see the code!</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="fu">=</span>
-    <span class="dt">Sort</span> {
-<span class="ot">        getSorted ::</span> [a]
-    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+        <p>Today we're going to look at the idea of using Haskell's type system to <strong>specialize our app implementation according to type-level flags</strong>. More specifically we're going to look at a fun way to write a monadic action which alters its behaviour based on which <strong>version</strong> of a system it's embedded in, simultaneously gaining ground on <a href="https://en.wikipedia.org/wiki/Expression_problem">the expression problem</a> and giving us compile-time guarantees that we haven't accidentally mixed up code from different versions of our app!</p>
+<p>The concrete example we'll be looking at is a simple web handler which returns a JSON representation of a User; we'll start with a single possible representation of the user, but will the evolve our system to be able to return a different JSON schema depending on which <strong>version</strong> of the API the user has selected.</p>
+<p>Disclaimer; the system I present probably isn't a great idea in a large production app, but is a fun experiment to learn more about higher kinded types and functional dependencies so we're going to do it anyways. Let's dive right in!</p>
+<h2 id="starting-app">Starting App</h2>
+<p>Let's build a quick starting app so we have something to work with; I'll elide all the web and http related bits, we'll have a simple handler that fetches a user and our <code>main</code> will run the handler and print things out.</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- You&#39;ll need to have the &#39;mtl&#39; and &#39;aeson&#39; packages in your project</span>
 
+<span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+<span class="ot">{-# LANGUAGE NamedFieldPuns #-}</span>
+<span class="ot">{-# LANGUAGE GeneralizedNewtypeDeriving #-}</span>
 
-<span class="co">-- So long as the elements can be ordered we can combine two sorted lists using mergeSort</span>
-<span class="kw">instance</span> (<span class="dt">Ord</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Sort</span> a) <span class="kw">where</span>
-  mempty <span class="fu">=</span> <span class="dt">Sort</span> []
-  mappend (<span class="dt">Sort</span> a) (<span class="dt">Sort</span> b) <span class="fu">=</span> <span class="dt">Sort</span> <span class="fu">$</span> mergeSort a b
+<span class="kw">import </span><span class="dt">Control.Monad.IO.Class</span>
+<span class="kw">import </span><span class="dt">Data.Aeson</span>
 
-<span class="co">-- simple merge sort implementation</span>
-<span class="ot">mergeSort ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [a]
-mergeSort [] xs <span class="fu">=</span> xs
-mergeSort xs [] <span class="fu">=</span> xs
-mergeSort (x<span class="fu">:</span>xs) (y<span class="fu">:</span>ys)
-  <span class="fu">|</span> y <span class="fu">&lt;</span> x <span class="fu">=</span> y <span class="fu">:</span> mergeSort (x <span class="fu">:</span> xs) ys
-mergeSort (x<span class="fu">:</span>xs) ys <span class="fu">=</span> x <span class="fu">:</span> mergeSort xs ys
+<span class="co">-- User -----------------------------------</span>
+<span class="kw">data</span> <span class="dt">User</span> <span class="fu">=</span> <span class="dt">User</span>
+  {<span class="ot"> name ::</span> <span class="dt">String</span>
+  } <span class="kw">deriving</span> (<span class="dt">Show</span>)
 
-<span class="co">-- We&#39;ll keep the &#39;Sort&#39; constructor private and expose this smart constructor instead so we can</span>
-<span class="co">-- guarantee that every list inside a `Sort` is guaranteed to be sorted.</span>
-<span class="co">-- We could use a simple sort function for this, but might as well use mergeSort since </span>
-<span class="co">-- we already wrote it.</span>
-<span class="ot">toSort ::</span> [a] <span class="ot">-&gt;</span> <span class="dt">Sort</span> a
-toSort <span class="fu">=</span> foldMap (<span class="dt">Sort</span> <span class="fu">.</span> pure)</code></pre></div>
-<p>Let's try it out:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">&gt;</span> toSort [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="ot">`mappend`</span> toSort [<span class="dv">10</span>, <span class="dv">7</span>, <span class="dv">8</span>, <span class="dv">4</span>]
-<span class="dt">Sort</span> {getSorted <span class="fu">=</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">8</span>,<span class="dv">10</span>]}
+<span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span>) <span class="kw">where</span>
+  toJSON (<span class="dt">User</span> {name}) <span class="fu">=</span> object [<span class="st">&quot;name&quot;</span> <span class="fu">.=</span> name]
 
-<span class="fu">&gt;</span> foldMap (toSort <span class="fu">.</span> pure) [<span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">8</span>]
-<span class="dt">Sort</span> {getSorted <span class="fu">=</span> [<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">8</span>]}</code></pre></div>
-<p>Nothing too complicated really! <code>mappend</code> over sorted lists just sorts the combined list; we have the benefit in this case of knowing that any list within a <code>Sort</code> is guaranteed to be sorted already so we can an efficient merge sort algorithm. This doesn't make much difference when we're appending small sets of values together, but in particular cases like FingerTrees where intermediate monoidal sums are cached it can really speed things up!</p>
-<p>Just like that we've got a cool monoid which sorts lists for us, and by combining it with <code>foldMap</code> we can easily sort the values from any foldable structure. One other benefit here is that since we know monoids are associative, if we have a huge list of elements we need sorted we can actually split up the list, sort chunks in parallel and combine them all and we have a guarantee that it'll all work out.</p>
-<p>Anyways, that's about it for this one, nothing to write home about, but I think it's fun to discover new monoids!</p>
+<span class="co">-- App Monad --------------------------------</span>
+<span class="kw">newtype</span> <span class="dt">AppM</span> a <span class="fu">=</span> <span class="dt">AppM</span>
+  {<span class="ot"> runApp ::</span> <span class="dt">IO</span> a
+  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>)
+
+<span class="co">-- User Service --------------------------------</span>
+<span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span>
+      <span class="dt">MonadUserService</span> m
+  <span class="kw">where</span>
+<span class="ot">  getUser ::</span> m <span class="dt">User</span>
+
+<span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dt">AppM</span> <span class="kw">where</span>
+  getUser <span class="fu">=</span> return (<span class="dt">User</span> <span class="st">&quot;Bob Johnson&quot;</span>)
+
+<span class="co">-- App -----------------------------------------</span>
+<span class="ot">userHandler ::</span> (<span class="dt">MonadUserService</span> m) <span class="ot">=&gt;</span> m <span class="dt">Value</span>
+userHandler <span class="fu">=</span> <span class="kw">do</span>
+  user <span class="ot">&lt;-</span> getUser
+  return <span class="fu">$</span> toJSON user
+
+<span class="ot">app ::</span> (<span class="dt">MonadIO</span> m, <span class="dt">MonadUserService</span> m) <span class="ot">=&gt;</span> m ()
+app <span class="fu">=</span> <span class="kw">do</span>
+  userJSON <span class="ot">&lt;-</span> userHandler
+  liftIO <span class="fu">$</span> print userJSON
+
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> runApp app</code></pre></div>
+<p>Hopefully that's not too cryptic 😅</p>
+<p>We've defined a simple user object and wrote an Aeson <code>ToJSON</code> instance for it so we can serialize it. Then we wrote a newtype wrapper around <code>IO</code> which we can use to implement various instances on; note that we use <code>GeneralizedNewtypeDeriving</code> to get our <code>Monad</code> and <code>MonadIO</code> instances for free.</p>
+<p>Next we define our interface for a User Service as the <code>MonadUserService</code> typeclass; this has a single member: <code>getUser</code> which defines how to get a user within a given monad. In our case we'll write the simplest possible implementation for our service and just return a static &quot;Bob Johnson&quot; user.</p>
+<p>Next up we have our handler which gets a user, serializes, then returns it. Lastly we've got an <code>app</code> which calls the user then prints it, and a <code>main</code> which runs the app.</p>
+<p>Brilliant, we're all set up; let's run it and see what we get!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">&gt;</span> main
+<span class="dt">Object</span> (fromList [(<span class="st">&quot;name&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob Johnson&quot;</span>)])</code></pre></div>
+<h2 id="chapter-2-wherein-our-api-evolves">Chapter 2; wherein our API evolves</h2>
+<p>They said we'd never succeed, but damn them all! In spite all of our investor's criticisms our app is doing wonderfully! We have a whole 7 of users and are making tens of dollars! Some users at large have requested the ability to get a user's first and last name separately; but other users have legacy systems built against our v1 API! Clearly it would be far too much work to duplicate our entire user handler and make alterations for our v2 API, let's see if we can <strong>parameterize</strong> our app over our <strong>API version</strong> and <strong>defer</strong> the choice of app version (and implementation) until the last possible minute!</p>
+<p>Like most Haskell refactors we can just start building what we want and let the compiler guide the way; let's change our <code>User</code> data type to reflect the needs of our users:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- First attempt</span>
+<span class="kw">data</span> <span class="dt">User</span>
+  <span class="fu">=</span> <span class="dt">UserV1</span> {<span class="ot"> name ::</span> <span class="dt">String</span> }
+  <span class="fu">|</span> <span class="dt">UserV2</span> {<span class="ot"> firstName ::</span> <span class="dt">String</span>
+           ,<span class="ot"> lastName ::</span> <span class="dt">String</span> }
+  <span class="kw">deriving</span> (<span class="dt">Show</span>)</code></pre></div>
+<p>This reflects the choice in our app that the user type could be either of the two shapes; but there's a few problems with this approach. First and foremost is that this means that at EVERY stage in the app where we use a <code>User</code> we need to pattern match over the constructors and handle EVERY one; regardless of which version we happen to be working with. Not only is this not what we wanted, but as we add more versions later on the number of possible code paths we need to handle explodes! One way we can avoid this chaos is to let the type system know that our data is <strong>versioned</strong>. Enter <code>GADT</code>s!</p>
+<h2 id="gadts-with-phantom-types">GADT's with Phantom types</h2>
+<p>Take a gander at this:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE GADTs #-}</span>
+<span class="ot">{-# LANGUAGE DataKinds #-}</span>
+<span class="ot">{-# LANGUAGE KindSignatures #-}</span>
+
+<span class="kw">import </span><span class="dt">GHC.TypeLits</span>
+
+<span class="kw">data</span> <span class="dt">User</span> (<span class="ot">v ::</span> <span class="dt">Nat</span>) <span class="kw">where</span>
+  <span class="dt">UserV1</span><span class="ot"> ::</span> {<span class="ot"> name ::</span> <span class="dt">String</span>} <span class="ot">-&gt;</span> <span class="dt">User</span> <span class="dv">1</span>
+  <span class="dt">UserV2</span>
+<span class="ot">    ::</span> {<span class="ot"> firstName ::</span> <span class="dt">String</span>
+       ,<span class="ot"> lastName ::</span> <span class="dt">String</span>}
+    <span class="ot">-&gt;</span> <span class="dt">User</span> <span class="dv">2</span></code></pre></div>
+<p>If you haven't worked with <code>GADT</code>s before this may all look a bit strange, let's break it down a bit:</p>
+<p>First off; in order to even talk about <code>GADT</code>s we need the <code>GADTs</code> language extension; this unlocks the <code>data ... where</code> syntax! There's a bit more to it, but the basic idea is that this allows us to effectively specify our data constructors like we would normal functions in haskell. This means we can specify constaints on our parameters, and in our case we can specialize the types of the resulting value based on which particular constructor was used. So if someone uses the <code>UserV1</code> constructor they MUST get a <code>User 1</code>, and similarly with <code>UserV2</code>. The compiler remembers this info and in our case can actually tell that if we have a function which accepts a <code>User 1</code> that we only need to match over the <code>UserV1</code> constructor since any values of <code>User 1</code> MUST have been constructed using <code>UserV1</code>.</p>
+<p>Maybe I'm getting ahead of myself; how is it we can suddenly have numbers like <code>1</code> and <code>2</code> in our types? The answer lies within the <code>(v :: Nat)</code> annotation. This is a <strong>Kind Signature</strong>, and as such naturally requires the <code>KindSignatures</code> extension. Others have written more exhaustively on the subject, but the basic idea is that <code>Nat</code> is a kind, i.e. a 'type' for types. This means that the <code>v</code> parameter can't take on just any type, but only types that are part of the <code>Nat</code> kind, which corresponds to the natural (aka non-negative) integers. This is handy, because it means people can't create a user with a version number of <code>String</code> or <code>()</code> or something silly like that. Lastly we need the <code>DataKinds</code> extension to allow us to use Data Constructors in our types; once that's enabled we can import <code>GHC.TypeLits</code> and use integer literals in our types and GHC will figure it all out.</p>
+<p>The <code>v</code> paramter of our user is also something called a &quot;phantom type&quot;. It's a type parameter on a data type that doesn't actually have an associated value in the right hand side of the data definition. These sorts of things are useful for adding additional information at the type level.</p>
+<p>Step one done! We've successfully parameterized our datatype over a version number at the type level! At this point your compiler is probably bugging you about the fact that the <code>User</code> constructor no longer exists; we originally implemented the <code>ToJSON</code> class for the base User type, but now User needs an additional type parameter. This is good! It means we can implement a different instance for each version of user we have; which is basically what we wanted to do in the first place!</p>
+<p>Let's alter our <code>ToJSON</code> instance so it has a single name parameter for v1 and a separate first and last name for v2!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE FlexibleInstances #-}</span>
+<span class="co">-- ...</span>
+<span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span> <span class="dv">1</span>) <span class="kw">where</span>
+  toJSON (<span class="dt">UserV1</span> {name}) <span class="fu">=</span> object [<span class="st">&quot;name&quot;</span> <span class="fu">.=</span> name]
+
+<span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span> <span class="dv">2</span>) <span class="kw">where</span>
+  toJSON (<span class="dt">UserV2</span> {firstName, lastName}) <span class="fu">=</span>
+    object [<span class="st">&quot;firstName&quot;</span> <span class="fu">.=</span> firstName, <span class="st">&quot;lastName&quot;</span> <span class="fu">.=</span> lastName]</code></pre></div>
+<p>Here we're specifying <strong>different instances</strong> of <code>ToJSON</code> for the different members of our <code>User</code> datatype. Note that, as promised, the compiler KNOWS that only the matching constructor needs to be matched on and that a <code>UserV1</code> won't show up in an instance for <code>User 2</code>. We'll need <code>FlexibleInstances</code> turned on so GHC can handle complex types like <code>User 1</code> in an instance definition.</p>
+<p>Next it's time to fix up our <code>MonadUserService</code> class, we know that <code>getUser</code> needs to return a user, but which user type should it return? We can imagine someone implementing a <code>MonadUserService</code> for <code>User 1</code> and also for <code>User 2</code>, so it would be nice if instances could specify which version they want to work with. To accomplish that we can add an additional parameter to the class:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE MultiParamTypeClasses #-}</span>
+<span class="co">-- ...</span>
+<span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span>
+      <span class="dt">MonadUserService</span> v m
+  <span class="kw">where</span>
+<span class="ot">  getUser ::</span> m (<span class="dt">User</span> v)
+
+<span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">1</span> <span class="dt">AppM</span> <span class="kw">where</span>
+  getUser <span class="fu">=</span> return (<span class="dt">UserV1</span> <span class="st">&quot;Bob Johnson&quot;</span>)
+
+<span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">2</span> <span class="dt">AppM</span> <span class="kw">where</span>
+  getUser <span class="fu">=</span> return (<span class="dt">UserV2</span> <span class="st">&quot;Bob&quot;</span> <span class="st">&quot;Johnson&quot;</span>)</code></pre></div>
+<p>Just like <code>ToJSON</code> we can now implement the typeclass instance differently for each version of our user. We'll need <code>MultiParamTypeClasses</code> to add the <code>v</code> parameter to our typeclass.</p>
+<h2 id="generalizing-the-handler-and-app-over-version">Generalizing the handler and app over version</h2>
+<p>We're moving along nicely! Next we need our <code>userHandler</code> and <code>app</code> to know about version numbers, however this layer of our app doesn't really care which exact version of user it's working with, mostly it just cares that certain instances exist for that user. Ideally we can write versions of these that work for either of our user versions all at once.</p>
+<p>The first step is to introduce our new paramterized typeclasses:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE FlexibleContexts #-}</span>
+
+<span class="ot">userHandler ::</span> (<span class="dt">ToJSON</span> (<span class="dt">User</span> v), <span class="dt">MonadUserService</span> v m) <span class="ot">=&gt;</span> m <span class="dt">Value</span>
+userHandler <span class="fu">=</span> <span class="kw">do</span>
+  user <span class="ot">&lt;-</span> getUser
+  return <span class="fu">$</span> toJSON user
+
+<span class="ot">app ::</span> (<span class="dt">ToJSON</span> (<span class="dt">User</span> v), <span class="dt">MonadIO</span> m, <span class="dt">MonadUserService</span> v m) <span class="ot">=&gt;</span> m ()
+app <span class="fu">=</span> <span class="kw">do</span>
+  userJSON <span class="ot">&lt;-</span> userHandler
+  liftIO <span class="fu">$</span> print userJSON</code></pre></div>
+<p>Now we run into a bit of a problem;</p>
+<pre><code>    • Could not deduce (MonadUserService v0 m)
+      from the context: (MonadIO m, MonadUserService v m)
+        bound by the type signature for:
+                   app :: forall (m :: * -&gt; *) (v :: Nat).
+                          (MonadIO m, MonadUserService v m) =&gt;
+                          m ()
+        at /Users/cpenner/dev/typesafe-versioning/src/Before2.hs:54:8-48
+      The type variable ‘v0’ is ambiguous
+    • In the ambiguity check for ‘app’
+      To defer the ambiguity check to use sites, enable AllowAmbiguousTypes
+      In the type signature:
+        app :: (MonadIO m, MonadUserService v m) =&gt; m ()</code></pre>
+<p>It's telling us it can't tell which user version we want it to use! So there are a few ways we can fix this; one way would be to specify the specific type that we'd like <code>v</code> to be each time it's used; we can enable <code>AllowAmbiguousTypes</code>, <code>TypeApplications</code> and <code>ScopedTypeVariables</code> to try that; but this ends up being pretty verbose and isn't the nicest to work with. We won't dive into that possibility, but I'd recommend you give it a try though if you like a challenge!</p>
+<p>The other option we have is to clear up the disambiguity by giving the type system another way to determine what <code>v</code> should be; in our case the monad <code>m</code> is pervasive throughout our app, so if we can somehow infer <code>v</code> from <code>m</code> then we can save ourselves a lot of trouble. We're already associating the two within the typeclass definition <code>class (Monad m) =&gt; MonadUserService v m</code>; however the type system recognizes that there could be an instance for several different values of <code>v</code>; and of course we've implemented exactly that!</p>
+<p>The way to fix this is to tell the type system that there's <strong>one-and-only-one</strong> <code>v</code> for each <code>m</code> using <strong>FunctionalDependencies</strong>; and then find a way to encode the <code>v</code> inside the <code>m</code> so we can still run the different versions of our app.</p>
+<p>Lets add a new extension and alter our typeclass appropriately:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span>
+
+<span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> <span class="dt">MonadUserService</span> v m <span class="fu">|</span> m <span class="ot">-&gt;</span> v
+  <span class="kw">where</span>
+<span class="ot">  getUser ::</span> m (<span class="dt">User</span> v)</code></pre></div>
+<p>We've added a the <code>| m -&gt; v</code> annotation which reads something like &quot;... where <code>m</code> determines <code>v</code>&quot;. Adding this annotation allows us to avoid the <code>Ambiguous Type</code> errors because we've told the type system that for any given <code>m</code> there's only one <code>v</code>; so if it knows <code>m</code>, (which in our case it does) then it can safely determine exactly which <code>v</code> to use.</p>
+<p>Now you'll probably see something like this:</p>
+<pre><code>Functional dependencies conflict between instance declarations:
+    instance MonadUserService 1 AppM
+    -- Defined at ...
+    instance MonadUserService 2 AppM
+    -- Defined at ...</code></pre>
+<p>We told the type system there'd only be a single <code>v</code> for every <code>m</code>; then immediately gave it two instances for <code>AppM</code>; GHC caught us lying! That's okay, GHC will forgive us if we can somehow make the two <code>m</code>'s different! We can do this by adding a phantom type to the <code>AppM</code> monad which simply denotes which version we're working with; let's try editing our <code>AppM</code> monad like this:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">AppM</span> (<span class="ot">v ::</span> <span class="dt">Nat</span>) a <span class="fu">=</span> <span class="dt">AppM</span>
+  {<span class="ot"> runApp ::</span> <span class="dt">IO</span> a
+  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>)</code></pre></div>
+<p>We've added the <code>(v :: Nat)</code> type argument here, it doesn't show up any where in our data, meaning it's a <strong>Phantom Type</strong> which is just there to help use denote something at the type level, in this case we denote which user version we're currently working with. Now we can add that additional info to our <code>MonadUserService</code> instances:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">1</span> (<span class="dt">AppM</span> <span class="dv">1</span>) <span class="kw">where</span>
+  getUser <span class="fu">=</span> return (<span class="dt">UserV1</span> <span class="st">&quot;Bob Johnson&quot;</span>)
+
+<span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">2</span> (<span class="dt">AppM</span> <span class="dv">2</span>) <span class="kw">where</span>
+  getUser <span class="fu">=</span> return (<span class="dt">UserV2</span> <span class="st">&quot;Bob&quot;</span> <span class="st">&quot;Johnson&quot;</span>)</code></pre></div>
+<p>It seems a bit redundant, but it gets us where we're going!</p>
+<p>Not done yet! We still need to tell GHC which version of our <code>app</code> we want to run! You can use <code>TypeApplications</code> for this if you like, but the easier way is to just specify with a type annotation:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ())</code></pre></div>
+<p>Try running the different versions and see what you get!</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell">
+<span class="fu">&gt;</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ())
+<span class="dt">Object</span> (fromList [(<span class="st">&quot;name&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob Johnson&quot;</span>)])
+<span class="fu">&gt;</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">2</span> ())
+<span class="dt">Object</span> (fromList [(<span class="st">&quot;lastName&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Johnson&quot;</span>),(<span class="st">&quot;firstName&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob&quot;</span>)])</code></pre></div>
+<p>That should do it! We can quickly and easily switch between versions of our app by changing the type annotation; if we like we could even write some aliases to help out:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">appV1 ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ()
+appV1 <span class="fu">=</span> app
+
+<span class="ot">appV2 ::</span> <span class="dt">AppM</span> <span class="dv">2</span> ()
+appV2 <span class="fu">=</span> app</code></pre></div>
+<p>Nice! Now we can write our app in such a way that it's <strong>generic</strong> and <strong>polymorphic</strong> over the <strong>version</strong> of user when that part of the app doesn't care which version it is, but we can still <strong>specialize</strong> to a specific user version when needed by using specific typeclasses or by pattern matching on the User constructor. The type system will guarantee that we never accidentally switch between user versions in the middle of our app; and we can defer the choice of version until the last possible second (at the top level call site). Sounds like a win to me!</p>
+<p>Hope you learned something!</p>
+<h2 id="bonus-section-asserting-version-compatibility">Bonus Section: Asserting Version Compatibility</h2>
+<p>If you take this pattern even further you might end up with multiple versions in your app; something like this:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">AppM</span> (<span class="ot">userVersion ::</span> <span class="dt">Nat</span>) (<span class="ot">postVersion ::</span> <span class="dt">Nat</span>) a <span class="fu">=</span> <span class="dt">AppM</span></code></pre></div>
+<p>This works fine of course, but as the number of version parameters grows it gets tough to keep track of which versions are compatible with each other, maybe <code>userVersion == 2</code> is only compatible with a <code>postVersion &gt;= 3</code>? Here's a fun trick using <code>ConstraintKinds</code> and <code>TypeFamilies</code> to let us easily assert that our app is never run with incompatible versions:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE TypeOperators #-}</span>
+<span class="ot">{-# LANGUAGE TypeFamilies #-}</span>
+<span class="ot">{-# LANGUAGE UndecidableInstances #-}</span>
+
+<span class="kw">import </span><span class="dt">Data.Kind</span>
+
+<span class="kw">type</span> family <span class="dt">Compatible</span> (<span class="ot">userVersion ::</span> <span class="dt">Nat</span>) (<span class="ot">postVersion ::</span> <span class="dt">Nat</span>)<span class="ot"> ::</span> <span class="dt">Constraint</span> <span class="kw">where</span>
+  <span class="dt">Compatible</span> <span class="dv">1</span> <span class="dv">1</span> <span class="fu">=</span> ()
+  <span class="dt">Compatible</span> <span class="dv">2</span> <span class="dv">3</span> <span class="fu">=</span> ()
+  <span class="dt">Compatible</span> <span class="dv">2</span> <span class="dv">4</span> <span class="fu">=</span> ()
+  <span class="dt">Compatible</span> a b <span class="fu">=</span> <span class="dt">TypeError</span> (<span class="dt">Text</span> <span class="st">&quot;userVersion &quot;</span> <span class="fu">:&lt;&gt;:</span> <span class="dt">ShowType</span> a 
+                         <span class="fu">:&lt;&gt;:</span> <span class="dt">Text</span> <span class="st">&quot; is not compatible with postVersion &quot;</span> <span class="fu">:&lt;&gt;:</span> <span class="dt">ShowType</span> b)</code></pre></div>
+<p>You may need to dig into this a bit on your own to understand it fully, but the basic idea is that it's a function over types which when given two versions will either result in an empty constraint (i.e. <code>()</code>) which will allow compilation to continue, or will result in a failing <code>TypeError</code> and will print a nice error message to the user. You can use it like this:</p>
+<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">runAppWithCheck ::</span> <span class="dt">Compatible</span> userVersion postVersion <span class="ot">=&gt;</span> <span class="dt">AppM</span> userVersion postVersion a <span class="ot">-&gt;</span> <span class="dt">IO</span> a
+<span class="co">-- We only really need the additional type information, under the hood we can just call `runApp`</span>
+runAppWithCheck <span class="fu">=</span> runApp</code></pre></div>
+<p>Now if you try to run your app with incompatible versions you'll get a nice error something like:</p>
+<pre><code>error:
+    • userVersion 2 is not compatible with postVersion 1
+    • In the expression: runAppWithCheck (app :: AppM 2 1 ())
+      In an equation for ‘main’:
+          main = runAppWithCheck (app :: AppM 2 1 ())
+   |
+   | main = runAppWithCheck (app :: AppM 2 1 ())</code></pre>
+<p>Good stuff! You can even use <code>DataKinds</code> to add a little structure to your version numbers so you can't accidentally mix up your userVersions with your postVersions, but I'll leave that for you to figure out 😉</p>
 
         <br>
         <br>
@@ -809,19 +980,19 @@ toSort <span class="fu">=</span> foldMap (<span class="dt">Sort</span> <span cla
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="http://chrispenner.ca/posts/monoid-sort" data-text="Check out: Monoidal Sorting - " data-via="chrislpenner">Tweet</a>
+                data-url="http://chrispenner.ca/posts/typesafe-api-versioning" data-text="Check out: Typesafe Versioned APIs - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="http://chrispenner.ca/posts/monoid-sort" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+            <div class="fb-like" data-href="http://chrispenner.ca/posts/typesafe-api-versioning" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
 <!-- Disqus Comments -->
 <!-- <div id="disqus_thread"></div> -->
 <!-- <script type="text/javascript"> -->
 <!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = '/posts/monoid-sort'; -->
-<!--     var disqus_url = 'http://chrispenner.ca/posts/monoid-sort'; -->
+<!--     var disqus_identifier = '/posts/typesafe-api-versioning'; -->
+<!--     var disqus_url = 'http://chrispenner.ca/posts/typesafe-api-versioning'; -->
 
 <!-- (function() { -->
     <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
