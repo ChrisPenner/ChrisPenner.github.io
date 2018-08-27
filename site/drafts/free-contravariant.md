@@ -19,6 +19,7 @@ Can represent many computations:
 - `FreeContra Either`: computation which may terminate producing a value
 - `FreeContra (b,)`: Computation which produces values (Moore/Mealy machine?)
 - `FreeContra (State s)`: Computation which produces a computation!
+- `(a, a)`: Pausable computation
 
 
 You can contramap your computations!
@@ -38,3 +39,42 @@ Given a function from arbitrary input to input of two different computers,
 choose one and run that computation.
 
 
+
+Two key types;
+Comonadic and Monadic:
+
+```haskell
+extractStep :: Comonad w => FreeContra w a -> a -> FreeContra m a
+extractStep (FreeContra wa) a = extract wa a
+
+joinStep :: Monad m => FreeContra m a -> a -> FreeContra m a
+joinStep (FreeContra ma) a = ma >>= \f -> runFreeContra (f a)
+```
+
+Examples:
+
+- Comonad Env (i.e. (b, a)): Computations producing values along the way
+- Comonad (Store s): (Covariant Comonad) Choose between multiple possible next computation steps
+    - also, can be transformed easily: `Store a (FreeContra a) -> FreeContra (Store a) a`
+- Comonad (Trace m): Computations with a 'default' behaviour that can be altered. Or could potentially 'collect'
+    program input/alterations?
+- Comonad Zipper: Choose your next step!
+- Monad [a]: Nondeterministic computations
+- Monad Maybe a: Haltable computations
+- Monad Either b a: Haltable computations (with result)
+
+
+Compositions:
+- Compose [] Either : many computations producing many results
+- Compose Either [] : Single computation which may end in many results
+- Compose [] (Env b) : Multiple computations each producing results
+- Compose (Env b) [] : ??
+
+
+Can potentially pair `FreeContra f` with `CoFree f` by pairing tags with
+functions and continuting on! Maybe the Applicative instance of `f` determines
+how structures are combined?
+
+Can use Monad Transformers and Comonad Transformers to combine `FreeContra []` with `FreeContra Maybe` for example;
+e.g. lift to `MaybeT []` or something and compute that, joining after each step? or in the case of comonad
+transformers, extracting after each step?
