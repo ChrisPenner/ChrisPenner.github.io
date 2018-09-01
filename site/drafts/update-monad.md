@@ -338,31 +338,41 @@ our monad, or use other monads to perform more interesting logic!
 ## Customizing the Update Monad with Monoids
 
 Okay! We've got one concrete use-case under our belts and have a pretty
-good understanding of how all this works! 
+good understanding of how all this works! But I promised that the Update Monad
+was general! Let's see some cool and weird behaviour!
 
+Something that immediately interested me with the update monad is that there
+are several distinct places to tweak its behaviour without even needing to
+change which implementation of `MonadUpdate` we use! We can change the action
+monoid, or which state we carry, or even our `applyAction` function! This sort
+of tweakability leads to all sorts of cool behaviour without too much work, and
+people can build all sorts of things we didn't initially expect when we wrote
+the type-classes!
 
+I won't get super in depth on each of these and encourage you to implement them
+yourself, but here are a few ideas to start with!
 
+Customizations:
 
+- `Update (Last s) s a` with `applyAction (Last p) s = fromMaybe s p`
+    - This is the state monad implemented in Update!
+    - `get == getState` 
+    - `put == putAction . Last . Just`
+    - `modify f == getState >>= putAction . Last . Just . f`
 
-
-
+- `Update (Dual (Endo s)) s a` with `applyAction (Dual (Endo p)) s = p s`
+    - Another possible implementation of State inside Update!
+    - `get == getState` 
+    - `put == putAction . Dual . Endo . const`
+    - `modify == putAction . Dual . Endo`
 
 -------------------------------------------------------------------------------
 
-Something that immediately interested me in
-this monad is that there are several distinct places to tweak its behaviour
-without even needing to change which implementation of `MonadUpdate` we use! We
-can change which action monoid we choose, which state we carry, and even the
-function we use to apply the actions to the state! This sort of generality leads
-to all sorts of cool behaviour without too much work, and people can build all
-sorts of things we didn't initially expect when we wrote the type-classes!
-
-
-
-Cool! I'll paste an implementation I came up with below; it could probably be
-made more elegant, let me know on Twitter (@chrislpenner) or Reddit
-(u/ChrisPenner) if you find an error in my logic! Most of the complexity is in
-the Applicative and Monad implementations
+Thanks for reading! I'm not perfect and really just go through all this stuff
+in my spare time, so if I've missed something (or you enjoyed the post 😄)
+please let me know! You can find me on
+[Twitter](https://twitter.com/chrislpenner) or
+[Reddit](https://www.reddit.com/user/ChrisPenner)!
 
 
 
