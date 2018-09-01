@@ -98,25 +98,69 @@ The Update Monad kinda looks like Reader, Writer and State got into a horrific
 car accident and are now hopelessly entangled! Each computation receives the
 current computation `state` (like reader) and can result in a monoidal action
 (like writer). The action is them applied to the state according to a helper
-typeclass which I'll call `ApplyAction`; this edited state is passed on to the
-next computation and away we go! Something that immediately interested me in
-this monad is that there are several distinct places to tweak its behaviour
-without even needing to change which implementation of `MonadUpdate` we use! We
-can change which action monoid we choose, which state we carry, and even the
-function we use to apply the actions to the state! This sort of generality leads
-to all sorts of cool behaviour without too much work, and people can build all
-sorts of things we didn't initially expect when we wrote the typeclasses!
-
-Let's take a look at my personal version of the class definition of MonadUpdate;
-interestingly it actually requires two classes to describe! 
+typeclass which I'll call `ApplyAction`: it has a single method
+`applyAction :: p -> s -> s`; which applies a given monoidal action `p` to a
+state resulting in a new state. This edited state is passed on to the next
+computation and away we go! Here's my implementation of this idea for a new
+type `Update`.
 
 
 ```haskell
-{-# LANGUAGE FunctionalDependencies #-}
-class ApplyAction p s where
+class (Monoid p) => ApplyAction p s where
   applyAction :: p -> s -> s
 
+data Update s p a = Update
+  { runUpdate :: (s -> (p, a))
+  } deriving (Functor)
 
+instance (ApplyAction p s) => Applicative (Update s p) where
+  pure a = Update $ \_ -> (mempty, a)
+  Update u <*> Update t =
+    Update $ \s
+      -- Run the first 'Update' with the initial state 
+      -- and get the monoidal action and the function out
+     ->
+      let (p, f) = u s
+      -- Run the second 'Update' with a state which has been altered by
+      -- the first action to get the 'a' and another action
+          (p', a) = t (applyAction p s)
+      -- Combine the actions together and run the function
+       in (p' <> p, f a)
+
+instance (ApplyAction p s) => Monad (Update s p) where
+  Update u >>= f =
+    Update $ \s
+      -- Run the first 'Update' with the initial state 
+      -- and get the monoidal action and the function out
+     ->
+      let (p, a) = u s
+      -- Run the given function over our resulting value to get our next Update
+          Update t = f a
+      -- Run our new 'Update' over the altered state
+          (p', a') = t (applyAction p s)
+      -- Combine the actions together and return the result
+       in (p <> p', a')
+```
+
+We could of course also implement an `UpdateT` monad transformer, but for the
+purposes of clarity I find it's easier to understand the concrete `Update`
+type. Hopefully it's relatively clear from the implementation how things fit
+together. Hopefully you can kind of see the similarities to Reader and Writer;
+we are always returning and combining our monoidal actions as we continue
+along, and each action has access to the state, but can't *directly* modify it
+(you may only modify it by providing actions). It's also worth noting that within
+any individual step only the latest `state` is available and it's not possible
+to view any previous actions which may have occurred; just like the Writer monad
+can't see any of the things submitted with `tell` in previous steps.
+
+Now that we've implemented our Update Monad we've got our `>>=` and `return`; but
+how do we actually accomplish anything with it? There's not `MonadUpdate` type-class
+provided in the paper, but here's my personal take on
+how to get some utility out of it, I've narrowed it down to two methods
+which seem to encompass the idea behind the Update Monad:
+
+```haskell
+{-# LANGUAGE FunctionalDependencies #-}
 class (ApplyAction s p, Monad m) =>
       -- Because each of our methods only uses p OR m but not both 
       -- we use functional dependencies to assert to the type system that 
@@ -128,18 +172,198 @@ class (ApplyAction s p, Monad m) =>
     getState :: m s
 ```
 
-The actual `MonadUpdate` typeclass isn't provided in the paper, so this is just my
-take on which methods we'll need to make it useful.
-
-Here are some laws I also just made up:
+You'll notice some similarities here too! `putAction` matches the signature for
+both `tell` and `put`, and `getState` matches both `ask` and `get`. This class
+still provides new value though, because unlike Reader and Writer the
+environment and the actions are related to each other through the `ApplyAction`
+class; and unlike `get` and `put` from `State` our `putAction` and `getState`
+operate over **different** types; you can only `put` **actions**, and you can
+only `get` **state**. We can formalize the expected relationship between these
+methods with these laws I made up (take with several dollops of salt):
 
 ```haskell
 -- Putting an action and then another action should be the same as 
 -- putting the combination of the two actions.
-putAction a >> putAction b == putAction (a `mappend` b)
+-- This law effectively enforces that `bind` is 
+-- employing your monoid as expected
+putAction p >> putAction q == putAction (p `mappend` q)
 -- We expect that when we 'put' an action that it gets applied to the state
 -- and that the change is visible immediately
+-- This law enforces that your implementation of bind 
+-- is actually applying your monoid to the state using ApplyAction
 applyAction p <$> getState == putAction p >> getState
 ```
+
+All the plumbing is set up! Let's start looking into some actual use-cases!
+I'll start by fully describing one particular use-case so we get an
+understanding of how this all works, then we'll experiment by tweaking our
+monoid or our `applyAction` function.
+
+## A Concrete Use-Case
+
+Let's pick a use-case I often see used to demonstrate the State monad so we
+can see how our Update monad is similar, but also slightly different!
+
+We're going to build a system which allows users to interact with their bank account!
+We'll have three actions they can perform: `Deposit`, `Withdraw`, and `CollectInterest`.
+These actions will be applied to a simple state `BankAccount Int` which keeps track
+of how many dollars we have in the account!
+
+Let's whip up the data types and operations we'll need:
+
+```haskell
+-- Simple type to track our bank balance
+newtype BankBalance =
+  BankBalance Int
+  deriving (Eq, Ord, Show)
+
+-- Three types of actions we can take on our account
+data AccountAction
+  = Deposit Int
+  | Withdraw Int
+  | ApplyInterest
+  deriving (Eq, Ord, Show)
+
+-- We can apply any of our actions to our bank balance to get a new balance
+processTransaction :: AccountAction -> BankBalance -> BankBalance
+processTransaction (Deposit n) (BankBalance b) 
+    = BankBalance (b + n)
+processTransaction (Withdraw n) (BankBalance b) 
+    = BankBalance (b - n)
+-- This is a gross oversimplification...
+-- I really hope my bank does something smarter
+-- We (kinda sorta) add 10% interest, truncating any cents.
+-- Who likes pocket-change anyways ¯\_(ツ)_/¯
+processTransaction ApplyInterest (BankBalance b) 
+    = BankBalance (fromIntegral balance * 1.1)
+```
+
+Now we've got our Action type and our State type, let's relate them together
+using `ApplyAction`.
+
+```haskell
+instance ApplyAction AccountAction BankBalance where
+  applyAction = processTransaction
+```
+
+One problem though! `AccountAction` isn't a monoid! Hrmmm, this is a bit
+upsetting; it seems to quite clearly represent the domain we want to work with,
+I'd really rather not muck up our data-type just to make it fit here. Maybe
+there's something else we can do! In our case, what does it mean to combine two
+actions? For a bank balance we probably just want to run the first action, then
+the second one! We'll need a value that acts as an 'empty' value for our monoid's `mempty`
+too; for that we can just have some notion of performing no actions!
+
+There are a few ways to promote our `AccountAction` type into a monoid with
+these properties; but one in particular stands out (I can already hear some of
+you shouting it at your screens). That's right! The [Free
+Monoid](https://en.wikipedia.org/wiki/Free_monoid) A.K.A. the List Monoid!
+Lists are kind of a special monoid in that they can turn ANY type into a monoid
+for **free**! We get `mappend == (++)` and `mempty == []`. This means that instead
+of *actually* combining things we kinda just collect them all, but fear not it still
+satisfies all the monoid laws correctly. This isn't a post on Free Monoids, though so
+we'll upgrade our `AccountAction` to `[AccountAction]` and move on:
+
+```haskell
+instance ApplyAction [AccountAction] BankBalance where
+  applyAction actions balance =
+    let allTransactions :: BankBalance -> BankBalance
+        allTransactions = appEndo $ foldMap (Endo . processTransaction) (reverse actions)
+     in allTransactions balance
+```
+
+We can keep our `processTransaction` function and partially apply it to our
+list of Actions giving us a list of `[BankBalance -> BankBalance]`; we can then
+use the `Endo` monoid to compose all of the functions together! Unfortunately
+Endo does right-to-left composition, so we'll need to reverse the list first
+(keeners will note we could use `Dual . Endo` for the same results). Then we
+use `appEndo` to unpack the resulting `BankBalance -> BankBalance` which we can
+apply to our balance! Now that we have an instance for `ApplyAction` we can
+start writing programs using `Update`.
+
+```haskell
+useATM :: Update [AccountAction] BankBalance ()
+useATM = do
+  putAction [Deposit 20] -- BankBalance 20
+  putAction [Deposit 30] -- BankBalance 50
+  putAction [ApplyInterest] -- BankBalance 55
+  putAction [Withdraw 10] -- BankBalance 45
+  getState
+
+$> runUpdate useATM (BankBalance 0)
+([Deposit 20,Deposit 30,ApplyInterest,Withdraw 10],BankBalance 45)
+```
+
+Hrmm, a bit clunky that we have to wrap every action with a list, but we could
+pretty easily write a helper `putAction' :: MonadUpdate m [p] s => p -> m ()`
+to help with that. By running the program we can see that we've collected the
+actions in the right order and have 'combined' them all by running `mappend`.
+We also see that our bank balance ends up where we'd expect! This seems to
+be pretty similar to the State Monad, we could write helpers that perform
+each of those actions over the State pretty easily using `modify`; but the
+Update Monad gives us a nice audit log of everything that happened! This means
+we could verify that actions happened in the correct order, or we could run the
+same actions over a different starting state! 
+
+The Update Monad also has a few tricks when it comes to testing your programs.
+Since the only thing that can affect our state is a sequence of actions, we can
+skip all the monad nonsense and test our business logic by just testing that
+our `applyAction` function works properly over different lists of actions!
+Observe:
+
+```haskell
+testBankSystem :: Bool
+testBankSystem =
+  applyAction [Deposit 20, Deposit 30, ApplyInterest, Withdraw 10] (BankBalance 0) 
+    == BankBalance 45
+
+$> testBankSystem
+True
+```
+
+Cool stuff! We can write the tests for our business logic without worrying about
+the impure ways we'll probably be getting those actions (like `IO`). This
+separation makes complicated business logic pretty easy to test, and we can
+write tests for the 'glue' code with confidence that the logic of our actions
+is correct.
+
+There's really only so much we can do with `Update` alone, but it's pretty easy
+to write an `UpdateT` transformer! I'll leave you to check out the
+implementation
+[here](https://github.com/ChrisPenner/update-monad/blob/master/src/UpdateT.hs)
+if you like; but this allows us to do things like decide which actions to take
+based on user input (via `IO`), use our state to make choices in the middle of
+our monad, or use other monads to perform more interesting logic!
+
+## Customizing the Update Monad with Monoids
+
+Okay! We've got one concrete use-case under our belts and have a pretty
+good understanding of how all this works! 
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+Something that immediately interested me in
+this monad is that there are several distinct places to tweak its behaviour
+without even needing to change which implementation of `MonadUpdate` we use! We
+can change which action monoid we choose, which state we carry, and even the
+function we use to apply the actions to the state! This sort of generality leads
+to all sorts of cool behaviour without too much work, and people can build all
+sorts of things we didn't initially expect when we wrote the type-classes!
+
+
+
+Cool! I'll paste an implementation I came up with below; it could probably be
+made more elegant, let me know on Twitter (@chrislpenner) or Reddit
+(u/ChrisPenner) if you find an error in my logic! Most of the complexity is in
+the Applicative and Monad implementations
+
+
 
 
