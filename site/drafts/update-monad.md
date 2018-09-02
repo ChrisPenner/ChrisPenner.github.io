@@ -366,6 +366,10 @@ Customizations:
     - `put == putAction . Dual . Endo . const`
     - `modify == putAction . Dual . Endo`
 
+- `Update Any Bool a` with `applyAction (Any b) s = b || s`
+    - You could implement a short-circuiting approach where future actions don't bother running if any previous
+        action has succeeded! You can flip the logic using `All` and `&&`.
+
 -------------------------------------------------------------------------------
 
 Thanks for reading! I'm not perfect and really just go through all this stuff
