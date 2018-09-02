@@ -40,7 +40,8 @@ main =
         (fmap (url :: Post -> String) <$> allPostsCache)
     allTagsCache <- simpleJsonCache' (TagCache ()) (getTags <$> allPostsCache)
     -- Require all the things we need to build the whole site
-    "site" ~> need ["static", "posts", "tags", "dist/index.html"]
+    "site" ~>
+      need ["static", "posts", "tags", "dist/index.html", "dist/atom.xml"]
     -- Require all static assets
     "static" ~> do
       staticFiles <-
@@ -59,6 +60,7 @@ main =
     "dist/tag//*.html" %> buildTag allTagsCache
      -- rule for actually building posts
     "dist/posts//*.html" %> buildPost postCache sortedPostURLsCache
+    "dist/atom.xml" %> buildAtomFeed allPostsCache
 
 data IndexInfo = IndexInfo
   { posts :: [Post]
@@ -218,6 +220,33 @@ rfc3339 = Just "%H:%M:%SZ"
 
 toIsoDate :: UTCTime -> String
 toIsoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339)
+
+buildAtomFeed :: Action [Post] -> FilePath -> Action ()
+buildAtomFeed postsCache out = do
+  now <- liftIO getCurrentTime
+  posts <- postsCache
+  let atomData =
+        AtomData
+          { title = "Chris Penner"
+          , domain = "https://chrispenner.ca"
+          , author = "Chris Penner"
+          , posts = posts
+          , currentTime = toIsoDate now
+          , url = "/atom.xml"
+          }
+  atomTempl <- compileTemplate' "site/templates/atom.xml"
+  writeFile' out . T.unpack $ substitute atomTempl (toJSON atomData)
+
+data AtomData = AtomData
+  { title :: String
+  , domain :: String
+  , author :: String
+  , posts :: [Post]
+  , currentTime :: String
+  , url :: String
+  } deriving (Generic, Eq, Ord, Show)
+
+instance ToJSON AtomData
 
 newtype SortedPostsCache =
   SortedPostsCache ()
