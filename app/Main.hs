@@ -26,7 +26,7 @@ import Slick
 
 main :: IO ()
 main =
-  shakeArgs shakeOptions {shakeVerbosity = Chatty} $
+  shakeArgs shakeOptions {shakeVerbosity = Chatty, shakeThreads = 4} $
     -- Set up caches
    do
     postCache <- jsonCache' loadPost
@@ -84,6 +84,7 @@ data Post = Post
   , author :: String
   , content :: String
   , url :: String
+  , image :: String
   , tags :: [String]
   , nextPostURL :: Maybe String
   , prevPostURL :: Maybe String
@@ -104,6 +105,7 @@ instance FromJSON Post where
         nextPostURL = Nothing
         prevPostURL = Nothing
         srcPath = v ^. key "srcPath" . _String . unpacked
+        image = v ^. key "image" . _String . unpacked
      in return Post {..}
 
 instance ToJSON Post
