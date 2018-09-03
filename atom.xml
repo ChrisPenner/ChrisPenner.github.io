@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2018-09-03T18:04:14Z</updated>
+  <updated>2018-09-03T18:17:21Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -346,44 +346,10 @@
               ]]></content>
       </entry>
   <entry>
-      <title>Query a Google Sheets Spreadsheet from BigQuery</title>
-      <link href="https://chrispenner.ca/posts/bigquery-sheets"/>
-      <id>https://chrispenner.ca/posts/bigquery-sheets</id>
-      <updated>2018-06-02T00:00:00Z</updated>
-      <summary>A guide to using a google sheets spreadsheet as a BigQuery datasource</summary>
-      <content type="html"><![CDATA[
-          <img src="https://chrispenner.ca/images/postman/mail.jpg" alt="Query a Google Sheets Spreadsheet from BigQuery">
-              <p>In line with google's goal to have the whole world running inside a google-doc by 2050 they've added a new feature to Big Query which allows you query directly from a Google Spreadsheet! That's right, it reads directly from the sheet so you don't need to worry about keeping your bigquery tables up to date.</p>
-<p>First I want to stress that we should AVOID USING GOOGLE SHEETS AS A PRIMARY DATASTORE whenever possible, but sometimes you've just got a bunch of data that you'd like to run some queries on; this was the case for me earlier; and this is a great solution for how to do that.</p>
-<h2>Prepping The Sheet</h2>
-<p>BQ has a few quirks, it can (currently) ONLY query the FIRST SHEET of a google sheet, and doesn't do any special handling of the header row of your spreadsheet. There's a trick you can do to mitigate this though. Either make a new sheet as the first sheet and read from the 'real' sheet and drop the headers. If your other sheet is named MYDATA then you could use something like <code>=FILTER(MYDATA!A2:A, NOT(ISBLANK(MYDATA!A2:A)))</code> which imports every non-blank row from the MYDATA sheet after dropping the first row.</p>
-<p>If you don't want to edit a sheet directly, you can make a new google sheet and use the <a href="https://support.google.com/docs/answer/3093340">IMPORTRANGE</a> command to import the data from a different spreadsheet.</p>
-<h2>Creating a Dataset</h2>
-<p>First step is to create a new bigquery dataset; go to bigquery, select your google cloud project on the left (or create one if you need to); then create a new 'dataset' in that project we'll set up to sync with our spreadsheet.</p>
-<p><img src="/images/bigquery-sheets/new_table_screen.png" alt="BQ UI" /></p>
-<p>Now we'll see this screen:</p>
-<p><img src="/images/bigquery-sheets/new_bq_table.png" alt="Create BQ Table" /></p>
-<ol>
-<li>Choose 'Google Drive' as your Location</li>
-<li>Paste the url of your spreadsheet in the box (just copy it from the url bar when you're at the spreadsheet)</li>
-<li>Set File Format to Google Sheets</li>
-<li>Add a table name like you normally would</li>
-</ol>
-<h2>Schema</h2>
-<p>In regards to adding a schema, BigQuery does NOT infer this for you, so you'll have to add one yourself. Each field of the schema corresponds to a column of the spreadsheet. For small spreadsheets you can enter it by hand, for bigger spreadsheets you can just generate a schema definition by copying the headers row from your spreadsheet and running it through this script: <a href="https://gist.github.com/ChrisPenner/2525b29f49cdb6613175cda8c85cb585">HERE</a>, then click 'Edit as Text' by the schema definiton and paste in the result</p>
-<p>Lastly, hit 'Create Table'</p>
-<h2>Querying</h2>
-<p>You're good to go now, query away! Note that you won't have the 'Preview' button like other data tables, this is because no data is actually located in BQ, it streams data from sheets whenever you make a query. This means the data will always be kept up to date!</p>
-<h2>Breaking Changes</h2>
-<p>BQ queries the spreadsheet directly so the data will always be up to date, but this also means that if someone shuffles around columns that the schema will be out of date with the data. Just note that if the column ordering changes you'll have to update your schema to match.</p>
-<p>Hope that helps, cheers!</p>
-              ]]></content>
-      </entry>
-  <entry>
       <title>Postman API Explorer: You&#39;ve got mail!</title>
       <link href="https://chrispenner.ca/posts/postman"/>
       <id>https://chrispenner.ca/posts/postman</id>
-      <updated>2018-06-02T00:00:00Z</updated>
+      <updated>2018-06-03T00:00:00Z</updated>
       <summary>A guide to using Postman for API exploration and testing</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/postman/mail.jpg" alt="Postman API Explorer: You&#39;ve got mail!">
@@ -477,6 +443,40 @@
 <h1>Importing/Exporting</h1>
 <p>Postman has the ability to import curl requests using the &quot;import&quot; button on the top left, but you can also export code for each request in a language of your choice using the &quot;code&quot; button on the right. You can export as Python, HTTP, curl, Go, Java, Node, etc.</p>
 <p>That's pretty much it for Postman. Tip your <em><em>servers</em></em>, I'm here all week.</p>
+              ]]></content>
+      </entry>
+  <entry>
+      <title>Query a Google Sheets Spreadsheet from BigQuery</title>
+      <link href="https://chrispenner.ca/posts/bigquery-sheets"/>
+      <id>https://chrispenner.ca/posts/bigquery-sheets</id>
+      <updated>2018-06-02T00:00:00Z</updated>
+      <summary>A guide to using a google sheets spreadsheet as a BigQuery datasource</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/postman/mail.jpg" alt="Query a Google Sheets Spreadsheet from BigQuery">
+              <p>In line with google's goal to have the whole world running inside a google-doc by 2050 they've added a new feature to Big Query which allows you query directly from a Google Spreadsheet! That's right, it reads directly from the sheet so you don't need to worry about keeping your bigquery tables up to date.</p>
+<p>First I want to stress that we should AVOID USING GOOGLE SHEETS AS A PRIMARY DATASTORE whenever possible, but sometimes you've just got a bunch of data that you'd like to run some queries on; this was the case for me earlier; and this is a great solution for how to do that.</p>
+<h2>Prepping The Sheet</h2>
+<p>BQ has a few quirks, it can (currently) ONLY query the FIRST SHEET of a google sheet, and doesn't do any special handling of the header row of your spreadsheet. There's a trick you can do to mitigate this though. Either make a new sheet as the first sheet and read from the 'real' sheet and drop the headers. If your other sheet is named MYDATA then you could use something like <code>=FILTER(MYDATA!A2:A, NOT(ISBLANK(MYDATA!A2:A)))</code> which imports every non-blank row from the MYDATA sheet after dropping the first row.</p>
+<p>If you don't want to edit a sheet directly, you can make a new google sheet and use the <a href="https://support.google.com/docs/answer/3093340">IMPORTRANGE</a> command to import the data from a different spreadsheet.</p>
+<h2>Creating a Dataset</h2>
+<p>First step is to create a new bigquery dataset; go to bigquery, select your google cloud project on the left (or create one if you need to); then create a new 'dataset' in that project we'll set up to sync with our spreadsheet.</p>
+<p><img src="/images/bigquery-sheets/new_table_screen.png" alt="BQ UI" /></p>
+<p>Now we'll see this screen:</p>
+<p><img src="/images/bigquery-sheets/new_bq_table.png" alt="Create BQ Table" /></p>
+<ol>
+<li>Choose 'Google Drive' as your Location</li>
+<li>Paste the url of your spreadsheet in the box (just copy it from the url bar when you're at the spreadsheet)</li>
+<li>Set File Format to Google Sheets</li>
+<li>Add a table name like you normally would</li>
+</ol>
+<h2>Schema</h2>
+<p>In regards to adding a schema, BigQuery does NOT infer this for you, so you'll have to add one yourself. Each field of the schema corresponds to a column of the spreadsheet. For small spreadsheets you can enter it by hand, for bigger spreadsheets you can just generate a schema definition by copying the headers row from your spreadsheet and running it through this script: <a href="https://gist.github.com/ChrisPenner/2525b29f49cdb6613175cda8c85cb585">HERE</a>, then click 'Edit as Text' by the schema definiton and paste in the result</p>
+<p>Lastly, hit 'Create Table'</p>
+<h2>Querying</h2>
+<p>You're good to go now, query away! Note that you won't have the 'Preview' button like other data tables, this is because no data is actually located in BQ, it streams data from sheets whenever you make a query. This means the data will always be kept up to date!</p>
+<h2>Breaking Changes</h2>
+<p>BQ queries the spreadsheet directly so the data will always be up to date, but this also means that if someone shuffles around columns that the schema will be out of date with the data. Just note that if the column ordering changes you'll have to update your schema to match.</p>
+<p>Hope that helps, cheers!</p>
               ]]></content>
       </entry>
   <entry>
@@ -1899,7 +1899,7 @@
       <link href="https://chrispenner.ca/posts/use-semantic-versioning"/>
       <id>https://chrispenner.ca/posts/use-semantic-versioning</id>
       <updated>2015-04-02T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Semantic versioning helps, use it!</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/versioning.jpg" alt="Semantic Versioning">
               <p>So! I'm going to talk about Semantic Versioning today because it's something that I think <em>everyone</em> should be using. Why? Because it takes something that is largely arbitrary and meaningless and redeems it by giving it meaning. A side effect of the system is that everyone thinks a little more about how their software changes affect those who actually use it.</p>
@@ -1970,7 +1970,7 @@
       <link href="https://chrispenner.ca/posts/gem-duckling"/>
       <id>https://chrispenner.ca/posts/gem-duckling</id>
       <updated>2015-02-21T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out the Duckling project</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/duckling.png" alt="Gem: Duckling">
               <p>Duckling is a very interesting project that I think exemplifies many great design principles. It's a parser written in Clojure that can turn natural language sentences into structured computer readable data. Clojure, if you haven't heard, is a Lisp that runs on Java's virtual machine. Now's a good a time as any to check it out!</p>
@@ -1996,7 +1996,7 @@
       <link href="https://chrispenner.ca/posts/worth-a-read-4"/>
       <id>https://chrispenner.ca/posts/worth-a-read-4</id>
       <updated>2015-02-13T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out these posts!</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/unix-prompt.png" alt="Worth a Read #4 - Unix Tools">
               <p>Okay! This time we're reading about cool and useful Unix tools. We've got some wargames to start us off, a fun way to learn Unix better through a series of challenges. Next is a great series of articles regarding using Unix as a development environment, then an overview of awk and tmux, some of the most useful Unix tools that I use. Finally a list of some other cool tools you may want to check out. I hope you find that it's worth a read!</p>
@@ -2016,7 +2016,7 @@
       <link href="https://chrispenner.ca/posts/vim-vs-emacs"/>
       <id>https://chrispenner.ca/posts/vim-vs-emacs</id>
       <updated>2015-02-06T00:00:00Z</updated>
-      <summary></summary>
+      <summary>I&#39;ve tried out both; here are some thoughts</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/vim-vs-emacs.png" alt="Vim vs. Emacs?">
               <p>So about a year ago I realized that as someone going into Computer Science as a career I would be typing for the rest of my life. Somewhere on the vastness of the internet I read that learning how to properly use a text editor (or, how to use a proper editor) would not only help me type faster, but also that being able to get what's in my head onto the screen efficiently would help keep me focused on the task at hand. These posts all came with the disclaimer that it would take time, effort, and that learning something new would slow me down at the start. However, if I can spend a few hours here and there to save myself countless hours throughout my career, it doesn't take complex mental math to see that it's a worthwhile thing to do.</p>
@@ -2053,7 +2053,7 @@
       <link href="https://chrispenner.ca/posts/gem-font-awesome"/>
       <id>https://chrispenner.ca/posts/gem-font-awesome</id>
       <updated>2015-01-21T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out Font-Awesome</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/font-awesome-logo.png" alt="Gem: Font-Awesome">
               <p>Not all open-source projects are software or code! Here's a project that has definitely helped me out as I build various websites.</p>
@@ -2074,7 +2074,7 @@
       <link href="https://chrispenner.ca/posts/worth-a-read-3"/>
       <id>https://chrispenner.ca/posts/worth-a-read-3</id>
       <updated>2015-01-13T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out these posts!</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/typography-t.png" alt="Worth a Read #3 - Typography">
               <p>This time we're talking typography. Some would say that good web-design is 90-99% typography. I'll let you decide whether you want to believe that, but regardless a few more tools in the typography tool-chest sure doesn't hurt. Here are a few articles to check out.</p>
@@ -2096,7 +2096,7 @@
       <link href="https://chrispenner.ca/posts/gem-git"/>
       <id>https://chrispenner.ca/posts/gem-git</id>
       <updated>2015-01-05T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out git</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/git-logo.png" alt="Gem: Git">
               <p>Speaking of open-source gems, it's tough to make it too far into this topic without mentioning Git. If you've been at all involved in the open source community recently then you're certainly familiar with it already. If not, then learning Git is a great place to start your journey into open-source tech.</p>
@@ -2117,7 +2117,7 @@
       <link href="https://chrispenner.ca/posts/procedural-content"/>
       <id>https://chrispenner.ca/posts/procedural-content</id>
       <updated>2015-01-03T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Procedural generation allows us to build incredibly vast and rich systems</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/no-mans-sky.png" alt="Procedural Generation is the Future">
               <p>I 've been noticing a trend in gaming recently towards procedurally generated content. <a href="https://minecraft.net/">Minecraft</a> has it, <a href="http://playstarbound.com/">Starbound</a> and <a href="http://terraria.org/">Terraria</a> have it, and randomized rogue-likes are running amok. No longer do we just play the same level over and over again until we memorize it well enough (remember Super Mario Bros?). The new gaming paradigm is one of discovery and adventure! While I know from experience that meticulously planned dungeons and carefully crafted levels can deliver an amazing experience, there are several reasons as to why I think the trend towards procedurally generated content is a good one.</p>
@@ -2146,7 +2146,7 @@
       <link href="https://chrispenner.ca/posts/worth-a-read-2"/>
       <id>https://chrispenner.ca/posts/worth-a-read-2</id>
       <updated>2014-11-10T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out these posts!</summary>
       <content type="html"><![CDATA[
               <p>This Worth A Read highlights some articles about CSS. See how the pros do things and learn a new trick or two.</p>
 <p>Follow me on twitter <a href="http://www.twitter.com/chrislpenner">@chrislpenner</a> to keep up with future posts!</p>
@@ -2165,7 +2165,7 @@
       <link href="https://chrispenner.ca/posts/gem-jekyll"/>
       <id>https://chrispenner.ca/posts/gem-jekyll</id>
       <updated>2014-11-03T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out Jekyll</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/jekyll-logo.png" alt="Gem: Jekyll">
               <p>Jekyll is a web-framework written in Ruby for creating <em>static</em> pages. If you're unfamiliar with the term, <em>static</em> means that it can take a set of input files and turn it into a site that's linked up very nicely, but cannot provide any interaction with the user, nor can it react to it's environment by using a web-server. Interactivity is still available on the client-side through the use of javascript of course.</p>
@@ -2185,7 +2185,7 @@
       <link href="https://chrispenner.ca/posts/worth-a-read-1"/>
       <id>https://chrispenner.ca/posts/worth-a-read-1</id>
       <updated>2014-10-31T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out these posts!</summary>
       <content type="html"><![CDATA[
               <p>This marks the beginning of a new feature, <strong>Worth a Read</strong>, which will contain a quick and easy list of blog posts and articles that I've found interesting recently. They may have to do with programming, design, lifestyle, cool products, or anything else I've been reading. Might be themed, might not! Hope you enjoy it!</p>
 <p>This week's list contains a variety of topics from different disciplines, hopefully you'll find something interesting! Follow me on twitter <a href="http://www.twitter.com/chrislpenner">\@chrislpenner</a> to keep up with future posts!</p>
@@ -2204,7 +2204,7 @@
       <link href="https://chrispenner.ca/posts/gem-neovim"/>
       <id>https://chrispenner.ca/posts/gem-neovim</id>
       <updated>2014-10-15T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Check out Neovim</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/neovim-logo.png" alt="Gem: Neovim">
               <p>This is the first of a series which will highlight open-source &quot;Gems in the rough&quot; that is, projects which are worth taking a look at, downloading, or contributing to. Let's get started!</p>
@@ -2224,7 +2224,7 @@
       <link href="https://chrispenner.ca/posts/you-own-your-data"/>
       <id>https://chrispenner.ca/posts/you-own-your-data</id>
       <updated>2014-09-26T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Don&#39;t give up control over your data</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/security-vs-privacy.jpg" alt="You Own Your Data">
               <p>First off, thanks for taking the time to read this, please send me a message on twitter <a href="http://www.twitter.com/chrislpenner">@chrislpenner</a> if you have ideas or comments, and share this post around if you agree with it.</p>
@@ -2256,7 +2256,7 @@
       <link href="https://chrispenner.ca/posts/modular-software"/>
       <id>https://chrispenner.ca/posts/modular-software</id>
       <updated>2014-09-24T00:00:00Z</updated>
-      <summary></summary>
+      <summary>The future of software exists in modularity and modularity</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/modular.png" alt="The Future of Software">
               <p>I 've always been annoyed with software, the particular reasons have changed consistently over the years, but I think that for all of us there's always been something that gets on our nerves; whether it's how your word processor never indents your lists properly, or how your computer's calendar starts on Sunday when you'd prefer to have it start on Monday.</p>
@@ -2278,7 +2278,7 @@
       <link href="https://chrispenner.ca/posts/set-the-data-free"/>
       <id>https://chrispenner.ca/posts/set-the-data-free</id>
       <updated>2014-08-02T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Simple formats afford adaptability</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/set-the-data-free.png" alt="Set the Data Free">
               <p>So lately I've been noticing something. The way we consume our data is changing, suddenly just having data isn't good enough, it's all about presentation. Most modern data formats such as Microsoft Word documents, Powerpoint Slides and PDFs are increasingly focused on making your data LOOK good.</p>
@@ -2294,7 +2294,7 @@
       <link href="https://chrispenner.ca/posts/legacy-in-design"/>
       <id>https://chrispenner.ca/posts/legacy-in-design</id>
       <updated>2014-07-26T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Things that come before greatly affect the success of our design</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/legacy-in-design.png" alt="Legacy in Design">
               <p>Designers often feel pressure to come up with something new and revolutionary. They want to make their mark on the design world by revolutionizing some new concept or idea. Certainly this form of thinking is a good thing; it fuels innovation and leads to exciting new possibilities that others wouldn't have ever contrived. However, humans build habits, and if we're designing for humans we simply must take this into account.</p>
@@ -2311,7 +2311,7 @@
       <link href="https://chrispenner.ca/posts/capslock"/>
       <id>https://chrispenner.ca/posts/capslock</id>
       <updated>2014-05-25T00:00:00Z</updated>
-      <summary></summary>
+      <summary>Caps lock is poorly designed. Read to find out why</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/capslock.png" alt="Caps-lock">
               <p>Any time I consider decisions of designers past, my mind always drifts towards the keyboard. It is a ubiquitous piece of hardware that most take for granted. If you take more than a second to think about it, it's a very strange design. The letters seem to be placed without rhyme or reason, most layouts have rows staggered by a seemingly arbitrary amount from one another, some keys are mirrored on either side (shift, control, etc) others are not (tab, return). It seems as though no-one in their right mind would ever design such a piece of work! The keyboard is the result of years of 'legacy' design, one or two things get carried over from iteration to iteration and over time the sense of it all is lost.</p>
@@ -2328,7 +2328,7 @@
       <link href="https://chrispenner.ca/posts/switch-to-mac"/>
       <id>https://chrispenner.ca/posts/switch-to-mac</id>
       <updated>2014-05-19T00:00:00Z</updated>
-      <summary></summary>
+      <summary>I switched to using a Mac, and I love it</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/the-switch-to-mac.png" alt="The Switch To Mac">
               <p>The time had come to replace my slowly fading laptop, it had served me well in the last four years, but all good things must come to an end. I was faced with a choice: which operating system do I commit to for my next four years? As a Computer Science student I wanted to make the right choice. These days most things I could ever want to do are possible on any one of the big three (Windows, OSX or Linux), so it was mostly a choice of form factor and style. How would each choice affect my experience throughout the years to come? Would I have to give up some long-loved programs that I had invested my time and money into? How could it affect my workflow? Here's a bit about my past experience with each OS.</p>
