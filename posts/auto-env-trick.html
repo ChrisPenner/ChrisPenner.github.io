@@ -771,7 +771,24 @@
 <p>You can do all sorts of things with this tool, though most people use it to configure their environment variables (hence the name). I use it for that as well, but I've added a new trick.</p>
 <p>Basically, each time you enter a project it will try to join an existing tmux session for that project, if none exist it will create one.</p>
 <p>Here's what's in each project's '.env' file now:</p>
-<script src="https://gist.github.com/ChrisPenner/83ad2665eed3dd5fff15.js"></script>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="co">#!/bin/sh</span></a>
+<a class="sourceLine" id="cb1-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb1-3" data-line-number="3"><span class="co"># Echo the root folder of the current git repo.</span></a>
+<a class="sourceLine" id="cb1-4" data-line-number="4"><span class="fu">gitroot()</span><span class="kw">{</span></a>
+<a class="sourceLine" id="cb1-5" data-line-number="5">    <span class="bu">echo</span> <span class="kw">`</span><span class="fu">git</span> rev-parse --show-toplevel<span class="kw">`</span></a>
+<a class="sourceLine" id="cb1-6" data-line-number="6"><span class="kw">}</span></a>
+<a class="sourceLine" id="cb1-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb1-8" data-line-number="8"><span class="co"># Reconnect tmux session</span></a>
+<a class="sourceLine" id="cb1-9" data-line-number="9"><span class="fu">tmuxproj()</span><span class="kw">{</span></a>
+<a class="sourceLine" id="cb1-10" data-line-number="10"><span class="co"># Don&#39;t attach to tmux if already in tmux</span></a>
+<a class="sourceLine" id="cb1-11" data-line-number="11">    <span class="kw">if</span> ! <span class="kw">{</span><span class="bu"> [</span> <span class="st">&quot;</span><span class="va">$TERM</span><span class="st">&quot;</span> <span class="ot">=</span> <span class="st">&quot;screen&quot;</span><span class="bu"> ]</span> <span class="kw">||</span><span class="bu"> [</span> <span class="ot">-n</span> <span class="st">&quot;</span><span class="va">$TMUX</span><span class="st">&quot;</span><span class="bu"> ]</span>; <span class="kw">}</span> <span class="kw">then</span></a>
+<a class="sourceLine" id="cb1-12" data-line-number="12">    <span class="co"># Attach to project tmux session if it exists, otherwise create it.</span></a>
+<a class="sourceLine" id="cb1-13" data-line-number="13">        <span class="ex">tmux</span> attach -t <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span> <span class="kw">||</span> <span class="ex">tmux</span> new -s <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span></a>
+<a class="sourceLine" id="cb1-14" data-line-number="14">    <span class="kw">fi</span></a>
+<a class="sourceLine" id="cb1-15" data-line-number="15"><span class="kw">}</span></a>
+<a class="sourceLine" id="cb1-16" data-line-number="16"></a>
+<a class="sourceLine" id="cb1-17" data-line-number="17"><span class="co"># inside a project&#39;s .env:</span></a>
+<a class="sourceLine" id="cb1-18" data-line-number="18"><span class="ex">tmuxproj</span></a></code></pre></div>
 <p>I use vim with tmux extensively, and so I often set up a workplace with several tmux windows and splits. Setting all this up and remembering what I was working on every time I context switch can be a bit of a pain, so now I use autoenv to manage it for me. What would usually happen to me is that I'd set up a tmux session with all of this, then forget about it next time I went to work on this project, but now every time I enter a project's directory it automagically puts me back into the session.</p>
 <p>Simple! Now I can't forget!</p>
 
