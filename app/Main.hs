@@ -197,7 +197,7 @@ getTags posts =
       tagToPostsList = fmap S.toList tagToPostsSet
       tagObjects =
         foldMapWithKey
-          (\tag ps -> [Tag {tag, posts = ps, url = "/tag/" <> tag}])
+          (\tag ps -> [Tag {tag, posts = sortByDate ps, url = "/tag/" <> tag}])
           tagToPostsList
    in tagObjects
   where
