@@ -15,7 +15,15 @@ Confusing, I know, but stick with me. It turns out that most recursive functions
 reworked into the tail-call form. Here's an example of the factorial function in it's original form, then reworked
 into the tail-call form.
 
-<script type="text/javascript" src="https://gist.github.com/ChrisPenner/c0b3f4feb054daa2f6370d2e9961d6d3.js"></script>
+```python
+def factorial(n):
+  if n == 0: return 1
+  else: return factorial(n-1) * n
+
+def tail_factorial(n, accumulator=1):
+  if n == 0: return accumulator
+  else: return tail_factorial(n-1, accumulator * n)
+  ```
 
 They both look similar, and in fact the original even **looks** like it's in the tail call form, but since there's
 that pesky multiplication which is outside of the recursive call it can't be optimized away.
@@ -32,7 +40,39 @@ But hey, I don't really care if this is something we should or shouldn't be doin
 Let's see if we can make it happen.
 
 
-<script type="text/javascript" src="https://gist.github.com/ChrisPenner/c958afbf6e7a763c188d8b83275751bb.js"></script>
+```python
+# factorial.py
+from tail_recursion import tail_recursive, recurse
+
+# Normal recursion depth maxes out at 980, this one works indefinitely
+@tail_recursive
+def factorial(n, accumulator=1):
+    if n == 0:
+        return accumulator
+    recurse(n-1, accumulator=accumulator*n)
+```
+
+```python
+# tail_recursion.py
+class Recurse(Exception):
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+def recurse(*args, **kwargs):
+    raise Recurse(*args, **kwargs)
+        
+def tail_recursive(f):
+    def decorated(*args, **kwargs):
+        while True:
+            try:
+                return f(*args, **kwargs)
+            except Recurse as r:
+                args = r.args
+                kwargs = r.kwargs
+                continue
+    return decorated
+```
 
 Now, don't get scared by decorators if you haven't seen them before, in fact go [read about them now](http://thecodeship.com/patterns/guide-to-python-function-decorators/), basically
 they're functions which are called on other functions and change the behaviour in some way.

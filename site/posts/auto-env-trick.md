@@ -19,7 +19,26 @@ will create one.
 
 Here's what's in each project's '.env' file now:
 
-<script src="https://gist.github.com/ChrisPenner/83ad2665eed3dd5fff15.js"></script>
+```bash
+#!/bin/sh
+
+# Echo the root folder of the current git repo.
+gitroot(){
+    echo `git rev-parse --show-toplevel`
+}
+
+# Reconnect tmux session
+tmuxproj(){
+# Don't attach to tmux if already in tmux
+    if ! { [ "$TERM" = "screen" ] || [ -n "$TMUX" ]; } then
+    # Attach to project tmux session if it exists, otherwise create it.
+        tmux attach -t `gitroot` || tmux new -s `gitroot`
+    fi
+}
+
+# inside a project's .env:
+tmuxproj
+```
 
 I use vim with tmux extensively, and so I often set up a workplace with several tmux windows
 and splits. Setting all this up and remembering what I was working on every time I context switch can be a bit of

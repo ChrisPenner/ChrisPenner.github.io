@@ -15,12 +15,20 @@ In the end I decided to write my own little helper module for this sort of thing
 
 At this point I would usually write out a few example use-cases with an interface that I'd want to use even if I'm not sure it's possible to implement that way. For some reason I avoided my own advice this time and started on the implementation first. Here's an example of the interface that resulted from my original implementation:
 
-<script src="https://gist.github.com/ChrisPenner/1436ac6d9f73dd8a9242.js?file=old_syntax.py"></script>
+```python
+@supply_args('first', 'second', 'third', keyword=42, args=True)
+def main(first, second, third, keyword=42, args):
+    print first, second, third, keyword, args
+```
 
 Hrmm, so it works, but you can see that we're writing each argument out twice. Keyword args are also doubled, and for some reason keywords aren't strings, whereas the other arguments are. The worst offender is the 'args' syntax. In order to specify we want to collect extra arguments into a list we set "args=True", then have an argument named args below. Hrmm, all of this is a little clunky, this definitely isn't an "it just works" scenario and honestly it's just as easy to screw up as using argparse in the first place. It was at this point that I realized I built it this way because it was easy to implement, not because it was easy to use! So back to the drawing board, let's design something we'd like to use first, then see if we can implement it!
 
 
-<script src="https://gist.github.com/ChrisPenner/1436ac6d9f73dd8a9242.js?file=new_syntax.py"></script>
+```python
+@supply_args
+def main(first, second, keyword=42, *extras):
+  print first, second, keyword, extras
+```
 
 Whoah, okay that's a lot simpler! No more duplication, I'd use that! But it almost seems a bit too much like magic, is it even possible to implement it this way?
 Let's try it out, one of the things we wanted was to be able to handle '--options' on the command line, and argparse has that ability, so we should probably take advantage of that. To that end we need to pass the names of the arguments to argparse to set it up, how can we do that now that we're not passing argument names to our decorator? After a quick dive into the depths of Stack Overflow I discovered what we need in the 'inspect' module from the standard library.
