@@ -93,6 +93,7 @@ data Post = Post
   , isoDate :: String
   , date :: String
   , srcPath :: String
+  , description :: String
   } deriving (Generic, Eq, Ord, Show)
 
 instance FromJSON Post where
@@ -108,6 +109,7 @@ instance FromJSON Post where
         prevPostURL = Nothing
         srcPath = v ^. key "srcPath" . _String . unpacked
         image = v ^? key "image" . _String . unpacked
+        description = v ^. key "description" . _String . unpacked
      in return Post {..}
 
 instance ToJSON Post
