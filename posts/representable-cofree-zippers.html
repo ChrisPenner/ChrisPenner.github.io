@@ -768,103 +768,103 @@
 <p>We're looking at a different way of building a zipper, The advantages of this method are that we can build it up out of smaller instances piece by piece. Each piece is a easier to write, and we also gain several utility functions from the Typeclasses we'll be implementing along the way! It's not terribly practical, but it's a fun experiment.</p>
 <p>You can find this post as a literate haskell file <a href="https://gist.github.com/ChrisPenner/4527dd0d9c60983562e03c28731bb3bd">here</a> so that means you can load it up directly in GHC and play around with it if you want to follow along! Let's get started.</p>
 <p>First we'll need a few language extensions, In case you're wondering; TypeFamilies is used by the <code>Representable</code>.</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# language DeriveFunctor #-}</span>
-<span class="ot">{-# language TypeFamilies #-}</span>
-<span class="ot">{-# language InstanceSigs #-}</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="ot">{-# language DeriveFunctor #-}</span></a>
+<a class="sourceLine" id="cb1-2" data-line-number="2"><span class="ot">{-# language TypeFamilies #-}</span></a>
+<a class="sourceLine" id="cb1-3" data-line-number="3"><span class="ot">{-# language InstanceSigs #-}</span></a></code></pre></div>
 <p>We're going to be writing a Zipper into a list. In case you're unfamiliar, a zipper is essentially a 'view' into a structure which is focused on a single element. We'll call our focused view into a list a 'Tape'</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">module</span> <span class="dt">Tape</span> <span class="kw">where</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">module</span> <span class="dt">Tape</span> <span class="kw">where</span></a></code></pre></div>
 <p>Go ahead and import everything we'll need:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- http://hackage.haskell.org/package/comonad-5/docs/Control-Comonad.html#t:Comonad</span>
-<span class="kw">import </span><span class="dt">Control.Comonad</span>
-<span class="co">-- http://hackage.haskell.org/package/free-4.12.4/docs/Control-Comonad-Cofree.html</span>
-<span class="kw">import </span><span class="dt">Control.Comonad.Cofree</span>
-<span class="co">-- https://hackage.haskell.org/package/distributive-0.5.0.2/docs/Data-Distributive.html#t:Distributive</span>
-<span class="kw">import </span><span class="dt">Data.Distributive</span>
- <span class="co">-- https://hackage.haskell.org/package/adjunctions-4.3/docs/Data-Functor-Rep.html#t:Representable</span>
-<span class="kw">import </span><span class="dt">Data.Functor.Rep</span>
-<span class="co">-- https://hackage.haskell.org/package/containers-0.5.10.2/docs/Data-Sequence.html</span>
-<span class="kw">import qualified</span> <span class="dt">Data.Sequence</span> <span class="kw">as</span> <span class="dt">S</span>
-<span class="co">-- https://hackage.haskell.org/package/base-4.9.1.0/docs/Data-List-NonEmpty.html</span>
-<span class="kw">import qualified</span> <span class="dt">Data.List.NonEmpty</span> <span class="kw">as</span> <span class="dt">NE</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="co">-- http://hackage.haskell.org/package/comonad-5/docs/Control-Comonad.html#t:Comonad</span></a>
+<a class="sourceLine" id="cb3-2" data-line-number="2"><span class="kw">import</span> <span class="dt">Control.Comonad</span></a>
+<a class="sourceLine" id="cb3-3" data-line-number="3"><span class="co">-- http://hackage.haskell.org/package/free-4.12.4/docs/Control-Comonad-Cofree.html</span></a>
+<a class="sourceLine" id="cb3-4" data-line-number="4"><span class="kw">import</span> <span class="dt">Control.Comonad.Cofree</span></a>
+<a class="sourceLine" id="cb3-5" data-line-number="5"><span class="co">-- https://hackage.haskell.org/package/distributive-0.5.0.2/docs/Data-Distributive.html#t:Distributive</span></a>
+<a class="sourceLine" id="cb3-6" data-line-number="6"><span class="kw">import</span> <span class="dt">Data.Distributive</span></a>
+<a class="sourceLine" id="cb3-7" data-line-number="7"> <span class="co">-- https://hackage.haskell.org/package/adjunctions-4.3/docs/Data-Functor-Rep.html#t:Representable</span></a>
+<a class="sourceLine" id="cb3-8" data-line-number="8"><span class="kw">import</span> <span class="dt">Data.Functor.Rep</span></a>
+<a class="sourceLine" id="cb3-9" data-line-number="9"><span class="co">-- https://hackage.haskell.org/package/containers-0.5.10.2/docs/Data-Sequence.html</span></a>
+<a class="sourceLine" id="cb3-10" data-line-number="10"><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Sequence</span> <span class="kw">as</span> <span class="dt">S</span></a>
+<a class="sourceLine" id="cb3-11" data-line-number="11"><span class="co">-- https://hackage.haskell.org/package/base-4.9.1.0/docs/Data-List-NonEmpty.html</span></a>
+<a class="sourceLine" id="cb3-12" data-line-number="12"><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.List.NonEmpty</span> <span class="kw">as</span> <span class="dt">NE</span></a></code></pre></div>
 <p>Great! At this point one would typically define their zipper data type, which for lists would look like: <code>data Tape a = Tape [a] a [a]</code>, This represents the idea of having a single element of the list 'under focus' with other elements to the left and right.</p>
 <p>We're trying something different, we're going to define TWO types. One type which represents all of the POSSIBLE movements, and one which represents a CHOICE of a specific movement.</p>
 <p>First we'll define the possible movements in our tape using the PRODUCT tape <code>TPossible</code>, we'll have a slot in our structure for both leftward and rightward movements:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">TPossible</span> a <span class="fu">=</span> <span class="dt">TPossible</span>
-  {<span class="ot"> leftward ::</span> a
-  ,<span class="ot"> rightward ::</span> a
-  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)</code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">data</span> <span class="dt">TPossible</span> a <span class="fu">=</span> <span class="dt">TPossible</span></a>
+<a class="sourceLine" id="cb4-2" data-line-number="2">  {<span class="ot"> leftward ::</span> a</a>
+<a class="sourceLine" id="cb4-3" data-line-number="3">  ,<span class="ot"> rightward ::</span> a</a>
+<a class="sourceLine" id="cb4-4" data-line-number="4">  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Functor</span>)</a></code></pre></div>
 <p>We're deriving Functor here too, that'll come in handy later.</p>
 <p>Next we represent a choice of direction as a SUM type, i.e. we can choose to go either LEFT or RIGHT at any given focus in the list.</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">TChoice</span> <span class="fu">=</span> <span class="dt">L</span> <span class="fu">|</span> <span class="dt">R</span>
-  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" data-line-number="1"><span class="kw">data</span> <span class="dt">TChoice</span> <span class="fu">=</span> <span class="dt">L</span> <span class="fu">|</span> <span class="dt">R</span></a>
+<a class="sourceLine" id="cb5-2" data-line-number="2">  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</a></code></pre></div>
 <p>Notice that each piece contains a different piece of the information we need, a value in <code>TPossible</code> knows what's to the left or right, a value in <code>TChoice</code> knows which way to move, but not what's there. This sort of relationship shows us that <code>TPossible</code> is a <code>Representable Functor</code>.</p>
 <p>Let's talk about what that means. A Representable Functor is any functor from which you can extract elements by giving it an index. That is; it's any functor that you can describe completely using a function from an index to a value. Given <code>Index -&gt; a</code> you can build up an <code>f a</code> if you have a relationship between <code>Index</code> and <code>f</code>!</p>
 <p>In our case we have such a relationship; and if we have a function <code>TChoice -&gt; a</code> we could build up a <code>TPossible a</code> by calling the function for the leftward and rightward slots using <code>L</code> and <code>R</code> respectively.</p>
 <p>But we're getting a bit ahead of ourselves; we'll need to build up a Distributive Instance first, it's a pre-requisite for the Representable class, and in fact every instance of Representable is also Distributive; If we like we can actually just implement Representative and use <code>distributeRep</code> from <code>Data.Functor.Rep</code> as your implementation of Distributive, but we'll do it the long way here.</p>
 <p>Distributive can seem strange if you haven't worked with it before, it's the dual of Traversable; Traversable can pull out other Applicative Effects from within its structure, and so Distributive can pull its own structure from any functor to the outside. You can define an instance by implementing either <code>distribute</code> or <code>collect</code>.</p>
 <p>Here're the signatures:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (g a) <span class="ot">-&gt;</span> g (f a)
-<span class="ot">collect ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> g b) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> g (f b)</code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="ot">distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (g a) <span class="ot">-&gt;</span> g (f a)</a>
+<a class="sourceLine" id="cb6-2" data-line-number="2"><span class="ot">collect ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> g b) <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> g (f b)</a></code></pre></div>
 <p>Let's see a few examples to solidify the idea:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">distribute ::</span> [<span class="dt">Identity</span> a] <span class="ot">-&gt;</span> <span class="dt">Identity</span> [a]
-<span class="ot">distribute ::</span> [<span class="dt">Bool</span> <span class="ot">-&gt;</span> a] <span class="ot">-&gt;</span> (<span class="dt">Bool</span> <span class="ot">-&gt;</span> [a])
-<span class="ot">distribute ::</span> [<span class="dt">TPossible</span> a] <span class="ot">-&gt;</span> <span class="dt">TPossible</span> [a]</code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb7-1" data-line-number="1"><span class="ot">distribute ::</span> [<span class="dt">Identity</span> a] <span class="ot">-&gt;</span> <span class="dt">Identity</span> [a]</a>
+<a class="sourceLine" id="cb7-2" data-line-number="2"><span class="ot">distribute ::</span> [<span class="dt">Bool</span> <span class="ot">-&gt;</span> a] <span class="ot">-&gt;</span> (<span class="dt">Bool</span> <span class="ot">-&gt;</span> [a])</a>
+<a class="sourceLine" id="cb7-3" data-line-number="3"><span class="ot">distribute ::</span> [<span class="dt">TPossible</span> a] <span class="ot">-&gt;</span> <span class="dt">TPossible</span> [a]</a></code></pre></div>
 <p>The list here could be ANY functor, I just used lists because it's something most people are familiar with. In many cases sequence and distribute are interchangeable since a lot of types have reasonableApplicative instances, but it's important to note that <code>distribute</code> pulls a distributive functor OUT from any wrapping functor while <code>sequence</code> from Data.Traversable pushes a traversable INTO a wrapping Applicative.</p>
 <p>A good intuition for determining whether a functor is distributive is to ask whether values of that functor (f a) always have the same number of elements of 'a'. If they do, and they don't have extra information aside from their structure, then it's probably distributive. Note that this means that we actually can't define Distributive for finite-length lists, give it a try if you don't believe me!</p>
 <p>We've got exactly two slots in EVERY <code>TPossible</code> so we can implement distribute by creating an outer <code>TPossible</code> where the left slot is the functor containing all the left values and likewise for the right slot.</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Distributive</span> <span class="dt">TPossible</span> <span class="kw">where</span>
-<span class="ot">  distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (<span class="dt">TPossible</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> (f a)
-  distribute fga <span class="fu">=</span> <span class="dt">TPossible</span> (fmap leftward fga) (fmap rightward fga)</code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" data-line-number="1"><span class="kw">instance</span> <span class="dt">Distributive</span> <span class="dt">TPossible</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb8-2" data-line-number="2"><span class="ot">  distribute ::</span> <span class="dt">Functor</span> f <span class="ot">=&gt;</span> f (<span class="dt">TPossible</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> (f a)</a>
+<a class="sourceLine" id="cb8-3" data-line-number="3">  distribute fga <span class="fu">=</span> <span class="dt">TPossible</span> (fmap leftward fga) (fmap rightward fga)</a></code></pre></div>
 <p>Now that's out of the way, let's get back to Representable! Remembering our previous definition <code>TPossible</code> is Representable because it has exactly two slots, a left and a right which can be indexed by <code>TChoice</code>! We need 3 things for an instance of Representable:</p>
 <ul>
 <li>A type which represents our index (called Rep)</li>
 <li><code>index</code> which pulls out the value at a given index.</li>
 <li><code>tabulate</code> which builds up an object from a function.</li>
 </ul>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Representable</span> <span class="dt">TPossible</span> <span class="kw">where</span>
-  <span class="kw">type</span> <span class="dt">Rep</span> <span class="dt">TPossible</span> <span class="fu">=</span> <span class="dt">TChoice</span>
-
-<span class="ot">  index ::</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> a
-  index (<span class="dt">TPossible</span> l _) <span class="dt">L</span> <span class="fu">=</span> l
-  index (<span class="dt">TPossible</span> _ r) <span class="dt">R</span> <span class="fu">=</span> r
-
-<span class="ot">  tabulate ::</span> (<span class="dt">TChoice</span> <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> a
-  tabulate describe <span class="fu">=</span> <span class="dt">TPossible</span> (describe <span class="dt">L</span>) (describe <span class="dt">R</span>)</code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="kw">instance</span> <span class="dt">Representable</span> <span class="dt">TPossible</span> <span class="kw">where</span></a>
+<a class="sourceLine" id="cb9-2" data-line-number="2">  <span class="kw">type</span> <span class="dt">Rep</span> <span class="dt">TPossible</span> <span class="fu">=</span> <span class="dt">TChoice</span></a>
+<a class="sourceLine" id="cb9-3" data-line-number="3"></a>
+<a class="sourceLine" id="cb9-4" data-line-number="4"><span class="ot">  index ::</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> a</a>
+<a class="sourceLine" id="cb9-5" data-line-number="5">  index (<span class="dt">TPossible</span> l _) <span class="dt">L</span> <span class="fu">=</span> l</a>
+<a class="sourceLine" id="cb9-6" data-line-number="6">  index (<span class="dt">TPossible</span> _ r) <span class="dt">R</span> <span class="fu">=</span> r</a>
+<a class="sourceLine" id="cb9-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb9-8" data-line-number="8"><span class="ot">  tabulate ::</span> (<span class="dt">TChoice</span> <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">TPossible</span> a</a>
+<a class="sourceLine" id="cb9-9" data-line-number="9">  tabulate describe <span class="fu">=</span> <span class="dt">TPossible</span> (describe <span class="dt">L</span>) (describe <span class="dt">R</span>)</a></code></pre></div>
 <p>We're moving along quick! We've got the necessary tools to index into our <code>TPossible</code> structure, which we can use to follow a 'path' through the zipper to find an element, but currently we only have a way to represent a single choice of direction at once. We can say we want to move right using 'R', but then we're stuck! Similarly with <code>TPossible</code> we have places to store the value to the left and right, but can't check the value at the current position! We can solve the problem by wrapping our <code>TPossible</code> in Cofree!</p>
 <p>Cofree allows us to promote a functor that we have into a Comonad by ensuring we always have an element in focus and that we have a way to move around amongst possible options while still maintaining a focus. It does this by using an infinitely recursive structure which wraps around a given functor (in our case <code>TPossible</code>). Let's build up a few of these structures by combining <code>TPossible</code> with Cofree! (:&lt;) is the Cofree constructor and has the following structure: <code>a :&lt; f (Cofree f a)</code>.</p>
 <p>Lucky for us, if we have a Representable instance for a functor f, we get Representable of Cofree f for free! We can cheat a little and use our Representable class to build up the data structure for us by simply providing a describe function to 'tabulate' which returns the value we want to appear at any given index. Remember, the index we chose for <code>TPossible</code> is <code>TChoice</code>. The index for <code>Cofree TPossible</code> is a Sequence of <code>TChoice</code>!</p>
 <p>Let's build our first actual 'Tape' using tabulate with our Cofree Representable instance! Here's an infinite number-line going out in both directions from our focus:</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">relativePosition ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>
-relativePosition <span class="fu">=</span> sum <span class="fu">.</span> fmap valOf
-  <span class="kw">where</span>
-    valOf <span class="dt">L</span> <span class="fu">=</span> (<span class="fu">-</span><span class="dv">1</span>)
-    valOf <span class="dt">R</span> <span class="fu">=</span> <span class="dv">1</span>
-
-<span class="ot">numberLine ::</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> <span class="dt">Int</span>
-numberLine <span class="fu">=</span> tabulate relativePosition</code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="ot">relativePosition ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb10-2" data-line-number="2">relativePosition <span class="fu">=</span> sum <span class="fu">.</span> fmap valOf</a>
+<a class="sourceLine" id="cb10-3" data-line-number="3">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb10-4" data-line-number="4">    valOf <span class="dt">L</span> <span class="fu">=</span> (<span class="fu">-</span><span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb10-5" data-line-number="5">    valOf <span class="dt">R</span> <span class="fu">=</span> <span class="dv">1</span></a>
+<a class="sourceLine" id="cb10-6" data-line-number="6"></a>
+<a class="sourceLine" id="cb10-7" data-line-number="7"><span class="ot">numberLine ::</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb10-8" data-line-number="8">numberLine <span class="fu">=</span> tabulate relativePosition</a></code></pre></div>
 <p>Kinda weird to look at eh? Effectively we're saying that if we move left the position is 1 less than whatever we were at before, and moving right adds one to the previous total. You could also write a recursive version of <code>describe</code> which calculates the result by pulling each index off of the sequence and returns the result! Let's look at another example where we want a zipper into a finite list!</p>
 <p>We'll define a function which 'projects' a list into an infinite Cofree; we define the behaviour such that moving left 'off the edge' just leaves you at the leftmost element and similar with the right. I'm going to re-use our previous helper 'relativePosition' here, but this time I'll use it to index into a list! We'll put some checks in place to ensure we never get an index which is out of bounds, if we're given an out of bounds index we'll just give the first or last element respectively; i.e. the zipper will never 'fall off the end'</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">project ::</span> <span class="dt">NE.NonEmpty</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a
-project l <span class="fu">=</span> tabulate describe
-  <span class="kw">where</span>
-    describe <span class="fu">=</span> (l <span class="fu">NE.!!</span>) <span class="fu">.</span> foldl go <span class="dv">0</span>
-    maxIndex <span class="fu">=</span> length l <span class="fu">-</span> <span class="dv">1</span>
-    minIndex <span class="fu">=</span> <span class="dv">0</span>
-    go n <span class="dt">L</span> <span class="fu">=</span> max minIndex (n <span class="fu">-</span> <span class="dv">1</span>)
-    go n <span class="dt">R</span> <span class="fu">=</span> min maxIndex (n <span class="fu">+</span> <span class="dv">1</span>)
-
-<span class="ot">elems ::</span> <span class="dt">NE.NonEmpty</span> <span class="dt">String</span>
-elems <span class="fu">=</span> <span class="st">&quot;one&quot;</span> <span class="fu">NE.:|</span> [<span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb11-1" data-line-number="1"><span class="ot">project ::</span> <span class="dt">NE.NonEmpty</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a</a>
+<a class="sourceLine" id="cb11-2" data-line-number="2">project l <span class="fu">=</span> tabulate describe</a>
+<a class="sourceLine" id="cb11-3" data-line-number="3">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb11-4" data-line-number="4">    describe <span class="fu">=</span> (l <span class="fu">NE.!!</span>) <span class="fu">.</span> foldl go <span class="dv">0</span></a>
+<a class="sourceLine" id="cb11-5" data-line-number="5">    maxIndex <span class="fu">=</span> length l <span class="fu">-</span> <span class="dv">1</span></a>
+<a class="sourceLine" id="cb11-6" data-line-number="6">    minIndex <span class="fu">=</span> <span class="dv">0</span></a>
+<a class="sourceLine" id="cb11-7" data-line-number="7">    go n <span class="dt">L</span> <span class="fu">=</span> max minIndex (n <span class="fu">-</span> <span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb11-8" data-line-number="8">    go n <span class="dt">R</span> <span class="fu">=</span> min maxIndex (n <span class="fu">+</span> <span class="dv">1</span>)</a>
+<a class="sourceLine" id="cb11-9" data-line-number="9"></a>
+<a class="sourceLine" id="cb11-10" data-line-number="10"><span class="ot">elems ::</span> <span class="dt">NE.NonEmpty</span> <span class="dt">String</span></a>
+<a class="sourceLine" id="cb11-11" data-line-number="11">elems <span class="fu">=</span> <span class="st">&quot;one&quot;</span> <span class="fu">NE.:|</span> [<span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</a></code></pre></div>
 <p>Now we can write a sequence of directions to form a path and see where we end up! Remember, the zipper 'sticks' to the ends if we try and go off!</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">path ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span>
-path <span class="fu">=</span> S.fromList [<span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">L</span>]</code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb12-1" data-line-number="1"><span class="ot">path ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span></a>
+<a class="sourceLine" id="cb12-2" data-line-number="2">path <span class="fu">=</span> S.fromList [<span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">R</span>, <span class="dt">L</span>]</a></code></pre></div>
 <p>Now we can <code>index (project elems) path</code> to get &quot;two&quot;!</p>
 <p>All this talk and we still haven't mentioned Comonad yet! Well lucky us; the 'free' package describes an instance of Comonad for all <code>(Functor f =&gt; Cofree f a)</code>! So our <code>(Cofree TPossible a)</code> is a Comonad over a for free! Remember that a Comonad instance gives us access to <code>extend</code>, <code>extract</code> and <code>duplicate</code> functions. You can see their types in <a href="https://hackage.haskell.org/package/comonad-5/docs/Control-Co%20monad.html#t:Comonad">Control.Comonad</a>.</p>
 <p>We already have a way to extract an element at a given position via 'index', but don't really have a way to move our zipper WITHOUT extracting; don't fret though, we can describe this behaviour in terms of our new Comonad instance by using extend!</p>
-<div class="sourceCode"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">moveTo ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a
-moveTo ind <span class="fu">=</span> extend (\cfr <span class="ot">-&gt;</span> index cfr ind)</code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb13-1" data-line-number="1"><span class="ot">moveTo ::</span> <span class="dt">S.Seq</span> <span class="dt">TChoice</span> <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a <span class="ot">-&gt;</span> <span class="dt">Cofree</span> <span class="dt">TPossible</span> a</a>
+<a class="sourceLine" id="cb13-2" data-line-number="2">moveTo ind <span class="fu">=</span> extend (\cfr <span class="ot">-&gt;</span> index cfr ind)</a></code></pre></div>
 <p>Great! Extend works by duplicating the Comonad meaning we'll have a <code>(Cofree TPossible (Cofree TPossible a))</code>, then it fmaps over the duplicated parts with the given function. The function 'move' will move the element in each slot of the Cofree over by a given amount, which is the same result as 'scanning' our Tape over to a given position.</p>
-<p>Cool stuff! I hope you've learned a little about Distributive, Representable, Comonads, Cofree, and zippers! If you have any questions find me on twitter <span class="citation">@chrislpenner</span></p>
+<p>Cool stuff! I hope you've learned a little about Distributive, Representable, Comonads, Cofree, and zippers! If you have any questions find me on twitter @chrislpenner</p>
 <p>Cheers!</p>
 
         <br>
@@ -873,19 +873,19 @@ moveTo ind <span class="fu">=</span> extend (\cfr <span class="ot">-&gt;</span> 
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="http://chrispenner.ca/posts/representable-cofree-zippers" data-text="Check out: Zippers using Representable and Cofree - " data-via="chrislpenner">Tweet</a>
+                data-url="http://chrispenner.ca" data-text="Check out: Zippers using Representable and Cofree - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="http://chrispenner.ca/posts/representable-cofree-zippers" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+            <div class="fb-like" data-href="http://chrispenner.ca" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
 <!-- Disqus Comments -->
 <!-- <div id="disqus_thread"></div> -->
 <!-- <script type="text/javascript"> -->
 <!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = '/posts/representable-cofree-zippers'; -->
-<!--     var disqus_url = 'http://chrispenner.ca/posts/representable-cofree-zippers'; -->
+<!--     var disqus_identifier = ''; -->
+<!--     var disqus_url = 'http://chrispenner.ca'; -->
 
 <!-- (function() { -->
     <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
