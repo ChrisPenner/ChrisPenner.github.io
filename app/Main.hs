@@ -86,7 +86,7 @@ data Post = Post
   , author :: String
   , content :: String
   , url :: String
-  , image :: String
+  , image :: Maybe String
   , tags :: [String]
   , nextPostURL :: Maybe String
   , prevPostURL :: Maybe String
@@ -107,7 +107,7 @@ instance FromJSON Post where
         nextPostURL = Nothing
         prevPostURL = Nothing
         srcPath = v ^. key "srcPath" . _String . unpacked
-        image = v ^. key "image" . _String . unpacked
+        image = v ^? key "image" . _String . unpacked
      in return Post {..}
 
 instance ToJSON Post
