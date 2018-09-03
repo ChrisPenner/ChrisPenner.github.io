@@ -1,10 +1,10 @@
 ---
 title: "Update Monads: Generalizing over Reader/Writer/State"
 author: Chris Penner
-date: Sept 1, 2018
+date: Sept 3, 2018
 tags: [programming, haskell]
 description: "We explore the applications and implementation of a generalized version of Reader/Writer/State monads called UpdateT."
-image: typesafe-api-versioning/numbers.jpg
+image: update-monad/change.jpg
 ---
 
 Today we're going to take a peek at the Update monad! It's a monad which was
@@ -136,11 +136,15 @@ only `get` **state**. We can formalize the expected relationship between these
 methods with these laws I made up (take with several dollops of salt):
 
 ```haskell
+-- Applying the 'empty' action to your state shouldn't change your state
+applyAction mempty == id
+
 -- Putting an action and then another action should be the same as 
 -- putting the combination of the two actions.
 -- This law effectively enforces that `bind` is 
 -- employing your monoid as expected
 putAction p >> putAction q == putAction (p `mappend` q)
+
 -- We expect that when we 'put' an action that it gets applied to the state
 -- and that the change is visible immediately
 -- This law enforces that your implementation of bind 
@@ -324,6 +328,14 @@ yourself, but here are a few ideas to start with!
 
 Customizations:
 
+- `Update w () a` with `applyAction _ () = ()`
+    - A simple implementation of `Writer`!
+    - The state doesn't matter; only the monoidal actions are tracked!
+
+- `Update () r a` with `applyAction () r = r`
+    - A simple implementation of `Reader`!
+    - There's no sensible updates to do; so your state always stays the same.
+
 - `Update (Last s) s a` with `applyAction (Last p) s = fromMaybe s p`
     - This is the state monad implemented in Update!
     - `get == getState` 
@@ -339,6 +351,32 @@ Customizations:
 - `Update Any Bool a` with `applyAction (Any b) s = b || s`
     - You could implement a short-circuiting approach where future actions don't bother running if any previous
         action has succeeded! You can flip the logic using `All` and `&&`.
+
+## Bonus: Performance
+
+The definition of the Update monad given here is quite simple because it's the
+easiest to explain, but there are a few problems with it; the most notable is
+that it ONLY passes along the new monoidal sum; NOT the edited state from step
+to step. In mathematic terms it's still correct since we can compute an
+up-to-date version of the state; but we have to compute it from scratch every
+time we run an action! Clearly not great for performance! Ironically we can provide
+a more optimal version using the State monad which we've generalized over! We DO still
+need a dependency on `ApplyAction p s` though, so keep that in mind. If we have one available
+we can do something like this:
+
+```haskell
+instance ApplyAction p s => MonadUpdate (State (p, s)) p s where
+  putAction p' = modify (\(p, s) -> (p <> p', applyAction p' s))
+  getState = snd <$> get
+```
+
+Technically we don't even need to keep track of the monoidal sum as we go
+along; there's no need for it! Unfortunately due to FunctionalDependencies in our
+MonadUpdate class GHC gets mad if it doesn't show up in our State Monad **somewhere**.
+This implementation keeps track of the latest state and just applies updates as it goes
+along, giving us a more efficient implementation. Note that using `put` or `modify` directly
+will probably cause some unexpected behaviour in your Update Monad, so you may want to wrap
+your `State` in a newtype first to prevent anyone from messing with the internals.
 
 -------------------------------------------------------------------------------
 
