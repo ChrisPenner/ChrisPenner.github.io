@@ -37,11 +37,11 @@ resolver: lts-11.15
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
-- '../slick'
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-# extra-deps:
-# - slick-0.1.0.2
+extra-deps:
+- slick-0.1.1.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}
