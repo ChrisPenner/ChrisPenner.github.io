@@ -1,7 +1,7 @@
 ---
 title: "Postman API Explorer: You've got mail!"
 author: Chris Penner
-date: Jun 2, 2018
+date: Jun 3, 2018
 tags: [programming, workflow]
 description: A guide to using Postman for API exploration and testing
 image: postman/mail.jpg
