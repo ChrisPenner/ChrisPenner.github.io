@@ -3,7 +3,7 @@ title: "Update Monads: Generalizing over Reader/Writer/State"
 author: Chris Penner
 date: Sept 1, 2018
 tags: [programming, haskell]
-description: We explore the applications and implementation of a generalized version of Reader/Writer/State monads called UpdateT.
+description: "We explore the applications and implementation of a generalized version of Reader/Writer/State monads called UpdateT."
 image: typesafe-api-versioning/numbers.jpg
 ---
 
@@ -18,6 +18,17 @@ of those tasks. It's definitely still worth checking out though; not only is it
 interesting, there are a few things it handles quite elegantly that might be a
 bit awkward to do in other ways.
 
+For readers who've spent a bit of time in Javascript land you may notice that
+the Update Monad is basically a formalization of the [Flux
+architecture](https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial),
+most commonly associated with the Redux library; although of course the Update
+Monad paper came first 😉. Most of the concepts carry over in some form. The
+`Store` in redux corresponds to the state of the Update monad, the `Action`s in
+Redux correspond directly to our monoidal Actions in the Update monad, and the
+view and dispatcher are left up to the implementor, but could be likened to a
+base monad in a monad transformer stack which could render, react, or get user
+input (e.g. IO).
+
 Heads up; this probably isn't a great post for absolute beginners, you'll want
 to have a decent understanding of [monoids](https://wiki.haskell.org/Monoid)
 and how [StateT](https://wiki.haskell.org/State_Monad) works before you dive in
@@ -29,68 +40,11 @@ both the `Reader` and `Writer` monads! This means ways that `State` can do
 EVERYTHING that `Reader` and `Writer` can do, i.e. you can implement either of
 them using the State monad if you want to; but as we know, `State` can also do
 **more**! State can not only `get` and `put` state, but the combination of
-these primitives means we can `modify` state too! Let's take a quick peek at
-how we can implement `Reader` and `Writer` using `State`. Again, I assume you
-understand State itself is implemented, so I'll just use the version from mtl
-in the following examples. I'm going to implement them as newtype wrappers
-around `StateT` since `StateT` already has different instances for these
-type-classes.
-
-```haskell
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
-module State where
-
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Writer
-
-newtype StateReader r a =
-  StateReader (State r a)
-  deriving (Functor, Applicative, Monad)
-
-instance MonadReader r (StateReader r) where
-  -- ask just returns the state
-  ask = StateReader get
-  local mod (StateReader m) =
-    StateReader $
-      -- We want to keep track the initial state so 
-      -- we can set it back after we temporarily edit our state.
-     do
-      before <- get
-      modify mod
-      a <- m
-      put before
-      return a
-
-newtype StateWriter w a =
-  StateWriter (State w a)
-  deriving (Functor, Applicative, Monad)
-
-instance Monoid w => MonadWriter w (StateWriter w) where
-  -- tell just mappends onto our state
-  tell m = StateWriter (modify (`mappend` m))
-  -- listen collects some new state which we return, 
-  -- then we apply it to our running tally.
-  listen (StateWriter m) =
-    let (a, s) = runState m mempty
-     in tell s >> return (a, s)
-  -- pass runs some action in our monad which 
-  -- results in a function which
-  -- we allow to modify the new state before 
-  -- we append it to the state we've
-  -- already collected.
-  pass (StateWriter m) =
-    let ((a, f), s) = runState m mempty
-     in tell (f s) >> return a
-```
-
-Hopefully that helps clarify how State is "more powerful" and thus "more
-general" than Reader and Writer!
-
-But we're not here for the Measly State monad! Let's get to the meat.
+these primitives means we can `modify` state too! I'll leave it up to you to
+implement `Reader` and `Writer` in terms of `State`, but basically `ask = get`
+and `tell w = modify (<> w)`. In a similar way, the primitives provided by
+`Update` allow you to implement the interface of `State`; as well as do some
+other cool things!
 
 ## Structure of the Update Monad
 
@@ -154,7 +108,7 @@ to view any previous actions which may have occurred; just like the Writer monad
 can't see any of the things submitted with `tell` in previous steps.
 
 Now that we've implemented our Update Monad we've got our `>>=` and `return`; but
-how do we actually accomplish anything with it? There's not `MonadUpdate` type-class
+how do we actually accomplish anything with it? There's no `MonadUpdate` type-class
 provided in the paper, but here's my personal take on
 how to get some utility out of it, I've narrowed it down to two methods
 which seem to encompass the idea behind the Update Monad:
@@ -194,6 +148,15 @@ putAction p >> putAction q == putAction (p `mappend` q)
 applyAction p <$> getState == putAction p >> getState
 ```
 
+Okay! Now of course we have to implement `MonadUpdate` for our `Update` monad;
+easy-peasy:
+
+```haskell
+instance (ApplyAction p s) => MonadUpdate (Update p s) p s where
+  putAction p = Update $ \_ -> (p, ())
+  getState = Update $ \s -> (mempty, s)
+```
+
 All the plumbing is set up! Let's start looking into some actual use-cases!
 I'll start by fully describing one particular use-case so we get an
 understanding of how this all works, then we'll experiment by tweaking our
@@ -212,12 +175,12 @@ of how many dollars we have in the account!
 Let's whip up the data types and operations we'll need:
 
 ```haskell
--- Simple type to track our bank balance
+-- Simple type to keep track our bank balance
 newtype BankBalance =
   BankBalance Int
   deriving (Eq, Ord, Show)
 
--- Three types of actions we can take on our account
+-- The three types of actions we can take on our account
 data AccountAction
   = Deposit Int
   | Withdraw Int
@@ -230,8 +193,9 @@ processTransaction (Deposit n) (BankBalance b)
     = BankBalance (b + n)
 processTransaction (Withdraw n) (BankBalance b) 
     = BankBalance (b - n)
+
 -- This is a gross oversimplification...
--- I really hope my bank does something smarter
+-- I really hope my bank does something smarter than this
 -- We (kinda sorta) add 10% interest, truncating any cents.
 -- Who likes pocket-change anyways ¯\_(ツ)_/¯
 processTransaction ApplyInterest (BankBalance b) 
@@ -259,10 +223,11 @@ these properties; but one in particular stands out (I can already hear some of
 you shouting it at your screens). That's right! The [Free
 Monoid](https://en.wikipedia.org/wiki/Free_monoid) A.K.A. the List Monoid!
 Lists are kind of a special monoid in that they can turn ANY type into a monoid
-for **free**! We get `mappend == (++)` and `mempty == []`. This means that instead
-of *actually* combining things we kinda just collect them all, but fear not it still
-satisfies all the monoid laws correctly. This isn't a post on Free Monoids, though so
-we'll upgrade our `AccountAction` to `[AccountAction]` and move on:
+for **free**! We get `mappend == (++)` and `mempty == []`. This means that
+instead of *actually* combining things we kinda just collect them all, but fear
+not it still satisfies all the monoid laws correctly. This isn't a post on Free
+Monoids though, so we'll upgrade our `AccountAction` to `[AccountAction]` and
+move on:
 
 ```haskell
 instance ApplyAction [AccountAction] BankBalance where
@@ -321,11 +286,16 @@ $> testBankSystem
 True
 ```
 
-Cool stuff! We can write the tests for our business logic without worrying about
-the impure ways we'll probably be getting those actions (like `IO`). This
+Cool stuff! We can write the tests for our business logic without worrying
+about the impure ways we'll probably be getting those actions (like `IO`). This
 separation makes complicated business logic pretty easy to test, and we can
-write tests for the 'glue' code with confidence that the logic of our actions
-is correct.
+write separate tests for the 'glue' code with confidence that the logic of our
+actions is correct. Note that using an impure base monad like IO could
+certainly cause the list of actions which are collected to change, but the list
+of actions which is collected **fully describes** the state changes which take
+place; and so testing only the application of actions is sufficient for testing
+state updates.
+
 
 There's really only so much we can do with `Update` alone, but it's pretty easy
 to write an `UpdateT` transformer! I'll leave you to check out the
