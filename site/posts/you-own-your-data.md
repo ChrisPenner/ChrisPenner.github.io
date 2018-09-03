@@ -4,6 +4,7 @@ author: Chris Penner
 date: Sep 26, 2014
 tags: [open-source]
 image: security-vs-privacy.jpg
+description: "Don't give up control over your data"
 ---
 
 First off, thanks for taking the time to read this, please send me a message on twitter [@chrislpenner](http://www.twitter.com/chrislpenner) if you have ideas or comments, and share this post around if you agree with it.

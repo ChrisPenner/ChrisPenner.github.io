@@ -3,7 +3,7 @@ title: Semantic Versioning
 author: Chris Penner
 date: Apr 2, 2015
 tags: [programming, open-source]
-description:
+description: "Semantic versioning helps, use it!"
 image: versioning.jpg
 ---
 

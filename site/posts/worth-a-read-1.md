@@ -4,6 +4,7 @@ author: Chris Penner
 date: Oct 31, 2014
 categories: Worth-a-read
 tags: [css, typography, python, design]
+description: "Check out these posts!"
 ---
 
 This marks the beginning of a new feature, **Worth a Read**, which will contain a quick

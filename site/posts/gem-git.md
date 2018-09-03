@@ -10,6 +10,7 @@ type: Version-Control
 program: Git
 image: git-logo.png
 links: Git|http://git-scm.com/, Github|https://github.com/git/git
+description: "Check out git"
 ---
 
 Speaking of open-source gems, it's tough to make it too far into this topic

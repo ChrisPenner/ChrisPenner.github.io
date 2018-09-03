@@ -5,6 +5,7 @@ date: Feb 13, 2015
 categories: worth-a-read
 tags: [unix]
 image: unix-prompt.png
+description: "Check out these posts!"
 ---
 
 Okay! This time we're reading about cool and useful Unix tools. We've got some

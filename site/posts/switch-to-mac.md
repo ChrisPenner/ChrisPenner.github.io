@@ -4,6 +4,7 @@ author: Chris Penner
 date: May 19, 2014
 categories: thoughts
 image: the-switch-to-mac.png
+description: "I switched to using a Mac, and I love it"
 ---
 
 The time had come to replace my slowly fading laptop, it had served me well in the last four years, but all good things must come to an end. I was faced with a choice: which operating system do I commit to for my next four years? As a Computer Science student I wanted to make the right choice. These days most things I could ever want to do are possible on any one of the big three (Windows, OSX or Linux), so it was mostly a choice of form factor and style. How would each choice affect my experience throughout the years to come? Would I have to give up some long-loved programs that I had invested my time and money into? How could it affect my workflow? Here's a bit about my past experience with each OS.

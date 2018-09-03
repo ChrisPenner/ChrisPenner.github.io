@@ -4,6 +4,7 @@ author: Chris Penner
 date: Feb 6, 2015
 tags: [vim]
 image: vim-vs-emacs.png
+description: "I've tried out both; here are some thoughts"
 ---
 
 So about a year ago I realized that as someone going into Computer Science as

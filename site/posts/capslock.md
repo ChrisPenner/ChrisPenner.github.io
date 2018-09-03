@@ -3,6 +3,7 @@ title: Caps-lock
 author: Chris Penner
 date: May 25, 2014
 tags: [design, ux]
+description: "Caps lock is poorly designed. Read to find out why"
 image: capslock.png
 ---
 

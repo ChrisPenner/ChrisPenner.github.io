@@ -4,6 +4,7 @@ author: Chris Penner
 date: Jul 26, 2014
 tags: [design, ux]
 image: legacy-in-design.png
+description: "Things that come before greatly affect the success of our design"
 ---
 
 Designers often feel pressure to come up with something new and revolutionary. They want to make their mark on the design world by revolutionizing some new concept or idea. Certainly this form of thinking is a good thing; it fuels innovation and leads to exciting new possibilities that others wouldn't have ever contrived. However, humans build habits, and if we're designing for humans we simply must take this into account.

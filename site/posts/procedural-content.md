@@ -4,6 +4,7 @@ author: Chris Penner
 date: Jan 3, 2015
 tags: [programming]
 image: no-mans-sky.png
+description: "Procedural generation allows us to build incredibly vast and rich systems"
 ---
 
 I 've been noticing a trend in gaming recently towards procedurally

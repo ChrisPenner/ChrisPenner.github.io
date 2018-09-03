@@ -9,6 +9,7 @@ state: Released
 type: Icon-font
 image: font-awesome-logo.png
 links: Font-Awesome|http://fontawesome.io/, Github|https://github.com/FortAwesome/Font-Awesome
+description: "Check out Font-Awesome"
 ---
 
 Not all open-source projects are software or code! Here's a project that has

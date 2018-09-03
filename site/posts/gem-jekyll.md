@@ -10,6 +10,7 @@ type: Web-Framework
 program: Jekyll
 image: jekyll-logo.png
 links: Jekyll|http://jekyllrb.com/, Github|https://github.com/jekyll/jekyll
+description: "Check out Jekyll"
 ---
 
 Jekyll is a web-framework written in Ruby for creating *static* pages.

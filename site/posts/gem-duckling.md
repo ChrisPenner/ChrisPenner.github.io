@@ -8,6 +8,7 @@ language: Clojure
 type: Dynamic Customizable Parser
 image: duckling.png
 links: Duckling|http://duckling-lib.org/, Github|https://github.com/wit-ai/duckling
+description: "Check out the Duckling project"
 ---
 
 Duckling is a very interesting project that I think exemplifies many great
