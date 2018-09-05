@@ -1,5 +1,5 @@
 ---
-title: "Update Monads: Execution with Auditing"
+title: "Update Monads: Variation on State Monads"
 author: Chris Penner
 date: Sep 3, 2018
 tags: [programming, haskell]

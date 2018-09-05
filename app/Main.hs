@@ -94,6 +94,7 @@ data Post = Post
   , date :: String
   , srcPath :: String
   , description :: String
+  , slug :: String
   } deriving (Generic, Eq, Ord, Show)
 
 instance FromJSON Post where
@@ -110,6 +111,7 @@ instance FromJSON Post where
         srcPath = v ^. key "srcPath" . _String . unpacked
         image = v ^? key "image" . _String . unpacked
         description = v ^. key "description" . _String . unpacked
+        slug = v ^. key "slug" . _String . unpacked
      in return Post {..}
 
 instance ToJSON Post
@@ -133,7 +135,10 @@ loadPost (PostFilePath postPath) = do
   let postURL = T.pack . srcToURL $ postPath
       withURL = _Object . at "url" ?~ String postURL
       withSrc = _Object . at "srcPath" ?~ String (T.pack srcPath)
-  convert . withSrc . withURL $ postData
+      withSlug =
+        _Object . at "slug" ?~
+        String (T.pack . dropExtension . takeBaseName $ srcPath)
+  convert . withSlug . withSrc . withURL $ postData
 
 buildIndex :: Action [Post] -> Action [Tag] -> FilePath -> Action ()
 buildIndex allPosts allTags out = do
