@@ -2,20 +2,20 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2018-09-05T02:01:43Z</updated>
+  <updated>2018-09-05T02:07:50Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
   <entry>
-      <title>Update Monads: Execution with Auditing</title>
+      <title>Update Monads: Variation on State Monads</title>
       <link href="https://chrispenner.ca/posts/update-monad"/>
       <id>https://chrispenner.ca/posts/update-monad</id>
       <updated>2018-09-03T00:00:00Z</updated>
       <summary>We explore the applications and implementation of a generalized version of Reader/Writer monads.</summary>
       <content type="html"><![CDATA[
-          <img src="https://chrispenner.ca/images/update-monad/change.jpg" alt="Update Monads: Execution with Auditing">
+          <img src="https://chrispenner.ca/images/update-monad/change.jpg" alt="Update Monads: Variation on State Monads">
               <p>Today we're going to take a peek at the Update monad! It's a monad which was formalized and described in <a href="https://danelahman.github.io/papers/types13postproc.pdf">Update Monads: Cointerpreting Directed Containers</a> by Danel Ahman and Tarmo Uustalu. Most folks probably haven't heard of it before, likely because most of what you'd use it for is well encompassed by the Reader, Writer, and State monads. The Update Monad can do everything that Reader, Writer, and State can do, but as a trade-off tends to be less efficient at each of those tasks. It's definitely still worth checking out though; not only is it interesting, there are a few things it handles quite elegantly that might be a bit awkward to do in other ways.</p>
 <p>Heads up; this probably isn't a great post for absolute beginners, you'll want to have a decent understanding of <a href="https://wiki.haskell.org/Monoid">monoids</a> and how <a href="https://wiki.haskell.org/State_Monad">StateT</a> works before you dive in here.</p>
 <p>For readers who've spent a bit of time in Javascript land you may notice that the Update Monad is basically a formalization of the <a href="https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial">Flux architecture</a>, most commonly associated with the Redux library; although of course the Update Monad paper came first 😉. Most of the concepts carry over in some form. The <code>Store</code> in redux corresponds to the state of the Update monad, the <code>Action</code>s in Redux correspond directly to our monoidal Actions in the Update monad, and the view and dispatcher are left up to the implementor, but could be likened to a base monad in a monad transformer stack which could render, react, or get user input (e.g. IO).</p>
