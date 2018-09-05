@@ -1,9 +1,9 @@
 ---
-title: "Update Monads: Generalizing over Reader/Writer/State"
+title: "Update Monads: Execution with Auditing"
 author: Chris Penner
-date: Sept 3, 2018
+date: Sep 3, 2018
 tags: [programming, haskell]
-description: "We explore the applications and implementation of a generalized version of Reader/Writer/State monads called UpdateT."
+description: "We explore the applications and implementation of a generalized version of Reader/Writer monads."
 image: update-monad/change.jpg
 ---
 
