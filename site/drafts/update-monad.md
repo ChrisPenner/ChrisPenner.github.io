@@ -18,6 +18,11 @@ of those tasks. It's definitely still worth checking out though; not only is it
 interesting, there are a few things it handles quite elegantly that might be a
 bit awkward to do in other ways.
 
+Heads up; this probably isn't a great post for absolute beginners, you'll want
+to have a decent understanding of [monoids](https://wiki.haskell.org/Monoid)
+and how [StateT](https://wiki.haskell.org/State_Monad) works before you dive in
+here. 
+
 For readers who've spent a bit of time in Javascript land you may notice that
 the Update Monad is basically a formalization of the [Flux
 architecture](https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial),
@@ -29,34 +34,25 @@ view and dispatcher are left up to the implementor, but could be likened to a
 base monad in a monad transformer stack which could render, react, or get user
 input (e.g. IO).
 
-Heads up; this probably isn't a great post for absolute beginners, you'll want
-to have a decent understanding of [monoids](https://wiki.haskell.org/Monoid)
-and how [StateT](https://wiki.haskell.org/State_Monad) works before you dive in
-here. 
-
-First, what does it mean to say that Update **generalizes** over the `State`
-monad? Well, we can make an analogy by saying that `State` generalizes over
-both the `Reader` and `Writer` monads! This means ways that `State` can do
-EVERYTHING that `Reader` and `Writer` can do, i.e. you can implement either of
-them using the State monad if you want to; but as we know, `State` can also do
-**more**! State can not only `get` and `put` state, but the combination of
-these primitives means we can `modify` state too! I'll leave it up to you to
-implement `Reader` and `Writer` in terms of `State`, but basically `ask = get`
-and `tell w = modify (<> w)`. In a similar way, the primitives provided by
-`Update` allow you to implement the interface of `State`; as well as do some
-other cool things!
+The Update monad is very similar to the State monad; and in fact you can
+implement either of them in terms of the other! Each has tasks at which it
+excels; the Update Monad is good at keeping an audit log of updates and
+limiting computations to a fixed set of permissible updates. State on the
+other hand has a simpler interface, less boiler-plate, and is MUCH more efficient
+at most practical tasks. It's no wonder that `State` won out in the end, but
+the Update monad is still fun to look at!
 
 ## Structure of the Update Monad
 
 The Update Monad kinda looks like Reader, Writer and State got into a horrific
 car accident and are now hopelessly entangled! Each computation receives the
-current computation `state` (like reader) and can result in a monoidal action
-(like writer). The action is them applied to the state according to a helper
+current computation `state` (like `Reader`) and can result in a monoidal action
+(like `Writer`). The action is them applied to the state according to a helper
 typeclass which I'll call `ApplyAction`: it has a single method
 `applyAction :: p -> s -> s`; which applies a given monoidal action `p` to a
 state resulting in a new state. This edited state is passed on to the next
-computation and away we go! Here's my implementation of this idea for a new
-type `Update`.
+computation (like `State`) and away we go! Here's my implementation of this idea for a new
+data type called `Update`.
 
 
 ```haskell
@@ -98,20 +94,21 @@ instance (ApplyAction p s) => Monad (Update s p) where
 
 We could of course also implement an `UpdateT` monad transformer, but for the
 purposes of clarity I find it's easier to understand the concrete `Update`
-type. Hopefully it's relatively clear from the implementation how things fit
-together. Hopefully you can kind of see the similarities to Reader and Writer;
-we are always returning and combining our monoidal actions as we continue
-along, and each action has access to the state, but can't *directly* modify it
-(you may only modify it by providing actions). It's also worth noting that within
-any individual step only the latest `state` is available and it's not possible
-to view any previous actions which may have occurred; just like the Writer monad
-can't see any of the things submitted with `tell` in previous steps.
+type. If you like you can take a peek at some other fun implementations
+[here](https://github.com/chrispenner/update-monad). Hopefully it's relatively
+clear from the implementation how things fit together. Hopefully you can kind
+of see the similarities to Reader and Writer; we are always returning and
+combining our monoidal actions as we continue along, and each action has access
+to the state, but can't *directly* modify it (you may only modify it by
+providing **actions**). It's also worth noting that within any individual step
+has only the latest `state` and it's not possible to view any previous actions
+which may have occurred, just like the Writer monad.
 
-Now that we've implemented our Update Monad we've got our `>>=` and `return`; but
-how do we actually accomplish anything with it? There's no `MonadUpdate` type-class
-provided in the paper, but here's my personal take on
-how to get some utility out of it, I've narrowed it down to two methods
-which seem to encompass the idea behind the Update Monad:
+Now that we've implemented our Update Monad we've got our `>>=` and `return`;
+but how do we actually accomplish anything with it? There's no `MonadUpdate`
+type-class provided in the paper, but here's my personal take on how to get
+some utility out of it, I've narrowed it down to these two methods which seem
+to encompass the core ideas behind the Update Monad:
 
 ```haskell
 {-# LANGUAGE FunctionalDependencies #-}
@@ -127,13 +124,13 @@ class (ApplyAction s p, Monad m) =>
 ```
 
 You'll notice some similarities here too! `putAction` matches the signature for
-both `tell` and `put`, and `getState` matches both `ask` and `get`. This class
-still provides new value though, because unlike Reader and Writer the
-environment and the actions are related to each other through the `ApplyAction`
-class; and unlike `get` and `put` from `State` our `putAction` and `getState`
-operate over **different** types; you can only `put` **actions**, and you can
-only `get` **state**. We can formalize the expected relationship between these
-methods with these laws I made up (take with several dollops of salt):
+`tell`, and `getState` matches `ask`! This class still provides new value
+though, because unlike Reader and Writer the environment and the actions are
+related to each other through the `ApplyAction` class; and unlike `get` and
+`put` from `State` our `putAction` and `getState` operate over **different**
+types; you can only `put` **actions**, and you can only `get` **state**. We can
+formalize the expected relationship between these methods with these laws I
+made up (take with a deluge of salt):
 
 ```haskell
 -- Applying the 'empty' action to your state shouldn't change your state
@@ -168,8 +165,8 @@ monoid or our `applyAction` function.
 
 ## A Concrete Use-Case
 
-Let's pick a use-case I often see used to demonstrate the State monad so we
-can see how our Update monad is similar, but also slightly different!
+Let's pick a use-case which I often see used for demonstrating the State monad so we
+can see how our Update monad is similar, but slightly different!
 
 We're going to build a system which allows users to interact with their bank account!
 We'll have three actions they can perform: `Deposit`, `Withdraw`, and `CollectInterest`.
@@ -267,12 +264,14 @@ Hrmm, a bit clunky that we have to wrap every action with a list, but we could
 pretty easily write a helper `putAction' :: MonadUpdate m [p] s => p -> m ()`
 to help with that. By running the program we can see that we've collected the
 actions in the right order and have 'combined' them all by running `mappend`.
-We also see that our bank balance ends up where we'd expect! This seems to
-be pretty similar to the State Monad, we could write helpers that perform
-each of those actions over the State pretty easily using `modify`; but the
-Update Monad gives us a nice audit log of everything that happened! This means
-we could verify that actions happened in the correct order, or we could run the
-same actions over a different starting state! 
+We also see that our bank balance ends up where we'd expect! This seems to be
+pretty similar to the State Monad, we could write helpers that perform each of
+those actions over the State pretty easily using `modify`; but the Update Monad
+gives us a nice audit log of everything that happened! Not to mention that it
+limits the available actions to ones that we support; users can't just multiply
+their bank balance by 100, they have use the approved actions. This means we
+could verify that actions happened in the correct order, or we could run the
+same actions over a different starting state and see how it works out!
 
 The Update Monad also has a few tricks when it comes to testing your programs.
 Since the only thing that can affect our state is a sequence of actions, we can
@@ -294,12 +293,13 @@ Cool stuff! We can write the tests for our business logic without worrying
 about the impure ways we'll probably be getting those actions (like `IO`). This
 separation makes complicated business logic pretty easy to test, and we can
 write separate tests for the 'glue' code with confidence that the logic of our
-actions is correct. Note that using an impure base monad like IO could
-certainly cause the list of actions which are collected to change, but the list
-of actions which is collected **fully describes** the state changes which take
-place; and so testing only the application of actions is sufficient for testing
-state updates.
-
+actions is correct and that our program **CAN'T** edit our state in an invalid
+way since all updates **must** be performed through the `performTransaction`
+function. Note that using an impure base monad like IO could certainly cause
+the list of actions which are collected to change, but the list of actions
+which is collected **fully describes** the state changes which take place; and
+so testing only the application of actions is sufficient for testing state
+updates.
 
 There's really only so much we can do with `Update` alone, but it's pretty easy
 to write an `UpdateT` transformer! I'll leave you to check out the
@@ -311,9 +311,9 @@ our monad, or use other monads to perform more interesting logic!
 
 ## Customizing the Update Monad with Monoids
 
-Okay! We've got one concrete use-case under our belts and have a pretty
-good understanding of how all this works! But I promised that the Update Monad
-was general! Let's see some cool and weird behaviour!
+Okay! We've got one concrete use-case under our belts and have a pretty good
+understanding of how all this works! let's see what we can tweak to make things
+a bit more interesting!
 
 Something that immediately interested me with the update monad is that there
 are several distinct places to tweak its behaviour without even needing to
@@ -334,7 +334,7 @@ Customizations:
 
 - `Update () r a` with `applyAction () r = r`
     - A simple implementation of `Reader`!
-    - There's no sensible updates to do; so your state always stays the same.
+    - There're no sensible updates to do; so your state always stays the same.
 
 - `Update (Last s) s a` with `applyAction (Last p) s = fromMaybe s p`
     - This is the state monad implemented in Update!
@@ -359,10 +359,10 @@ easiest to explain, but there are a few problems with it; the most notable is
 that it ONLY passes along the new monoidal sum; NOT the edited state from step
 to step. In mathematic terms it's still correct since we can compute an
 up-to-date version of the state; but we have to compute it from scratch every
-time we run an action! Clearly not great for performance! Ironically we can provide
-a more optimal version using the State monad which we've generalized over! We DO still
-need a dependency on `ApplyAction p s` though, so keep that in mind. If we have one available
-we can do something like this:
+time we run an action! Clearly not great for performance! Like I said earlier
+you can actually implement a more efficient version of `MonadUpdate` using
+`State`! We DO still need a dependency on `ApplyAction p s` though, so keep
+that in mind. If we have one available we can do something like this:
 
 ```haskell
 instance ApplyAction p s => MonadUpdate (State (p, s)) p s where
@@ -372,13 +372,11 @@ instance ApplyAction p s => MonadUpdate (State (p, s)) p s where
 
 Technically we don't even need to keep track of the monoidal sum as we go
 along; there's no need for it! Unfortunately due to FunctionalDependencies in our
-MonadUpdate class GHC gets mad if it doesn't show up in our State Monad **somewhere**.
+MonadUpdate class GHC gets mad if it doesn't show up inside our State Monad **somewhere**.
 This implementation keeps track of the latest state and just applies updates as it goes
 along, giving us a more efficient implementation. Note that using `put` or `modify` directly
 will probably cause some unexpected behaviour in your Update Monad, so you may want to wrap
 your `State` in a newtype first to prevent anyone from messing with the internals.
-
--------------------------------------------------------------------------------
 
 Thanks for reading! I'm not perfect and really just go through all this stuff
 in my spare time, so if I've missed something (or you enjoyed the post 😄)
