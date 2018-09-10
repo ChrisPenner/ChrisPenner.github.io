@@ -1,5 +1,5 @@
 ---
-title: "Testing Monads using Constraints"
+title: "Mocking Effects using Constraints"
 author: Chris Penner
 date: Sep 3, 2018
 tags: [programming, haskell, testing]
@@ -233,8 +233,10 @@ runTestM' db (TestM m) = flip evalState db . runExceptT $ m
 ```
 
 Now we have a completely **pure** way of modeling our DB, which we can seed
-with initial data, and we can even inspect the final state if we like! This makes
-writing tests *so* much easier.
+with initial data, and we can even inspect the final state if we like! This
+makes writing tests *so* much easier. We can re-write the `upperCase` test
+without any IO! This means we have fewer dependencies, fewer unknowns, and can
+more directly test the behaviour of the action which we actually care about.
 
 ```haskell
 main :: IO ()
@@ -254,17 +256,18 @@ Nifty!
 
 ## Parameterizing test implementations
 
-The thing about tests is that you often want to **test** weird behaviour! This
-means we'll probably want multiple implementations which behave differently.
-Let's say that we want to test what happens if our DB fails on every single
-call? We **could** implement a whole new `TestM` monad with a new instance for
-`MonadDB` which errors on every call, and this would work fine, but in the real
-world we'll probably be mocking out a half-dozen or more services; that means
-we'll need a half dozen instance for each and every `TestM` we build! I don't feel
-like working overtime, so let's see if we can come up with something cleaner. Just so
-you know I'm not glossing over **too** many details let's expand our example to include
-at least one other mocked service. We'll add some capability to our AppM to
-handle input and output from the console!
+The thing about **test**s is that you often want to **test** unique and
+interesting behaviour! This means we'll probably want multiple implementations
+of our mocked services which each behave differently. Let's say that we want to
+test what happens if our DB fails on every single call? We **could** implement
+a whole new `TestM` monad with a new instance for `MonadDB` which errors on
+every call, and this would work fine, but in the real world we'll probably be
+mocking out a half-dozen services or more! That means we'll need a half dozen
+instances for each and every `TestM` we build! I don't feel like working
+overtime, so let's see if we can come up with something cleaner. It's getting
+tough to talk about this abstractly so let's expand our example to include at
+least one other mocked service. We'll add some capability to our AppM to handle
+input and output from the console!
 
 ```haskell
 class MonadCli m
@@ -292,7 +295,7 @@ storeName = do
 Let's jump into testing it! To do so we'll need to make `TestM` an instance of
 `MonadCli` too! Now that we have multiple concerns going on I'm going to use a
 shared state and add some lenses to make working with everything a bit easier.
-It's a little set up up-front, but from now on adding additional functionality
+It's a bit of set-up up-front, but from now on adding additional functionality
 should be pretty straight-forward!
 
 ```haskell
@@ -365,18 +368,24 @@ main =
         result `shouldBe` Right "Steven"
 ```
 
+Hopefully that comes out green!
+
 Great! So, like I said before we'd like to customize our implementations of
 some of our mocked out services, let's say we want the DB to fail on every
 call! One option would be to wrap `TestM` in a newtype and use
-`GeneralizedNewtypeDeriving` to get back our implementation of `MonadCli` then
-write a NEW instance for `MonadDB` which fails. This still results in an
-`(n*k)` problem though, we need a different newtype for EACH pairing of every
-possible set of behaviours we can imagine! Cartesian products are fun, but not
-when you're writing implementations. Let's solve this problem the way we solve
-all problems in Haskell: Add more type parameters!
+`deriving MonadCli` with `GeneralizedNewtypeDeriving` to get back our
+implementation of `MonadCli` then write a NEW instance for `MonadDB` which
+fails on every call. If we have to do this for every customized behaviour for
+each of our services though this results in an `(n*k)` number of newtypes! We
+need a different newtype for EACH pairing of every possible set of behaviours
+we can imagine! Let's solve this problem the way we solve all problems in
+Haskell: Add more type parameters!
 
-Let's parameterize `TestM` with slots which represent possible implementations of each service.
-To help users know how it works and also prevent incorrect usage we'll qualify the parameters using `DataKinds`!
+## Phantom Data Kinds
+
+Let's parameterize `TestM` with slots which represent possible implementations
+of each service. To help users know how it works and also prevent incorrect
+usage we'll qualify the parameters using `DataKinds`!
 
 
 ```haskell
@@ -389,7 +398,7 @@ data DBImpl
 
 data CliImpl
   = CliUseList
-  | CliFixedVal
+  | CliStatic
 
 newtype TestM (db :: DBImpl) (cli :: CliImpl) a = TestM
   { runTestM :: ExceptT DBError (State TestState) a
@@ -405,8 +414,11 @@ runTestM' startState (TestM m) = flip evalState startState . runExceptT $ m
 ```
 
 Notice that we don't actually need to use these params inside the definition of
-the `TestM` newtype; they're just there as annotations for the compiler. Now let's update
-the instance we've defined already, as well as add some new ones!
+the `TestM` newtype; they're just there as annotations for the compiler, I call
+these 👻 "Phantom Data Kinds" 👻.. Now let's update the instance we've defined
+already to handle the type params, as well as add some new instances!
+
+The instance signatures are the most important part here; but read the rest if you like 🤷‍♂️
 
 ```haskell
 instance MonadDB (TestM DBUseMap cli) String where
@@ -440,23 +452,28 @@ our MonadDB implementation we can have a different implementation for each
 value of the `db :: DBImpl` type param while not caring at all what's in the
 `cli :: CliImpl` parameter! This means that we only need to implement each
 behaviour once, and we can mix and match implementations for different services
-at will! We *do* need to make sure we have a spot to keep the data we need for
-each implementation inside our `TestM` monad stack, but for the vast majority
-of cases you can just carve out a spot in the `State` to keep track of what you
-need. Using lenses means that adding something new won't affect existing
+at will! We *do* need to make sure that there's some way to actually implement
+that behaviour against our `TestM`; but for the vast majority of cases you can
+just carve out a spot in the `State` to keep track of what you need for your
+mock. Using lenses means that adding something new won't affect existing
 implementations.
 
-Whoops; just about forgot that we need a way to pick which behaviour we want
-when we're actually running our tests! `TypeApplications` is a huge help here;
-it's still a smidge messy, but I think it's worth it for the benefits we get in
-return. We use `TypeApplications` to pick which `DBImpl` and `CliImpl` we want
-so that GHC doesn't get mad at us about ambiguous type variables. Use them like this:
+Whoops; just about forgot, we need a way to pick which behaviour we want when
+we're actually running our tests! `TypeApplications` are a huge help here! We
+use `TypeApplications` to pick which `DBImpl` and `CliImpl` we want so that GHC
+doesn't get mad at us about ambiguous type variables. Use them like this:
 
 ```haskell
+{-# LANGUAGE TypeApplications #-}
+
 runTestM' @DBUseMap @CliUseList
             (emptyState & cliInput .~ ["Steven"]) $
             storeName >> getEntity "name"
 ```
+
+Now you can pretty easily keep a separate module where you define `TestM` and
+all of its behaviours and instances, then just use Type Applications to
+specialize your test monad when you run it to get the behaviour you want!
 
 And that wraps up our dive into testing using `mtl-style` constraints! Thanks for joining me!
 
