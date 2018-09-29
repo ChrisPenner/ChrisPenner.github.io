@@ -1,10 +1,10 @@
 ---
 title: "Mocking Effects using Constraints and Phantom Data Kinds"
 author: Chris Penner
-date: Sep 3, 2018
+date: Sep 29, 2018
 tags: [programming, haskell, testing]
 description: "We learn a method to mock multiple effects when writing tests without an exponential explosion of instances."
-image: update-monad/change.jpg
+image: mock-effects-with-data-kinds/phantom.jpg
 ---
 
 This ended up being a pretty long post; if you're pretty comfortable with monad constraints and testing in Haskell
@@ -388,7 +388,7 @@ runTestM' startState (TestM m) = flip evalState startState . runExceptT $ m
 
 Notice that we don't actually need to use these params inside the definition of
 the `TestM` newtype; they're just there as annotations for the compiler, I call
-these 👻 "Phantom Data Kinds" 👻.. Now let's update the instance we've defined
+these 👻 Phantom Data Kinds 👻. Now let's update the instance we've defined
 already to handle the type params, as well as add some new instances!
 
 The instance signatures are the most important part here; but read the rest if you like 🤷‍♂️
@@ -459,64 +459,3 @@ Special thanks to Sandy Maguire A.K.A. isovector for proofreading and helping me
 If you have questions or comments hit me up on
 [Twitter](https://twitter.com/chrislpenner) or
 [Reddit](https://www.reddit.com/user/ChrisPenner)!
-
--------
-
-
-
-
-
-```haskell
-import Data.Char
-
-data Result
-  = Success
-  | Fail String
----------------------------------------
-
-getEntity :: Key -> AppM String
-getEntity key = liftIO $ getByKeyIO key
-
--- Our fictional database returns either Success or Fail from our 'store' database call
--- We just convert it to a DB error and throw it.
-storeEntity :: Key -> String -> AppM ()
-storeEntity key value = do
-  result <- liftIO $ storeByKeyIO key value
-  case result of
-    Success -> return ()
-    Fail msg -> throwError $ DBError msg
-
--- Get a string by key, uppercase it, then store it back.
-upperCase :: Key -> AppM ()
-upperCase key = do
-  thing <- getEntity key
-  storeEntity key (fmap toUpper thing)
-```
-
-
--- We'll use some lenses to help out here; if you're not familiar with lenses
--- don't worry too much, we're doing basically the same thing we did before,
--- just with a bit of nesting ;)
--- We can actually probably do most of it as a one-liner, but let's not get
--- carried away, this isn't a post on lens :3
-instance MonadDB TestM String where
-  getEntity key = do
-    db' <- use db
-    case M.lookup key db' of
-      Nothing -> throwError . DBError $ "didn't find " ++ key ++ " in db"
-      Just v -> return v
-  storeEntity key value = db %= M.insert key value
-
-instance MonadCli TestM where
-  -- We'll just record things we say in our list of output
-  say msg = cliOutput %= (++ [msg])
-  -- We'll pull input from our state as long as we have some.
-  listen = do
-    inputs <- use cliInput
-    case inputs of
-      [] -> return "NO MORE INPUT"
-      (msg:rest) -> cliInput .= rest >> return msg
-
-emptyState :: TestState
-emptyState = TestState {_cliInput = mempty, _cliOutput = mempty, _db = mempty}
-
