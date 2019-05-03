@@ -36,10 +36,10 @@ getOptions = do
 
 ## Options of the high kind
 
-If you're unfamiliar with HKD (higher kinded data); it's a very simple idea
+If you're unfamiliar with HKDT (higher kinded data types); it's a very simple idea
 with some mind bending implications. Many data types are parameterized by a
 value type (e.g. `[a]` is a list is parameterized by the types of values it
-contains); however HKD types are parameterized by some **wrapper** (typically a
+contains); however HKDT are parameterized by some **wrapper** (typically a
 functor, but not always) around the data of the record. Easiest to just show
 an example and see it in practice. Let's define a very simple type to contain
 all the options our app needs:
@@ -54,7 +54,7 @@ data Options_ f =
 ```
 
 Notice that each field is *wrapped* in `f`. I use a `_` suffix as a convention
-to denote that it's an HKD type. `f` could be anything at all of the
+to denote that it's an HKDT. `f` could be anything at all of the
 kind `Type -> Type`; e.g. `Maybe`, `IO`, `Either String`, or even strange
 constructions like `Compose Maybe (Join (Biff (,) IO Reader))` ! You'll
 discover the implications as we go along, so don't worry if you don't get it
@@ -72,7 +72,7 @@ use something more sophisticated in your app; but for the blog post I'll just
 lean on the `Read` typeclass to make a small helper.
 
 ```haskell
-import System.Environment (lookupEnv)
+import System.Environment (lookupEnv, setEnv)
 import Text.Read (readMaybe)
 
 lookupEnv' :: Read a => String -> IO (Maybe a)
@@ -144,7 +144,7 @@ Unfortunately it's not quite so easy as just tacking on a `deriving FromJSON`;
 Since GHC doesn't know what type `f` is, it has a tough time figuring out
 how to derive FromJSON for all of the `f a` fields. No worries though; someone
 thought of that! Time to pull in the [`barbies`](http://hackage.haskell.org/package/barbies)
-library. An incredibly useful tool for working with HKD in general. Add the `barbies`
+library. An incredibly useful tool for working with HKDT in general. Add the `barbies`
 library to your project, then we'll derive a few handy instances:
 
 ```haskell
@@ -269,14 +269,212 @@ bsequence :: Options_ (Compose ((->) A.Value) Maybe)
 ```
 
 We use the `->` applicative (also known as `Reader`) to extract the function to
-the outside of the structure! Hopefully this demonstrates the flexibility of
-the technique, we can provide an arbitrary lens chain to extract the value for
-each setting, maybe it's overkill in this case, but I can think of a few
-situations where it would be pretty handy.
+the outside of the structure! This of course requires that the individual
+fields can be traversed; implying the `TraversableB` constraint. Hopefully this
+demonstrates the flexibility of the technique, we can provide an arbitrary lens
+chain to extract the value for each setting, maybe it's overkill in this case,
+but I can think of a few situations where it would be pretty handy.
 
 This is dragging on a bit; let's see how we can actually use these things!
 
 ## Combining Options Objects
 
+Now that we've got two different ways to collect options for our program let's
+see how we can mix and match them. Let's write a simple function in IO for getting
+and combining our options parsers.
+
+```haskell
+import Control.Applicative
+
+-- Fake config file reader for convenience
+readConfigFile :: IO A.Value
+readConfigFile =
+    pure $ A.object [ "host" A..= A.String "example.com"
+                    , "verbosity" A..= A.Number 42
+                    ]
+
+getOptions :: IO (Options_ Maybe)
+getOptions = do
+    setEnv "NUM_THREADS" "1337" -- set an env var for easy testing
+    configJson <- readConfigFile
+    bzipWith (<|>) <$> envOpts <*> pure (jsonOptsCustom configJson)
+```
+
+In `getOptions` once we've collected our config file from wherever we like we
+can now run `envOpts` in IO to populate it with values, likewise by running our
+`jsonOptsCustom` with a JSON value. We lift the latter into IO with `pure` so
+we can use `<*>` notation. Now we need to decide what semantics we want when we
+hit values that overlap! I've decided to use `<|>` from `Alternative` to
+combine our `Maybe` values. This basically means "take the first non-Nothing
+value and ignore the rest". That means in our case that the first setting to be
+"set" wins out. `bzipWith` performs element-wise zipping of each element within our
+`Options_` record, with the caveat that the function you give it must work over
+any possible `a` contained inside. In our case the type is specialized to:
+
+```haskell
+bzipWith  :: (forall a. Maybe a -> Maybe a -> Maybe a)
+          -> Options_ Maybe -> Options_ Maybe -> Options_ Maybe
+```
+
+Which does what we want. This end bit is a bit messy though, let's see if we
+can't clean it up! My first thought is that I'd love to use `<|>` without any
+lifting/zipping, but the kinds don't line up; `Options_` is kind
+`(Type -> Type) -> Type` whereas `Type -> Type` is required by `Alternative`.
+How do we lift Alternative to Higher Kinds? Well we could try something clever,
+**OR** we could go the opposite direction and use `Alternative` to build a
+`Monoid` instance for our type; then use that to combine our values!
+
+```haskell
+instance (Alternative f) => Semigroup (Options_ f) where
+  (<>) = bzipWith (<|>)
+
+instance (Alternative f) => Monoid (Options_ f) where
+  mempty = buniq empty
+```
+
+Now we have a Monoid for `Options_` whenever `f` is an `Alternative` such as
+`Maybe`! This isn't the canonical `Monoid` instance for all HKDT, but in
+this case it works great! `Alternative` is actually just a Monoid on
+Applicative Functors, so it makes sense that it makes a great Monoid if we
+apply it to values within an HKDT.
+
+Let's see how we can refactor our combination of options now:
+
+```haskell
+getOptions :: IO (Options_ Maybe)
+getOptions = do
+    setEnv "NUM_THREADS" "1337"
+    configJson <- readConfigFile
+    envOpts <> pure (jsonOptsCustom configJson)
+```
+
+Wait a minute; what about the `IO`? `IO` has a a little known Monoid instance
+whenever the result of the `IO` is a Monoid; it simply runs both `IO` actions
+then `mappends` the results. In this case it's perfect! As we get even more
+possible option parsers we could even just put them in a list and `fold` them
+together: `fold [envOpts, pure (jsonOptsCustom configJson), ...]`
+
+But wait! There's more!
+
+## Setting Default Values
+
+We've seen how we can specify multiple **partial** configuration sources, but
+at the end of the day we were still left with an `Options_ Maybe`! What if we
+want to guarantee we have all the config values? Let's write a new helper.
+
+```haskell
+import Data.Maybe (fromMaybe)
+
+orOverride :: ProductB b => b Identity -> b Maybe -> b Identity
+orOverride = (bzipWith fromMaybeI)
+  where
+    fromMaybeI :: Identity a -> Maybe a -> Identity a
+    fromMaybeI ia ma = Identity $ fromMaybe (runIdentity ia) ma
+```
+
+This new helper uses our old friend `bzipWith` to lift `fromMaybe` to run over HKDTs!
+We have to do a little bit of annoying wrapping/unwrapping of Identity, but it's
+not too bad. This function will take the config value from any `Just`'s in our
+`Options_ Maybe` and will choose the default for the `Nothing`s!
+
+```haskell
+import Data.Foldable
+---
+getOptions :: IO (Options_ Identity)
+getOptions = do
+    setEnv "NUM_THREADS" "1337"
+    configJson <- readConfigFile
+    (defaultOpts `orOverride`) <$> fold [envOpts, pure (jsonOptsCustom configJson)]
+```
+
+## Better Errors
+
+So far our system silently fails in a lot of places. Let's see how HKDTs can 
+give us more expressive error handling!
+
+The first cool thing is that we can store error messages directly with the fields
+they pertain to!
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+---
+optErrors :: Options_ (Const String)
+optErrors =
+    Options_
+    { serverHost = "server host required but not provided"
+    , numThreads = "num threads required but not provided"
+    , verbosity  = "verbosity required but not provided"
+    }
+
+```
+
+If we use `Const String` in our HKDT we can say that we actually don't care which field
+it is, we just want to store a string no matter what! If we turn on `OverloadedStrings`
+we can even leave out the `Const` constructor if we like! But I'll leave that choice up to you ;)
+
+Now that we've got errors which apply to each field we can construct a helpful error
+message if we're missing required fields:
+
+```haskell
+import Data.Either.Validation
+---
+validateOptions :: (TraversableB b, ProductB b)
+                => b (Const String)
+                -> b Maybe
+                -> Validation [String] (b Identity)
+validateOptions errMsgs mOpts = bsequence' $ bzipWith validate mOpts errMsgs
+  where
+    validate :: Maybe a -> Const String a -> Validation [String] a
+    validate (Just x) _ = Success x
+    validate Nothing (Const err) = Failure [err]
+
+```
+
+`validateOptions` takes any traversable product HKDT with `Maybe` fields and an
+HKDT filled with error messages inside `Const` and will return a `Validation`
+object containing either a summary of errors or a validated `Identity` HKDT.
+Just as before we use `bzipWith` with a function which operates at the level of
+functors as a Natural Transformation; i.e. it cares only about the containers,
+not the values. Note that Validation is very similar to the `Either` type, but
+accumulates all available errors rather than failing fast.
 
 
+```haskell
+getOptions :: IO (Validation [String] (Options_ Identity))
+getOptions = do
+    setEnv "NUM_THREADS" "1337"
+    configJson <- readConfigFile
+    validateOptions optErrors <$> fold [envOpts, pure (jsonOptsCustom configJson)]
+```
+
+That about wraps it up!
+
+
+## Bonus: Parsing CLI Optoins
+
+```haskell
+cliOptsParser :: Options_ Parser
+cliOptsParser =
+    Options_
+    { serverHost =
+          strOption (long "hello" <> metavar "TARGET" <> help "Target for the greeting")
+    , numThreads =
+          option auto
+                 (long "threads" <> short 't' <> help "number of threads" <> metavar "INT")
+    , verbosity  = option auto
+                          (long "verbosity"
+                           <> short 'v'
+                           <> help "Level of verbosity"
+                           <> metavar "VERBOSITY")
+    }
+
+
+mkOptional :: FunctorB b => b Parser -> b (Parser `Compose` Maybe)
+mkOptional = bmap (Compose . optional)
+
+toParserInfo :: (TraversableB b) => b (Parser `Compose` Maybe) -> ParserInfo (b Maybe)
+toParserInfo b = info (bsequence b) briefDesc
+
+cliOpts :: IO (Options_ Maybe)
+cliOpts = execParser $ toParserInfo (mkOptional cliOptsParser)
+```
