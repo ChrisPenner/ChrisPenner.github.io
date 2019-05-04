@@ -821,8 +821,10 @@
 <a class="sourceLine" id="cb6-8" data-line-number="8"><span class="ot">envOpts ::</span> <span class="dt">Options_</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</a>
 <a class="sourceLine" id="cb6-9" data-line-number="9">envOpts <span class="fu">=</span></a>
 <a class="sourceLine" id="cb6-10" data-line-number="10">    <span class="dt">OptionsF</span></a>
-<a class="sourceLine" id="cb6-11" data-line-number="11">    <span class="co">-- Contents are unchanged since we changed the helper</span></a>
-<a class="sourceLine" id="cb6-12" data-line-number="12">    { <span class="fu">...</span> }</a></code></pre></div>
+<a class="sourceLine" id="cb6-11" data-line-number="11">    { serverHost <span class="fu">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></a>
+<a class="sourceLine" id="cb6-12" data-line-number="12">    , numThreads <span class="fu">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></a>
+<a class="sourceLine" id="cb6-13" data-line-number="13">    , verbosity  <span class="fu">=</span> <span class="dt">Compose</span> <span class="fu">$</span> pure <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></a>
+<a class="sourceLine" id="cb6-14" data-line-number="14">    }</a></code></pre></div>
 <p>I personally find it more readable to write <code>Compose</code> as infix like this, but some disagree. Very cool; we've got a version of our record where each field contains an action which gets and parses the right value from the environment! It's clear at a glance that we haven't forgotten to check any fields (if you have <code>-Wall</code> enabled you'd get a warning about missing fields)! We've effectively turned the traditional <code>Options &lt;$&gt; ... &lt;*&gt; ...</code> design <strong>inside out</strong>. It's much more declarative this way, and now that it's all collected as structured data it'll be easier for us to work with from now on too!</p>
 <p>Let's build another one!</p>
 <h2>Parsing JSON/YAML Configs</h2>
