@@ -135,8 +135,10 @@ readEnv envKey = Compose $ do
 envOpts :: Options_ (IO `Compose` Maybe)
 envOpts =
     OptionsF
-    -- Contents are unchanged since we changed the helper
-    { ... }
+    { serverHost = readEnv "SERVER_HOST"
+    , numThreads = readEnv "NUM_THREADS"
+    , verbosity  = Compose $ pure Nothing -- Don't read verbosity from environment
+    }
 ```
 
 I personally find it more readable to write `Compose` as infix like this, but
