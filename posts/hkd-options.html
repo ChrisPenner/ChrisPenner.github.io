@@ -8,10 +8,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="Update Monads: Variation on State Monads">
-    <meta name="twitter:description" content="We explore the applications and implementation of a generalized version of Reader/Writer monads.">
-    <meta name="twitter:image" content="http://chrispenner.ca/images/update-monad/change.jpg">
-    <title>Update Monads: Variation on State Monads</title>
+    <meta name="twitter:title" content="Higher Kinded Option Parsing">
+    <meta name="twitter:description" content="Collecting options for your application from multiple sources using Higher Kinded Data">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/hkd-option-parsing/tools.jpg">
+    <title>Higher Kinded Option Parsing</title>
     <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
@@ -737,209 +737,294 @@
         </div>
     </header>
 
-     <a id="leftarrow" class="arrow" href="/posts/mock-effects-with-data-kinds">&larr;</a> 
-     <a id="rightarrow" class="arrow" href="/posts/typesafe-api-versioning">&rarr;</a> 
+    
+     <a id="rightarrow" class="arrow" href="/posts/mock-effects-with-data-kinds">&rarr;</a> 
 
 <div id="page">
     <div class="wrapper">
         <div class="masthead">
             <span class="title">
-                Update Monads: Variation on State Monads
+                Higher Kinded Option Parsing
             </span>
             <br>
 
-            <img class="post-image" src="/images/update-monad/change.jpg">
+            <img class="post-image" src="/images/hkd-option-parsing/tools.jpg">
             <br>
             <span class="byline">by Chris Penner</span>
             <br>
-            <span class="date">Sep 3, 2018</span>
+            <span class="date">May 4, 2019</span>
             <br>
             <div class="metadata">
                 <br>
                 <span class="tags">
                     Tags<br>
-                    <a class="tag" href="/tag/programming">programming</a>
                     <a class="tag" href="/tag/haskell">haskell</a>
                 </span>
             </div>
         </div>
     </div>
     <article class="post">
-        <p>Today we're going to take a peek at the Update monad! It's a monad which was formalized and described in <a href="https://danelahman.github.io/papers/types13postproc.pdf">Update Monads: Cointerpreting Directed Containers</a> by Danel Ahman and Tarmo Uustalu. Most folks probably haven't heard of it before, likely because most of what you'd use it for is well encompassed by the Reader, Writer, and State monads. The Update Monad can do everything that Reader, Writer, and State can do, but as a trade-off tends to be less efficient at each of those tasks. It's definitely still worth checking out though; not only is it interesting, there are a few things it handles quite elegantly that might be a bit awkward to do in other ways.</p>
-<p>Heads up; this probably isn't a great post for absolute beginners, you'll want to have a decent understanding of <a href="https://wiki.haskell.org/Monoid">monoids</a> and how <a href="https://wiki.haskell.org/State_Monad">StateT</a> works before you dive in here.</p>
-<p>For readers who've spent a bit of time in Javascript land you may notice that the Update Monad is basically a formalization of the <a href="https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial">Flux architecture</a>, most commonly associated with the Redux library; although of course the Update Monad paper came first 😉. Most of the concepts carry over in some form. The <code>Store</code> in redux corresponds to the state of the Update monad, the <code>Action</code>s in Redux correspond directly to our monoidal Actions in the Update monad, and the view and dispatcher are left up to the implementor, but could be likened to a base monad in a monad transformer stack which could render, react, or get user input (e.g. IO).</p>
-<p>The Update monad is very similar to the State monad; and in fact you can implement either of them in terms of the other! Each has tasks at which it excels; the Update Monad is good at keeping an audit log of updates and limiting computations to a fixed set of permissible updates. State on the other hand has a simpler interface, less boiler-plate, and is MUCH more efficient at most practical tasks. It's no wonder that <code>State</code> won out in the end, but the Update monad is still fun to look at!</p>
-<h2>Structure of the Update Monad</h2>
-<p>The Update Monad kinda looks like Reader, Writer and State got into a horrific car accident and are now hopelessly entangled! Each computation receives the current computation <code>state</code> (like <code>Reader</code>) and can result in a monoidal action (like <code>Writer</code>). The action is them applied to the state according to a helper typeclass which I'll call <code>ApplyAction</code>: it has a single method <code>applyAction :: p -&gt; s -&gt; s</code>; which applies a given monoidal action <code>p</code> to a state resulting in a new state. This edited state is passed on to the next computation (like <code>State</code>) and away we go! Here's my implementation of this idea for a new data type called <code>Update</code>.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="kw">class</span> (<span class="dt">Monoid</span> p) <span class="ot">=&gt;</span> <span class="dt">ApplyAction</span> p s <span class="kw">where</span></a>
-<a class="sourceLine" id="cb1-2" data-line-number="2"><span class="ot">  applyAction ::</span> p <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> s</a>
-<a class="sourceLine" id="cb1-3" data-line-number="3"></a>
-<a class="sourceLine" id="cb1-4" data-line-number="4"><span class="kw">data</span> <span class="dt">Update</span> s p a <span class="fu">=</span> <span class="dt">Update</span></a>
-<a class="sourceLine" id="cb1-5" data-line-number="5">  {<span class="ot"> runUpdate ::</span> (s <span class="ot">-&gt;</span> (p, a))</a>
-<a class="sourceLine" id="cb1-6" data-line-number="6">  } <span class="kw">deriving</span> (<span class="dt">Functor</span>)</a>
-<a class="sourceLine" id="cb1-7" data-line-number="7"></a>
-<a class="sourceLine" id="cb1-8" data-line-number="8"><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Applicative</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></a>
-<a class="sourceLine" id="cb1-9" data-line-number="9">  pure a <span class="fu">=</span> <span class="dt">Update</span> <span class="fu">$</span> \_ <span class="ot">-&gt;</span> (mempty, a)</a>
-<a class="sourceLine" id="cb1-10" data-line-number="10">  <span class="dt">Update</span> u <span class="fu">&lt;*&gt;</span> <span class="dt">Update</span> t <span class="fu">=</span></a>
-<a class="sourceLine" id="cb1-11" data-line-number="11">    <span class="dt">Update</span> <span class="fu">$</span> \s</a>
-<a class="sourceLine" id="cb1-12" data-line-number="12">      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></a>
-<a class="sourceLine" id="cb1-13" data-line-number="13">      <span class="co">-- and get the monoidal action and the function out</span></a>
-<a class="sourceLine" id="cb1-14" data-line-number="14">     <span class="ot">-&gt;</span></a>
-<a class="sourceLine" id="cb1-15" data-line-number="15">      <span class="kw">let</span> (p, f) <span class="fu">=</span> u s</a>
-<a class="sourceLine" id="cb1-16" data-line-number="16">      <span class="co">-- Run the second &#39;Update&#39; with a state which has been altered by</span></a>
-<a class="sourceLine" id="cb1-17" data-line-number="17">      <span class="co">-- the first action to get the &#39;a&#39; and another action</span></a>
-<a class="sourceLine" id="cb1-18" data-line-number="18">          (p&#39;, a) <span class="fu">=</span> t (applyAction p s)</a>
-<a class="sourceLine" id="cb1-19" data-line-number="19">      <span class="co">-- Combine the actions together and run the function</span></a>
-<a class="sourceLine" id="cb1-20" data-line-number="20">       <span class="kw">in</span> (p&#39; <span class="fu">&lt;&gt;</span> p, f a)</a>
-<a class="sourceLine" id="cb1-21" data-line-number="21"></a>
-<a class="sourceLine" id="cb1-22" data-line-number="22"><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Monad</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></a>
-<a class="sourceLine" id="cb1-23" data-line-number="23">  <span class="dt">Update</span> u <span class="fu">&gt;&gt;=</span> f <span class="fu">=</span></a>
-<a class="sourceLine" id="cb1-24" data-line-number="24">    <span class="dt">Update</span> <span class="fu">$</span> \s</a>
-<a class="sourceLine" id="cb1-25" data-line-number="25">      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></a>
-<a class="sourceLine" id="cb1-26" data-line-number="26">      <span class="co">-- and get the monoidal action and the function out</span></a>
-<a class="sourceLine" id="cb1-27" data-line-number="27">     <span class="ot">-&gt;</span></a>
-<a class="sourceLine" id="cb1-28" data-line-number="28">      <span class="kw">let</span> (p, a) <span class="fu">=</span> u s</a>
-<a class="sourceLine" id="cb1-29" data-line-number="29">      <span class="co">-- Run the given function over our resulting value to get our next Update</span></a>
-<a class="sourceLine" id="cb1-30" data-line-number="30">          <span class="dt">Update</span> t <span class="fu">=</span> f a</a>
-<a class="sourceLine" id="cb1-31" data-line-number="31">      <span class="co">-- Run our new &#39;Update&#39; over the altered state</span></a>
-<a class="sourceLine" id="cb1-32" data-line-number="32">          (p&#39;, a&#39;) <span class="fu">=</span> t (applyAction p s)</a>
-<a class="sourceLine" id="cb1-33" data-line-number="33">      <span class="co">-- Combine the actions together and return the result</span></a>
-<a class="sourceLine" id="cb1-34" data-line-number="34">       <span class="kw">in</span> (p <span class="fu">&lt;&gt;</span> p&#39;, a&#39;)</a></code></pre></div>
-<p>We could of course also implement an <code>UpdateT</code> monad transformer, but for the purposes of clarity I find it's easier to understand the concrete <code>Update</code> type. If you like you can take a peek at some other fun implementations <a href="https://github.com/chrispenner/update-monad">here</a>. Hopefully it's relatively clear from the implementation how things fit together. Hopefully you can kind of see the similarities to Reader and Writer; we are always returning and combining our monoidal actions as we continue along, and each action has access to the state, but can't <em>directly</em> modify it (you may only modify it by providing <strong>actions</strong>). It's also worth noting that within any individual step has only the latest <code>state</code> and it's not possible to view any previous actions which may have occurred, just like the Writer monad.</p>
-<p>Now that we've implemented our Update Monad we've got our <code>&gt;&gt;=</code> and <code>return</code>; but how do we actually accomplish anything with it? There's no <code>MonadUpdate</code> type-class provided in the paper, but here's my personal take on how to get some utility out of it, I've narrowed it down to these two methods which seem to encompass the core ideas behind the Update Monad:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></a>
-<a class="sourceLine" id="cb2-2" data-line-number="2"><span class="kw">class</span> (<span class="dt">ApplyAction</span> s p, <span class="dt">Monad</span> m) <span class="ot">=&gt;</span></a>
-<a class="sourceLine" id="cb2-3" data-line-number="3">      <span class="co">-- Because each of our methods only uses p OR m but not both </span></a>
-<a class="sourceLine" id="cb2-4" data-line-number="4">      <span class="co">-- we use functional dependencies to assert to the type system that </span></a>
-<a class="sourceLine" id="cb2-5" data-line-number="5">      <span class="co">-- both s and p are determined by &#39;m&#39;; this helps GHC be confident</span></a>
-<a class="sourceLine" id="cb2-6" data-line-number="6">      <span class="co">-- that we can&#39;t end up in spots where types could be ambiguous.</span></a>
-<a class="sourceLine" id="cb2-7" data-line-number="7">      <span class="dt">MonadUpdate</span> m s p <span class="fu">|</span> m <span class="ot">-&gt;</span> s , m <span class="ot">-&gt;</span> p</a>
-<a class="sourceLine" id="cb2-8" data-line-number="8">  <span class="kw">where</span></a>
-<a class="sourceLine" id="cb2-9" data-line-number="9"><span class="ot">    putAction ::</span> p <span class="ot">-&gt;</span> m ()</a>
-<a class="sourceLine" id="cb2-10" data-line-number="10"><span class="ot">    getState ::</span> m s</a></code></pre></div>
-<p>You'll notice some similarities here too! <code>putAction</code> matches the signature for <code>tell</code>, and <code>getState</code> matches <code>ask</code>! This class still provides new value though, because unlike Reader and Writer the environment and the actions are related to each other through the <code>ApplyAction</code> class; and unlike <code>get</code> and <code>put</code> from <code>State</code> our <code>putAction</code> and <code>getState</code> operate over <strong>different</strong> types; you can only <code>put</code> <strong>actions</strong>, and you can only <code>get</code> <strong>state</strong>. We can formalize the expected relationship between these methods with these laws I made up (take with a deluge of salt):</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="co">-- Applying the &#39;empty&#39; action to your state shouldn&#39;t change your state</span></a>
-<a class="sourceLine" id="cb3-2" data-line-number="2">applyAction mempty <span class="fu">==</span> id</a>
-<a class="sourceLine" id="cb3-3" data-line-number="3"></a>
-<a class="sourceLine" id="cb3-4" data-line-number="4"><span class="co">-- Putting an action and then another action should be the same as </span></a>
-<a class="sourceLine" id="cb3-5" data-line-number="5"><span class="co">-- putting the combination of the two actions.</span></a>
-<a class="sourceLine" id="cb3-6" data-line-number="6"><span class="co">-- This law effectively enforces that `bind` is </span></a>
-<a class="sourceLine" id="cb3-7" data-line-number="7"><span class="co">-- employing your monoid as expected</span></a>
-<a class="sourceLine" id="cb3-8" data-line-number="8">putAction p <span class="fu">&gt;&gt;</span> putAction q <span class="fu">==</span> putAction (p <span class="ot">`mappend`</span> q)</a>
-<a class="sourceLine" id="cb3-9" data-line-number="9"></a>
-<a class="sourceLine" id="cb3-10" data-line-number="10"><span class="co">-- We expect that when we &#39;put&#39; an action that it gets applied to the state</span></a>
-<a class="sourceLine" id="cb3-11" data-line-number="11"><span class="co">-- and that the change is visible immediately</span></a>
-<a class="sourceLine" id="cb3-12" data-line-number="12"><span class="co">-- This law enforces that your implementation of bind </span></a>
-<a class="sourceLine" id="cb3-13" data-line-number="13"><span class="co">-- is actually applying your monoid to the state using ApplyAction</span></a>
-<a class="sourceLine" id="cb3-14" data-line-number="14">applyAction p <span class="fu">&lt;$&gt;</span> getState <span class="fu">==</span> putAction p <span class="fu">&gt;&gt;</span> getState</a></code></pre></div>
-<p>Okay! Now of course we have to implement <code>MonadUpdate</code> for our <code>Update</code> monad; easy-peasy:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">Update</span> p s) p s <span class="kw">where</span></a>
-<a class="sourceLine" id="cb4-2" data-line-number="2">  putAction p <span class="fu">=</span> <span class="dt">Update</span> <span class="fu">$</span> \_ <span class="ot">-&gt;</span> (p, ())</a>
-<a class="sourceLine" id="cb4-3" data-line-number="3">  getState <span class="fu">=</span> <span class="dt">Update</span> <span class="fu">$</span> \s <span class="ot">-&gt;</span> (mempty, s)</a></code></pre></div>
-<p>All the plumbing is set up! Let's start looking into some actual use-cases! I'll start by fully describing one particular use-case so we get an understanding of how this all works, then we'll experiment by tweaking our monoid or our <code>applyAction</code> function.</p>
-<h2>A Concrete Use-Case</h2>
-<p>Let's pick a use-case which I often see used for demonstrating the State monad so we can see how our Update monad is similar, but slightly different!</p>
-<p>We're going to build a system which allows users to interact with their bank account! We'll have three actions they can perform: <code>Deposit</code>, <code>Withdraw</code>, and <code>CollectInterest</code>. These actions will be applied to a simple state <code>BankAccount Int</code> which keeps track of how many dollars we have in the account!</p>
-<p>Let's whip up the data types and operations we'll need:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" data-line-number="1"><span class="co">-- Simple type to keep track our bank balance</span></a>
-<a class="sourceLine" id="cb5-2" data-line-number="2"><span class="kw">newtype</span> <span class="dt">BankBalance</span> <span class="fu">=</span></a>
-<a class="sourceLine" id="cb5-3" data-line-number="3">  <span class="dt">BankBalance</span> <span class="dt">Int</span></a>
-<a class="sourceLine" id="cb5-4" data-line-number="4">  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</a>
-<a class="sourceLine" id="cb5-5" data-line-number="5"></a>
-<a class="sourceLine" id="cb5-6" data-line-number="6"><span class="co">-- The three types of actions we can take on our account</span></a>
-<a class="sourceLine" id="cb5-7" data-line-number="7"><span class="kw">data</span> <span class="dt">AccountAction</span></a>
-<a class="sourceLine" id="cb5-8" data-line-number="8">  <span class="fu">=</span> <span class="dt">Deposit</span> <span class="dt">Int</span></a>
-<a class="sourceLine" id="cb5-9" data-line-number="9">  <span class="fu">|</span> <span class="dt">Withdraw</span> <span class="dt">Int</span></a>
-<a class="sourceLine" id="cb5-10" data-line-number="10">  <span class="fu">|</span> <span class="dt">ApplyInterest</span></a>
-<a class="sourceLine" id="cb5-11" data-line-number="11">  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</a>
-<a class="sourceLine" id="cb5-12" data-line-number="12"></a>
-<a class="sourceLine" id="cb5-13" data-line-number="13"><span class="co">-- We can apply any of our actions to our bank balance to get a new balance</span></a>
-<a class="sourceLine" id="cb5-14" data-line-number="14"><span class="ot">processTransaction ::</span> <span class="dt">AccountAction</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></a>
-<a class="sourceLine" id="cb5-15" data-line-number="15">processTransaction (<span class="dt">Deposit</span> n) (<span class="dt">BankBalance</span> b) </a>
-<a class="sourceLine" id="cb5-16" data-line-number="16">    <span class="fu">=</span> <span class="dt">BankBalance</span> (b <span class="fu">+</span> n)</a>
-<a class="sourceLine" id="cb5-17" data-line-number="17">processTransaction (<span class="dt">Withdraw</span> n) (<span class="dt">BankBalance</span> b) </a>
-<a class="sourceLine" id="cb5-18" data-line-number="18">    <span class="fu">=</span> <span class="dt">BankBalance</span> (b <span class="fu">-</span> n)</a>
-<a class="sourceLine" id="cb5-19" data-line-number="19"></a>
-<a class="sourceLine" id="cb5-20" data-line-number="20"><span class="co">-- This is a gross oversimplification...</span></a>
-<a class="sourceLine" id="cb5-21" data-line-number="21"><span class="co">-- I really hope my bank does something smarter than this</span></a>
-<a class="sourceLine" id="cb5-22" data-line-number="22"><span class="co">-- We (kinda sorta) add 10% interest, truncating any cents.</span></a>
-<a class="sourceLine" id="cb5-23" data-line-number="23"><span class="co">-- Who likes pocket-change anyways ¯\_(ツ)_/¯</span></a>
-<a class="sourceLine" id="cb5-24" data-line-number="24">processTransaction <span class="dt">ApplyInterest</span> (<span class="dt">BankBalance</span> b) </a>
-<a class="sourceLine" id="cb5-25" data-line-number="25">    <span class="fu">=</span> <span class="dt">BankBalance</span> (fromIntegral balance <span class="fu">*</span> <span class="fl">1.1</span>)</a></code></pre></div>
-<p>Now we've got our Action type and our State type, let's relate them together using <code>ApplyAction</code>.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">instance</span> <span class="dt">ApplyAction</span> <span class="dt">AccountAction</span> <span class="dt">BankBalance</span> <span class="kw">where</span></a>
-<a class="sourceLine" id="cb6-2" data-line-number="2">  applyAction <span class="fu">=</span> processTransaction</a></code></pre></div>
-<p>One problem though! <code>AccountAction</code> isn't a monoid! Hrmmm, this is a bit upsetting; it seems to quite clearly represent the domain we want to work with, I'd really rather not muck up our data-type just to make it fit here. Maybe there's something else we can do! In our case, what does it mean to combine two actions? For a bank balance we probably just want to run the first action, then the second one! We'll need a value that acts as an 'empty' value for our monoid's <code>mempty</code> too; for that we can just have some notion of performing no actions!</p>
-<p>There are a few ways to promote our <code>AccountAction</code> type into a monoid with these properties; but one in particular stands out (I can already hear some of you shouting it at your screens). That's right! The <a href="https://en.wikipedia.org/wiki/Free_monoid">Free Monoid</a> A.K.A. the List Monoid! Lists are kind of a special monoid in that they can turn ANY type into a monoid for <strong>free</strong>! We get <code>mappend == (++)</code> and <code>mempty == []</code>. This means that instead of <em>actually</em> combining things we kinda just collect them all, but fear not it still satisfies all the monoid laws correctly. This isn't a post on Free Monoids though, so we'll upgrade our <code>AccountAction</code> to <code>[AccountAction]</code> and move on:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb7-1" data-line-number="1"><span class="kw">instance</span> <span class="dt">ApplyAction</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> <span class="kw">where</span></a>
-<a class="sourceLine" id="cb7-2" data-line-number="2">  applyAction actions balance <span class="fu">=</span></a>
-<a class="sourceLine" id="cb7-3" data-line-number="3">    <span class="kw">let</span><span class="ot"> allTransactions ::</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></a>
-<a class="sourceLine" id="cb7-4" data-line-number="4">        allTransactions <span class="fu">=</span> appEndo <span class="fu">$</span> foldMap (<span class="dt">Endo</span> <span class="fu">.</span> processTransaction) (reverse actions)</a>
-<a class="sourceLine" id="cb7-5" data-line-number="5">     <span class="kw">in</span> allTransactions balance</a></code></pre></div>
-<p>We can keep our <code>processTransaction</code> function and partially apply it to our list of Actions giving us a list of <code>[BankBalance -&gt; BankBalance]</code>; we can then use the <code>Endo</code> monoid to compose all of the functions together! Unfortunately Endo does right-to-left composition, so we'll need to reverse the list first (keeners will note we could use <code>Dual . Endo</code> for the same results). Then we use <code>appEndo</code> to unpack the resulting <code>BankBalance -&gt; BankBalance</code> which we can apply to our balance! Now that we have an instance for <code>ApplyAction</code> we can start writing programs using <code>Update</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" data-line-number="1"><span class="ot">useATM ::</span> <span class="dt">Update</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> ()</a>
-<a class="sourceLine" id="cb8-2" data-line-number="2">useATM <span class="fu">=</span> <span class="kw">do</span></a>
-<a class="sourceLine" id="cb8-3" data-line-number="3">  putAction [<span class="dt">Deposit</span> <span class="dv">20</span>] <span class="co">-- BankBalance 20</span></a>
-<a class="sourceLine" id="cb8-4" data-line-number="4">  putAction [<span class="dt">Deposit</span> <span class="dv">30</span>] <span class="co">-- BankBalance 50</span></a>
-<a class="sourceLine" id="cb8-5" data-line-number="5">  putAction [<span class="dt">ApplyInterest</span>] <span class="co">-- BankBalance 55</span></a>
-<a class="sourceLine" id="cb8-6" data-line-number="6">  putAction [<span class="dt">Withdraw</span> <span class="dv">10</span>] <span class="co">-- BankBalance 45</span></a>
-<a class="sourceLine" id="cb8-7" data-line-number="7">  getState</a>
-<a class="sourceLine" id="cb8-8" data-line-number="8"></a>
-<a class="sourceLine" id="cb8-9" data-line-number="9"><span class="fu">$&gt;</span> runUpdate useATM (<span class="dt">BankBalance</span> <span class="dv">0</span>)</a>
-<a class="sourceLine" id="cb8-10" data-line-number="10">([<span class="dt">Deposit</span> <span class="dv">20</span>,<span class="dt">Deposit</span> <span class="dv">30</span>,<span class="dt">ApplyInterest</span>,<span class="dt">Withdraw</span> <span class="dv">10</span>],<span class="dt">BankBalance</span> <span class="dv">45</span>)</a></code></pre></div>
-<p>Hrmm, a bit clunky that we have to wrap every action with a list, but we could pretty easily write a helper <code>putAction' :: MonadUpdate m [p] s =&gt; p -&gt; m ()</code> to help with that. By running the program we can see that we've collected the actions in the right order and have 'combined' them all by running <code>mappend</code>. We also see that our bank balance ends up where we'd expect! This seems to be pretty similar to the State Monad, we could write helpers that perform each of those actions over the State pretty easily using <code>modify</code>; but the Update Monad gives us a nice audit log of everything that happened! Not to mention that it limits the available actions to ones that we support; users can't just multiply their bank balance by 100, they have use the approved actions. This means we could verify that actions happened in the correct order, or we could run the same actions over a different starting state and see how it works out!</p>
-<p>The Update Monad also has a few tricks when it comes to testing your programs. Since the only thing that can affect our state is a sequence of actions, we can skip all the monad nonsense and test our business logic by just testing that our <code>applyAction</code> function works properly over different lists of actions! Observe:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="ot">testBankSystem ::</span> <span class="dt">Bool</span></a>
-<a class="sourceLine" id="cb9-2" data-line-number="2">testBankSystem <span class="fu">=</span></a>
-<a class="sourceLine" id="cb9-3" data-line-number="3">  applyAction [<span class="dt">Deposit</span> <span class="dv">20</span>, <span class="dt">Deposit</span> <span class="dv">30</span>, <span class="dt">ApplyInterest</span>, <span class="dt">Withdraw</span> <span class="dv">10</span>] (<span class="dt">BankBalance</span> <span class="dv">0</span>) </a>
-<a class="sourceLine" id="cb9-4" data-line-number="4">    <span class="fu">==</span> <span class="dt">BankBalance</span> <span class="dv">45</span></a>
-<a class="sourceLine" id="cb9-5" data-line-number="5"></a>
-<a class="sourceLine" id="cb9-6" data-line-number="6"><span class="fu">$&gt;</span> testBankSystem</a>
-<a class="sourceLine" id="cb9-7" data-line-number="7"><span class="dt">True</span></a></code></pre></div>
-<p>Cool stuff! We can write the tests for our business logic without worrying about the impure ways we'll probably be getting those actions (like <code>IO</code>). This separation makes complicated business logic pretty easy to test, and we can write separate tests for the 'glue' code with confidence that the logic of our actions is correct and that our program <strong>CAN'T</strong> edit our state in an invalid way since all updates <strong>must</strong> be performed through the <code>performTransaction</code> function. Note that using an impure base monad like IO could certainly cause the list of actions which are collected to change, but the list of actions which is collected <strong>fully describes</strong> the state changes which take place; and so testing only the application of actions is sufficient for testing state updates.</p>
-<p>There's really only so much we can do with <code>Update</code> alone, but it's pretty easy to write an <code>UpdateT</code> transformer! I'll leave you to check out the implementation <a href="https://github.com/ChrisPenner/update-monad/blob/master/src/UpdateT.hs">here</a> if you like; but this allows us to do things like decide which actions to take based on user input (via <code>IO</code>), use our state to make choices in the middle of our monad, or use other monads to perform more interesting logic!</p>
-<h2>Customizing the Update Monad with Monoids</h2>
-<p>Okay! We've got one concrete use-case under our belts and have a pretty good understanding of how all this works! let's see what we can tweak to make things a bit more interesting!</p>
-<p>Something that immediately interested me with the update monad is that there are several distinct places to tweak its behaviour without even needing to change which implementation of <code>MonadUpdate</code> we use! We can change the action monoid, or which state we carry, or even our <code>applyAction</code> function! This sort of tweakability leads to all sorts of cool behaviour without too much work, and people can build all sorts of things we didn't initially expect when we wrote the type-classes!</p>
-<p>I won't get super in depth on each of these and encourage you to implement them yourself, but here are a few ideas to start with!</p>
-<p>Customizations:</p>
-<ul>
-<li><code>Update w () a</code> with <code>applyAction _ () = ()</code>
-<ul>
-<li>A simple implementation of <code>Writer</code>!</li>
-<li>The state doesn't matter; only the monoidal actions are tracked!</li>
-</ul></li>
-<li><code>Update () r a</code> with <code>applyAction () r = r</code>
-<ul>
-<li>A simple implementation of <code>Reader</code>!</li>
-<li>There're no sensible updates to do; so your state always stays the same.</li>
-</ul></li>
-<li><code>Update (Last s) s a</code> with <code>applyAction (Last p) s = fromMaybe s p</code>
-<ul>
-<li>This is the state monad implemented in Update!</li>
-<li><code>get == getState</code></li>
-<li><code>put == putAction . Last . Just</code></li>
-<li><code>modify f == getState &gt;&gt;= putAction . Last . Just . f</code></li>
-</ul></li>
-<li><code>Update (Dual (Endo s)) s a</code> with <code>applyAction (Dual (Endo p)) s = p s</code>
-<ul>
-<li>Another possible implementation of State inside Update!</li>
-<li><code>get == getState</code></li>
-<li><code>put == putAction . Dual . Endo . const</code></li>
-<li><code>modify == putAction . Dual . Endo</code></li>
-</ul></li>
-<li><code>Update Any Bool a</code> with <code>applyAction (Any b) s = b || s</code>
-<ul>
-<li>You could implement a short-circuiting approach where future actions don't bother running if any previous action has succeeded! You can flip the logic using <code>All</code> and <code>&amp;&amp;</code>.</li>
-</ul></li>
-</ul>
-<h2>Bonus: Performance</h2>
-<p>The definition of the Update monad given here is quite simple because it's the easiest to explain, but there are a few problems with it; the most notable is that it ONLY passes along the new monoidal sum; NOT the edited state from step to step. In mathematic terms it's still correct since we can compute an up-to-date version of the state; but we have to compute it from scratch every time we run an action! Clearly not great for performance! Like I said earlier you can actually implement a more efficient version of <code>MonadUpdate</code> using <code>State</code>! We DO still need a dependency on <code>ApplyAction p s</code> though, so keep that in mind. If we have one available we can do something like this:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="kw">instance</span> <span class="dt">ApplyAction</span> p s <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">State</span> (p, s)) p s <span class="kw">where</span></a>
-<a class="sourceLine" id="cb10-2" data-line-number="2">  putAction p&#39; <span class="fu">=</span> modify (\(p, s) <span class="ot">-&gt;</span> (p <span class="fu">&lt;&gt;</span> p&#39;, applyAction p&#39; s))</a>
-<a class="sourceLine" id="cb10-3" data-line-number="3">  getState <span class="fu">=</span> snd <span class="fu">&lt;$&gt;</span> get</a></code></pre></div>
-<p>Technically we don't even need to keep track of the monoidal sum as we go along; there's no need for it! Unfortunately due to FunctionalDependencies in our MonadUpdate class GHC gets mad if it doesn't show up inside our State Monad <strong>somewhere</strong>. This implementation keeps track of the latest state and just applies updates as it goes along, giving us a more efficient implementation. Note that using <code>put</code> or <code>modify</code> directly will probably cause some unexpected behaviour in your Update Monad, so you may want to wrap your <code>State</code> in a newtype first to prevent anyone from messing with the internals.</p>
-<p>Thanks for reading! I'm not perfect and really just go through all this stuff in my spare time, so if I've missed something (or you enjoyed the post 😄) please let me know! You can find me on <a href="https://twitter.com/chrislpenner">Twitter</a> or <a href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
+        <p>Higher Kinded Data Types (HKDTs) have piqued my interest lately. They seem to have a lot of potential applications, however the ergonomics still aren't so great in most of these cases. Today we'll look at one case where I think the end result ends up quite nice! Let's parse some options!</p>
+<p>First the problem; if you've worked on a non-trivial production app you've probably come across what I'll call the <strong>Configuration Conundrum</strong>. Specifically, this is when an app collects configuration values from <em>many sources</em>. Maybe it parses some options from CLI flags, some from Environment Variables, yet more come from a configuration file in JSON or YAML or TOML or or even worse it may pull from SEVERAL files. Working with these is a mess, option priority gets tricky, providing useful error messages gets even harder, and the code for managing all these sources is confusing, complicated, and spread out. Though we may not solve ALL these problems today, we'll build an approach that's modular and extensible enough that you can mix and match bits and pieces to get whatever you need.</p>
+<p>Here's an example of some messy code which pulls options from the environment or from a JSON value file:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></a>
+<a class="sourceLine" id="cb1-2" data-line-number="2">getOptions <span class="fu">=</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb1-3" data-line-number="3">    configJson <span class="ot">&lt;-</span> readConfigFile</a>
+<a class="sourceLine" id="cb1-4" data-line-number="4">    mServerHostEnv <span class="ot">&lt;-</span> readServerHostEnv</a>
+<a class="sourceLine" id="cb1-5" data-line-number="5">    mNumThreadsEnv <span class="ot">&lt;-</span> readNumThreadsEnv</a>
+<a class="sourceLine" id="cb1-6" data-line-number="6">    <span class="kw">let</span> mServerHostJson <span class="fu">=</span> configJson <span class="fu">^?</span> key <span class="st">&quot;server_host&quot;</span> <span class="fu">.</span> _String <span class="fu">.</span> unpacked</a>
+<a class="sourceLine" id="cb1-7" data-line-number="7">    <span class="kw">let</span> mNumThreadsJson <span class="fu">=</span> configJson <span class="fu">^?</span> key <span class="st">&quot;num_threads&quot;</span> <span class="fu">.</span> _Number <span class="fu">.</span> to round</a>
+<a class="sourceLine" id="cb1-8" data-line-number="8">    return <span class="fu">$</span> <span class="dt">Options</span> <span class="fu">&lt;$&gt;</span> fromMaybe serverHostDef (mServerHostEnv <span class="fu">&lt;|&gt;</span> mServerHostJson)</a>
+<a class="sourceLine" id="cb1-9" data-line-number="9">                     <span class="fu">&lt;*&gt;</span> fromMaybe numThreadsDef (mNumThreadsEnv <span class="fu">&lt;|&gt;</span> mNumThreadsJson)</a></code></pre></div>
+<p>Here's a peek at how our configuration parsing code will end up:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></a>
+<a class="sourceLine" id="cb2-2" data-line-number="2">getOptions <span class="fu">=</span></a>
+<a class="sourceLine" id="cb2-3" data-line-number="3">  withDefaults defaultOpts <span class="fu">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="fu">&lt;$&gt;</span> readConfigFile]</a></code></pre></div>
+<p>This is slightly disingenuous as some of the logic is abstracted away behind the scenes in the second example; but he point here is that the logic CAN be abstracted, whereas it's very difficult to abstract over the steps in the first example without creating a bunch of intermediate types.</p>
+<h2>Kinds of Options</h2>
+<p>If you're unfamiliar with HKDTs (higher kinded data types); it's a very simple idea with some mind bending implications. Many data types are parameterized by a value type (e.g. <code>[a]</code> is a list is parameterized by the types of values it contains); however HKDTs are parameterized by some <strong>wrapper</strong> type (typically a functor, but not always) around the data of the record. Easiest to just show an example and see it in practice. Let's define a very simple type to contain all the options our app needs:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="kw">data</span> <span class="dt">Options_</span> f <span class="fu">=</span></a>
+<a class="sourceLine" id="cb3-2" data-line-number="2">    <span class="dt">Options_</span></a>
+<a class="sourceLine" id="cb3-3" data-line-number="3">    {<span class="ot"> serverHost ::</span> f <span class="dt">String</span></a>
+<a class="sourceLine" id="cb3-4" data-line-number="4">    ,<span class="ot"> numThreads ::</span> f <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb3-5" data-line-number="5">    ,<span class="ot"> verbosity  ::</span> f <span class="dt">Int</span></a>
+<a class="sourceLine" id="cb3-6" data-line-number="6">    }</a></code></pre></div>
+<p>Notice that each field is <em>wrapped</em> in <code>f</code>. I use a <code>_</code> suffix as a convention to denote that it's a HKDT. <code>f</code> could be anything at all of the kind <code>Type -&gt; Type</code>; e.g. <code>Maybe</code>, <code>IO</code>, <code>Either String</code>, or even strange constructions like <code>Compose Maybe (Join (Biff (,) IO Reader))</code> ! You'll discover the implications as we go along, so don't worry if you don't get it yet. For our first example we'll describe how to get options from Environment Variables!</p>
+<h2>Getting Environment Variables</h2>
+<p>Applications will often set configuration values using Environment Variables; it's an easy way to implicitly pass information into programs and is nice for sensitive data like secrets. We can describe the options in our HKDT in terms of Environment Variables which may or may not exist. First we'll need a way to lookup an option for a given key, and a way to convert it into the type we expect. You may want to use something more sophisticated in your app; but for the blog post I'll just lean on the <code>Read</code> typeclass to make a small helper.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">import</span> <span class="dt">System.Environment</span> (lookupEnv, setEnv)</a>
+<a class="sourceLine" id="cb4-2" data-line-number="2"><span class="kw">import</span> <span class="dt">Text.Read</span> (readMaybe)</a>
+<a class="sourceLine" id="cb4-3" data-line-number="3"></a>
+<a class="sourceLine" id="cb4-4" data-line-number="4"><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Maybe</span> a)</a>
+<a class="sourceLine" id="cb4-5" data-line-number="5">readEnv envKey <span class="fu">=</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb4-6" data-line-number="6">    lookupEnv envKey <span class="fu">&gt;&gt;=</span> pure <span class="fu">.</span> \<span class="kw">case</span></a>
+<a class="sourceLine" id="cb4-7" data-line-number="7">        <span class="dt">Just</span> x <span class="ot">-&gt;</span> readMaybe x</a>
+<a class="sourceLine" id="cb4-8" data-line-number="8">        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span></a></code></pre></div>
+<p>This function looks up the given key in the environment, returning a <code>Nothing</code> if it doesn't exist or fails to parse. We'll talk about more civilized error handling later on, don't worry ;)</p>
+<p>Now we can describe how to get each option in our type using this construct:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb5-1" data-line-number="1"><span class="co">-- This doesn&#39;t work!</span></a>
+<a class="sourceLine" id="cb5-2" data-line-number="2"><span class="ot">envOpts ::</span> <span class="dt">Options_</span> <span class="fu">??</span></a>
+<a class="sourceLine" id="cb5-3" data-line-number="3">envOpts <span class="fu">=</span></a>
+<a class="sourceLine" id="cb5-4" data-line-number="4">    <span class="dt">OptionsF</span></a>
+<a class="sourceLine" id="cb5-5" data-line-number="5">    { serverHost <span class="fu">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></a>
+<a class="sourceLine" id="cb5-6" data-line-number="6">    , numThreads <span class="fu">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></a>
+<a class="sourceLine" id="cb5-7" data-line-number="7">    , verbosity  <span class="fu">=</span> pure <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></a>
+<a class="sourceLine" id="cb5-8" data-line-number="8">    }</a></code></pre></div>
+<p>Close; but if you'll note earlier, each field should contain field's underlying type wrapped in some <code>f</code>. Here we've got <code>IO (Maybe a)</code>, we can't assign <code>f</code> to <code>IO (Maybe _)</code> so we need to compose the two Functors somehow. We can employ <code>Compose</code> here to collect both <code>IO</code> and <code>Maybe</code> into a single Higher Kinded Type to serve as our <code>f</code>. Try the following instead:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Data.Functor.Compose</span> (<span class="dt">Compose</span>(..))</a>
+<a class="sourceLine" id="cb6-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb6-3" data-line-number="3"><span class="co">-- Add a Compose to our helper</span></a>
+<a class="sourceLine" id="cb6-4" data-line-number="4"><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) a</a>
+<a class="sourceLine" id="cb6-5" data-line-number="5">readEnv envKey <span class="fu">=</span> <span class="dt">Compose</span> <span class="fu">$</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb6-6" data-line-number="6">    <span class="fu">...</span></a>
+<a class="sourceLine" id="cb6-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb6-8" data-line-number="8"><span class="ot">envOpts ::</span> <span class="dt">Options_</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb6-9" data-line-number="9">envOpts <span class="fu">=</span></a>
+<a class="sourceLine" id="cb6-10" data-line-number="10">    <span class="dt">OptionsF</span></a>
+<a class="sourceLine" id="cb6-11" data-line-number="11">    <span class="co">-- Contents are unchanged since we changed the helper</span></a>
+<a class="sourceLine" id="cb6-12" data-line-number="12">    { <span class="fu">...</span> }</a></code></pre></div>
+<p>I personally find it more readable to write <code>Compose</code> as infix like this, but some disagree. Very cool; we've got a version of our record where each field contains an action which gets and parses the right value from the environment! It's clear at a glance that we haven't forgotten to check any fields (if you have <code>-Wall</code> enabled you'd get a warning about missing fields)! We've effectively turned the traditional <code>Options &lt;$&gt; ... &lt;*&gt; ...</code> design <strong>inside out</strong>. It's much more declarative this way, and now that it's all collected as structured data it'll be easier for us to work with from now on too!</p>
+<p>Let's build another one!</p>
+<h2>Parsing JSON/YAML Configs</h2>
+<p>JSON and YAML configuration files are pretty common these days. I won't bother to dive into where to store them or how we'll parse them, let's assume you've done that already and just pretend we've got ourselves an Aeson <code>Value</code> object from some config file and we want to dump the values into our options object.</p>
+<p>We have two options here and I'll show both! The simplest is just to derive <code>FromJSON</code> and cast the value directly into our type!</p>
+<p>Unfortunately it's not quite so easy as just tacking on a <code>deriving FromJSON</code>; Since GHC doesn't know what type <code>f</code> is it has a tough time figuring out what you want it to do. If you try you'll get an error like:</p>
+<pre><code>• No instance for (FromJSON (f String))</code></pre>
+<p>We need to help out GHC a bit. No worries though; someone thought of that! Time to pull in the <a href="http://hackage.haskell.org/package/barbies"><code>barbies</code></a> library. An incredibly useful tool for working with HKDT in general. Add the <code>barbies</code> library to your project, then we'll derive a few handy instances:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb8-1" data-line-number="1"><span class="ot">{-# LANGUAGE DeriveGeneric #-}</span></a>
+<a class="sourceLine" id="cb8-2" data-line-number="2"><span class="ot">{-# LANGUAGE DeriveAnyClass #-}</span></a>
+<a class="sourceLine" id="cb8-3" data-line-number="3"><span class="ot">{-# LANGUAGE StandaloneDeriving #-}</span></a>
+<a class="sourceLine" id="cb8-4" data-line-number="4"><span class="co">-- ...</span></a>
+<a class="sourceLine" id="cb8-5" data-line-number="5"><span class="kw">import</span> <span class="dt">GHC.Generics</span> (<span class="dt">Generic</span>)</a>
+<a class="sourceLine" id="cb8-6" data-line-number="6"><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Aeson</span> <span class="kw">as</span> <span class="dt">A</span></a>
+<a class="sourceLine" id="cb8-7" data-line-number="7"><span class="kw">import</span> <span class="dt">Data.Barbie</span></a>
+<a class="sourceLine" id="cb8-8" data-line-number="8"><span class="co">-- ...</span></a>
+<a class="sourceLine" id="cb8-9" data-line-number="9"></a>
+<a class="sourceLine" id="cb8-10" data-line-number="10"><span class="co">-- Go back and add the deriving clause:</span></a>
+<a class="sourceLine" id="cb8-11" data-line-number="11"><span class="kw">data</span> <span class="dt">Options_</span> f <span class="fu">=</span></a>
+<a class="sourceLine" id="cb8-12" data-line-number="12">    <span class="dt">Options_</span> {<span class="fu">...</span>}</a>
+<a class="sourceLine" id="cb8-13" data-line-number="13">    <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">FunctorB</span>, <span class="dt">TraversableB</span>, <span class="dt">ProductB</span>, <span class="dt">ConstraintsB</span>, <span class="dt">ProductBC</span>)</a>
+<a class="sourceLine" id="cb8-14" data-line-number="14"></a>
+<a class="sourceLine" id="cb8-15" data-line-number="15"><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Show</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Show</span> (<span class="dt">Options_</span> f)</a>
+<a class="sourceLine" id="cb8-16" data-line-number="16"><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Eq</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Eq</span> (<span class="dt">Options_</span> f)</a>
+<a class="sourceLine" id="cb8-17" data-line-number="17"><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">A.FromJSON</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">A.FromJSON</span> (<span class="dt">Options_</span> f)</a></code></pre></div>
+<p>Okay! Let's step through some of that. First we derive <code>Generic</code>, it's used by both <code>aeson</code> and <code>barbies</code> for most of their type classes. We derive a bunch of handy <code>*B</code> helpers (B for Barbies) which also come from the <code>barbies</code> lib, we'll explain them as we use them. The important part right now is the <code>deriving instance</code> clauses. <code>AllBF</code> from <code>barbies</code> asserts that <strong>all</strong> the wrapped fields of the typeclass adhere to some type class. For example, <code>AllBF Show f Options_</code> says that <code>f a</code> is Showable for every field in our product. More concretely, in our case <code>AllBF Show f Options</code> expands into something equivalent to <code>(Show (f String), Show (f Int))</code> since we have fields of type <code>String</code> and <code>Int</code>. Nifty! So we can now derive type classes with behaviour dependent on the wrapping type. In most cases this works as expected, and can sometimes be really handy!</p>
+<p>One example where this ends up being useful is <code>FromJSON</code>. The behaviour of our <code>FromJSON</code> instance will depend on the wrapper type; if we choose <code>f ~ Maybe</code> then all of our fields become optional! Let's use this behaviour to say that we want to parse our JSON file into an <code>Options</code> object, but it's okay if fields are missing.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Control.Lens</span></a>
+<a class="sourceLine" id="cb9-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb9-3" data-line-number="3"><span class="ot">jsonOptsDerived ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb9-4" data-line-number="4">jsonOptsDerived <span class="fu">=</span> fromResult <span class="fu">.</span> A.fromJSON</a>
+<a class="sourceLine" id="cb9-5" data-line-number="5">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb9-6" data-line-number="6"><span class="ot">    fromResult ::</span> <span class="dt">A.Result</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb9-7" data-line-number="7">    fromResult (<span class="dt">A.Success</span> a) <span class="fu">=</span> a</a>
+<a class="sourceLine" id="cb9-8" data-line-number="8">    fromResult (<span class="dt">A.Error</span> _) <span class="fu">=</span> buniq <span class="dt">Nothing</span></a></code></pre></div>
+<p>A few things to point out here; we call <code>fromJson :: FromJSON a =&gt; Value -&gt; Result a</code> here, but we don't really need the outer <code>Result</code> type; we'd prefer if the failure was localized at the individual field level; simply using <code>Nothing</code> for fields which are missing. So we use <code>fromResult</code> to unpack the result if successful, or to construct an <code>Options_ Maybe</code> filled completely with <code>Nothing</code> if the parsing fails for some reason (you'll probably want to come back an improve this error handling behaviour later). You'll notice that nothing we do really has much to do with <code>Options_</code>; so let's generalize this into a combinator we can re-use in the future:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="ot">jsonOptsDerived ::</span> (<span class="dt">A.FromJSON</span> (b <span class="dt">Maybe</span>), <span class="dt">ProductB</span> b) <span class="ot">=&gt;</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb10-2" data-line-number="2">jsonOptsDerived <span class="fu">=</span> fromResult <span class="fu">.</span> A.fromJSON</a>
+<a class="sourceLine" id="cb10-3" data-line-number="3">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb10-4" data-line-number="4"><span class="ot">    fromResult ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> <span class="dt">A.Result</span> (b <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb10-5" data-line-number="5">    fromResult (<span class="dt">A.Success</span> a) <span class="fu">=</span> a</a>
+<a class="sourceLine" id="cb10-6" data-line-number="6">    fromResult (<span class="dt">A.Error</span> _) <span class="fu">=</span> buniq <span class="dt">Nothing</span></a></code></pre></div>
+<p><code>buniq</code> requires a <code>ProductB</code> constraint which asserts that the type we're constructing is a Record type or some other Product. This is required because <code>buniq</code> wouldn't know which constructor to instantiate if it were a Sum-type.</p>
+<p>Okay, we've seen the generic version; here's a different approach where we can choose HOW to deserialize each option from the provided <code>Value</code>.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb11-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Data.Text.Lens</span></a>
+<a class="sourceLine" id="cb11-2" data-line-number="2"><span class="kw">import</span> <span class="dt">Data.Aeson.Lens</span></a>
+<a class="sourceLine" id="cb11-3" data-line-number="3"><span class="kw">import</span> <span class="dt">Control.Lens</span></a>
+<a class="sourceLine" id="cb11-4" data-line-number="4"></a>
+<a class="sourceLine" id="cb11-5" data-line-number="5"><span class="ot">jsonOptsCustom ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb11-6" data-line-number="6">jsonOptsCustom <span class="fu">=</span> bsequence</a>
+<a class="sourceLine" id="cb11-7" data-line-number="7">    <span class="dt">Options_</span></a>
+<a class="sourceLine" id="cb11-8" data-line-number="8">    { serverHost <span class="fu">=</span> findField <span class="fu">$</span> key <span class="st">&quot;host&quot;</span>        <span class="fu">.</span> _String <span class="fu">.</span> unpacked</a>
+<a class="sourceLine" id="cb11-9" data-line-number="9">    , numThreads <span class="fu">=</span> findField <span class="fu">$</span> key <span class="st">&quot;num_threads&quot;</span> <span class="fu">.</span> _Number <span class="fu">.</span> to round</a>
+<a class="sourceLine" id="cb11-10" data-line-number="10">    , verbosity  <span class="fu">=</span> findField <span class="fu">$</span> key <span class="st">&quot;verbosity&quot;</span>   <span class="fu">.</span> _Number <span class="fu">.</span> to round</a>
+<a class="sourceLine" id="cb11-11" data-line-number="11">    }</a>
+<a class="sourceLine" id="cb11-12" data-line-number="12">      <span class="kw">where</span></a>
+<a class="sourceLine" id="cb11-13" data-line-number="13"><span class="ot">        findField ::</span> <span class="dt">Fold</span> <span class="dt">A.Value</span> a <span class="ot">-&gt;</span> <span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span> a</a>
+<a class="sourceLine" id="cb11-14" data-line-number="14">        findField p <span class="fu">=</span> <span class="dt">Compose</span> (preview p)</a></code></pre></div>
+<p>Some of these types get a bit funky; but IMHO they wouldn't be too terrible if this were all bundled up in some lib for readability. As I said earlier, some of the ergonomics still have room for improvement.</p>
+<p>Let's talk about what this thing does! First we import a bunch of lensy stuff; then in each field of our options type we build a getter function from <code>Value -&gt; Maybe a</code> which tries to extract the field from the JSON Value. <code>preview</code> mixed with <code>Data.Aeson.Lens</code> happens to be a handy way to do this. I pulled out the <code>findField</code> helper mainly to draw attention to the rather cryptic <code>Compose ((-&gt;) A.Value) Maybe a</code> type signature. This is just <code>Compose</code> wrapped around a function <code>A.Value -&gt; Maybe a</code>; why do we need the <code>Compose</code> here? What we REALLY want is <code>A.Value -&gt; Option_ Maybe</code>; but remember that every field MUST contain something that matches <code>f a</code> for some <code>f</code>. A function signature like <code>A.Value -&gt; Maybe a</code> doesn't match this form, but <code>Compose ((-&gt;) A.Value) Maybe a</code> does (where <code>f ~ Compose ((-&gt;) A.Value) Maybe</code>)! Ideally we'd then like to pull the function bits to the outside since we'll be calling each field with the same argument. Conveniently; <code>barbies</code> provides us with <code>bsequence</code>; whose type looks like this:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb12-1" data-line-number="1"><span class="ot">bsequence ::</span></a>
+<a class="sourceLine" id="cb12-2" data-line-number="2">  (<span class="dt">Applicative</span> f, <span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span></a>
+<a class="sourceLine" id="cb12-3" data-line-number="3">  b (<span class="dt">Compose</span> f g) <span class="ot">-&gt;</span> f (b g)</a></code></pre></div>
+<p>Or if we specialize it to this particular case:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb13-1" data-line-number="1"><span class="ot">bsequence ::</span> <span class="dt">Options_</span> (<span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb13-2" data-line-number="2">          <span class="ot">-&gt;</span> (<span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span>)</a></code></pre></div>
+<p>We use the <code>-&gt;</code> applicative (also known as <code>Reader</code>) to extract the function Functor to the outside of the structure! This of course requires that the individual fields can be traversed; implying the <code>TraversableB</code> constraint. Hopefully this demonstrates the flexibility of this technique, we can provide an arbitrary lens chain to extract the value for each setting, maybe it's overkill in this case, but I can think of a few situations where it would be pretty handy.</p>
+<p>While we're at it, let's <code>bsequence</code> our earlier Environment Variable object to get the IO on the outside!</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb14-1" data-line-number="1"><span class="ot">envOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb14-2" data-line-number="2">envOpts <span class="fu">=</span> bsequence</a>
+<a class="sourceLine" id="cb14-3" data-line-number="3">    <span class="dt">Options_</span></a>
+<a class="sourceLine" id="cb14-4" data-line-number="4">    <span class="co">-- serverHost is already a string so we don&#39;t need to &#39;read&#39; it.</span></a>
+<a class="sourceLine" id="cb14-5" data-line-number="5">    { serverHost <span class="fu">=</span> <span class="dt">Compose</span> <span class="fu">.</span> lookupEnv <span class="fu">$</span> <span class="st">&quot;SERVER_HOST&quot;</span></a>
+<a class="sourceLine" id="cb14-6" data-line-number="6">    , numThreads <span class="fu">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></a>
+<a class="sourceLine" id="cb14-7" data-line-number="7">    <span class="co">-- We can &#39;ignore&#39; a field by simply returning Nothing.</span></a>
+<a class="sourceLine" id="cb14-8" data-line-number="8">    , verbosity    <span class="fu">=</span> <span class="dt">Compose</span> <span class="fu">.</span> pure <span class="fu">$</span> <span class="dt">Nothing</span></a>
+<a class="sourceLine" id="cb14-9" data-line-number="9">    }</a></code></pre></div>
+<p>This is dragging on a bit; let's see how we can actually use these things!</p>
+<h2>Combining Options Objects</h2>
+<p>Now that we've got two different ways to collect options for our program let's see how we can combine them. Let's write a simple action in IO for getting and combining our options parsers.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb15-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Control.Applicative</span></a>
+<a class="sourceLine" id="cb15-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb15-3" data-line-number="3"><span class="co">-- Fake config file for convenience</span></a>
+<a class="sourceLine" id="cb15-4" data-line-number="4"><span class="ot">readConfigFile ::</span> <span class="dt">IO</span> <span class="dt">A.Value</span></a>
+<a class="sourceLine" id="cb15-5" data-line-number="5">readConfigFile <span class="fu">=</span></a>
+<a class="sourceLine" id="cb15-6" data-line-number="6">    pure <span class="fu">$</span> A.object [ <span class="st">&quot;host&quot;</span> <span class="fu">A..=</span> <span class="dt">A.String</span> <span class="st">&quot;example.com&quot;</span></a>
+<a class="sourceLine" id="cb15-7" data-line-number="7">                    , <span class="st">&quot;verbosity&quot;</span> <span class="fu">A..=</span> <span class="dt">A.Number</span> <span class="dv">42</span></a>
+<a class="sourceLine" id="cb15-8" data-line-number="8">                    ]</a>
+<a class="sourceLine" id="cb15-9" data-line-number="9"></a>
+<a class="sourceLine" id="cb15-10" data-line-number="10"><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb15-11" data-line-number="11">getOptions <span class="fu">=</span> <span class="kw">do</span></a>
+<a class="sourceLine" id="cb15-12" data-line-number="12">    configJson <span class="ot">&lt;-</span> readConfigFile</a>
+<a class="sourceLine" id="cb15-13" data-line-number="13">    envOpts&#39; <span class="ot">&lt;-</span> envOpts</a>
+<a class="sourceLine" id="cb15-14" data-line-number="14">    return <span class="fu">$</span> bzipWith (<span class="fu">&lt;|&gt;</span>) envOpts&#39; (jsonOptsCustom configJson)</a></code></pre></div>
+<p>Let's try it out, then I'll explain it.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb16-1" data-line-number="1">λ<span class="fu">&gt;</span> getOptions</a>
+<a class="sourceLine" id="cb16-2" data-line-number="2"><span class="dt">Options_</span> {serverHost <span class="fu">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="fu">=</span> <span class="dt">Nothing</span>, verbosity <span class="fu">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</a>
+<a class="sourceLine" id="cb16-3" data-line-number="3"></a>
+<a class="sourceLine" id="cb16-4" data-line-number="4">λ<span class="fu">&gt;</span> setEnv <span class="st">&quot;NUM_THREADS&quot;</span> <span class="st">&quot;1337&quot;</span></a>
+<a class="sourceLine" id="cb16-5" data-line-number="5">λ<span class="fu">&gt;</span> getOptions</a>
+<a class="sourceLine" id="cb16-6" data-line-number="6"><span class="dt">Options_</span> {serverHost <span class="fu">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="fu">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="fu">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</a>
+<a class="sourceLine" id="cb16-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb16-8" data-line-number="8"><span class="co">-- We&#39;ve set things up so that environment variables override our JSON config.</span></a>
+<a class="sourceLine" id="cb16-9" data-line-number="9">λ<span class="fu">&gt;</span> setEnv <span class="st">&quot;SERVER_HOST&quot;</span> <span class="st">&quot;chrispenner.ca&quot;</span></a>
+<a class="sourceLine" id="cb16-10" data-line-number="10"><span class="dt">Options_</span> {serverHost <span class="fu">=</span> <span class="dt">Just</span> <span class="st">&quot;chrispenner.ca&quot;</span>, numThreads <span class="fu">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="fu">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</a></code></pre></div>
+<p>Now that we're combining sets of config values we need to decide what semantics we want when values overlap! I've decided to use <code>&lt;|&gt;</code> from <code>Alternative</code> to combine our <code>Maybe</code> values. This basically means &quot;take the first non-Nothing value and ignore the rest&quot;. That means in our case that the first setting to be &quot;set&quot; wins out. <code>bzipWith</code> performs element-wise zipping of each element within our <code>Options_</code> record, with the caveat that the function you give it must work over any possible <code>a</code> contained inside. In our case the type is specialized to:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb17-1" data-line-number="1"><span class="ot">bzipWith  ::</span> (forall a<span class="fu">.</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a)</a>
+<a class="sourceLine" id="cb17-2" data-line-number="2">          <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></a></code></pre></div>
+<p>Which does what we want. This end bit is going to get messy if we add any more sources though, let's see if we can't clean it up! My first thought is that I'd love to use <code>&lt;|&gt;</code> without any lifting/zipping, but the kinds don't line up; <code>Options_</code> is kind <code>(Type -&gt; Type) -&gt; Type</code> whereas <code>Type -&gt; Type</code> is required by <code>Alternative</code>. How do we lift Alternative to Higher Kinds? Well we could try something clever, <strong>OR</strong> we could go the opposite direction and use <code>Alternative</code> to build a <code>Monoid</code> instance for our type; then use that to combine our values!</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb18-1" data-line-number="1"><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Semigroup</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></a>
+<a class="sourceLine" id="cb18-2" data-line-number="2">  (<span class="fu">&lt;&gt;</span>) <span class="fu">=</span> bzipWith (<span class="fu">&lt;|&gt;</span>)</a>
+<a class="sourceLine" id="cb18-3" data-line-number="3"></a>
+<a class="sourceLine" id="cb18-4" data-line-number="4"><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></a>
+<a class="sourceLine" id="cb18-5" data-line-number="5">  mempty <span class="fu">=</span> buniq empty</a></code></pre></div>
+<p>Now we have a Monoid for <code>Options_</code> whenever <code>f</code> is an <code>Alternative</code> such as <code>Maybe</code>! There are many possible <code>Monoid</code> instance for HKDTs, but in our case it works great! <code>Alternative</code> is actually just a Monoid in the category of Applicative Functors, so it makes sense that it makes a suitable Monoid if we apply it to values within an HKDT.</p>
+<p>Let's see how we can refactor things.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb19-1" data-line-number="1"><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb19-2" data-line-number="2">getOptions <span class="fu">=</span> envOpts <span class="fu">&lt;&gt;</span> (jsonOptsCustom <span class="fu">&lt;$&gt;</span> readConfigFile)</a></code></pre></div>
+<p>Wait a minute; what about the <code>IO</code>? Here I'm actually employing <code>IO</code>s little known Monoid instance! <code>IO</code> is a Monoid whenever the result of the <code>IO</code> is a Monoid; it simply runs both <code>IO</code> actions then <code>mappends</code> the results (e.g. <code>liftA2 (&lt;&gt;)</code>). In this case it's perfect! As we get even more possible option parsers we could even just put them in a list and <code>fold</code> them together: <code>fold [envOpts, jsonOptsCustom &lt;$&gt; readConfigFile, ...]</code></p>
+<p>But wait! There's more!</p>
+<h2>Setting Default Values</h2>
+<p>We've seen how we can specify multiple <strong>partial</strong> configuration sources, but at the end of the day we're still left with an <code>Options_ Maybe</code>! What if we want to guarantee that we have a value for all required config values? Let's write a new helper.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb20-1" data-line-number="1"><span class="ot">withDefaults ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> b <span class="dt">Identity</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span> <span class="ot">-&gt;</span> b <span class="dt">Identity</span></a>
+<a class="sourceLine" id="cb20-2" data-line-number="2">withDefaults <span class="fu">=</span> bzipWith fromMaybeI</a>
+<a class="sourceLine" id="cb20-3" data-line-number="3">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb20-4" data-line-number="4"><span class="ot">    fromMaybeI ::</span> <span class="dt">Identity</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Identity</span> a</a>
+<a class="sourceLine" id="cb20-5" data-line-number="5">    fromMaybeI (<span class="dt">Identity</span> a) <span class="dt">Nothing</span>  <span class="fu">=</span> <span class="dt">Identity</span> a</a>
+<a class="sourceLine" id="cb20-6" data-line-number="6">    fromMaybeI _            (<span class="dt">Just</span> a) <span class="fu">=</span> <span class="dt">Identity</span> a</a></code></pre></div>
+<p>This new helper uses our old friend <code>bzipWith</code> to lift a slightly altered <code>fromMaybe</code> to run over HKDTs! We have to do a little bit of annoying wrapping/unwrapping of Identity, but it's not too bad. This function will take the config value from any <code>Just</code>'s in our <code>Options_ Maybe</code> and will choose the default for the <code>Nothing</code>s!</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb21-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Data.Foldable</span></a>
+<a class="sourceLine" id="cb21-2" data-line-number="2"><span class="co">---</span></a>
+<a class="sourceLine" id="cb21-3" data-line-number="3"><span class="kw">type</span> <span class="dt">Options</span> <span class="fu">=</span> <span class="dt">Options_</span> <span class="dt">Identity</span></a>
+<a class="sourceLine" id="cb21-4" data-line-number="4"></a>
+<a class="sourceLine" id="cb21-5" data-line-number="5"><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></a>
+<a class="sourceLine" id="cb21-6" data-line-number="6">getOptions <span class="fu">=</span></a>
+<a class="sourceLine" id="cb21-7" data-line-number="7">  withDefaults defaultOpts <span class="fu">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="fu">&lt;$&gt;</span> readConfigFile]</a></code></pre></div>
+<p>We introduce the alias <code>type Options = Options_ Identity</code> as a convenience.</p>
+<h2>Better Errors</h2>
+<p>So far our system silently fails in a lot of places. Let's see how HKDTs can give us more expressive error handling!</p>
+<p>The first cool thing is that we can store error messages directly alongside fields they pertain to!</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb22-1" data-line-number="1"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></a>
+<a class="sourceLine" id="cb22-2" data-line-number="2"><span class="co">---</span></a>
+<a class="sourceLine" id="cb22-3" data-line-number="3"><span class="ot">optErrors ::</span> <span class="dt">Options_</span> (<span class="dt">Const</span> <span class="dt">String</span>)</a>
+<a class="sourceLine" id="cb22-4" data-line-number="4">optErrors <span class="fu">=</span></a>
+<a class="sourceLine" id="cb22-5" data-line-number="5">    <span class="dt">Options_</span></a>
+<a class="sourceLine" id="cb22-6" data-line-number="6">    { serverHost <span class="fu">=</span> <span class="st">&quot;server host required but not provided&quot;</span></a>
+<a class="sourceLine" id="cb22-7" data-line-number="7">    , numThreads <span class="fu">=</span> <span class="st">&quot;num threads required but not provided&quot;</span></a>
+<a class="sourceLine" id="cb22-8" data-line-number="8">    , verbosity  <span class="fu">=</span> <span class="st">&quot;verbosity required but not provided&quot;</span></a>
+<a class="sourceLine" id="cb22-9" data-line-number="9">    }</a></code></pre></div>
+<p>If we use <code>Const String</code> in our HKDT we are saying that we actually don't care about the type of the field itself, we just want to store a string no matter what! If we turn on <code>OverloadedStrings</code> we can even leave out the <code>Const</code> constructor if we like! But I'll leave that choice up to you.</p>
+<p>Now that we've got errors which relate to each field we can construct a helpful error message if we're missing required fields:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb23-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Data.Either.Validation</span></a>
+<a class="sourceLine" id="cb23-2" data-line-number="2"><span class="co">---</span></a>
+<a class="sourceLine" id="cb23-3" data-line-number="3"><span class="ot">validateOptions ::</span> (<span class="dt">TraversableB</span> b, <span class="dt">ProductB</span> b)</a>
+<a class="sourceLine" id="cb23-4" data-line-number="4">                <span class="ot">=&gt;</span> b (<span class="dt">Const</span> <span class="dt">String</span>)</a>
+<a class="sourceLine" id="cb23-5" data-line-number="5">                <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></a>
+<a class="sourceLine" id="cb23-6" data-line-number="6">                <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] (b <span class="dt">Identity</span>)</a>
+<a class="sourceLine" id="cb23-7" data-line-number="7">validateOptions errMsgs mOpts <span class="fu">=</span> bsequence&#39; <span class="fu">$</span> bzipWith validate mOpts errMsgs</a>
+<a class="sourceLine" id="cb23-8" data-line-number="8">  <span class="kw">where</span></a>
+<a class="sourceLine" id="cb23-9" data-line-number="9"><span class="ot">    validate ::</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Const</span> <span class="dt">String</span> a <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] a</a>
+<a class="sourceLine" id="cb23-10" data-line-number="10">    validate (<span class="dt">Just</span> x) _          <span class="fu">=</span> <span class="dt">Success</span> x</a>
+<a class="sourceLine" id="cb23-11" data-line-number="11">    validate <span class="dt">Nothing</span> (<span class="dt">Const</span> err) <span class="fu">=</span> <span class="dt">Failure</span> [err]</a></code></pre></div>
+<p><code>validateOptions</code> takes any traversable product HKDT with <code>Maybe</code> fields and an HKDT filled with error messages inside <code>Const</code> and will return a <code>Validation</code> object containing either a summary of errors or a validated <code>Identity</code> HKDT. Just as before we use <code>bzipWith</code> with a function which operates at the level of functors as a Natural Transformation; i.e. it cares only about the containers, not the values. Note that Validation is very similar to the <code>Either</code> type, but accumulates all available errors rather than failing fast. We use <code>bsequence'</code> here, which is just like <code>bsequence</code>; but saves us the trouble of explicitly threading an <code>Identity</code> into our structure. Check the docs in <code>barbies</code> if you'd like to learn more.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb24-1" data-line-number="1"><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</a>
+<a class="sourceLine" id="cb24-2" data-line-number="2">getOptions <span class="fu">=</span></a>
+<a class="sourceLine" id="cb24-3" data-line-number="3">  validateOptions optErrors <span class="fu">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="fu">&lt;$&gt;</span> readConfigFile]</a></code></pre></div>
+<p>Now if we end up with values missing we get a list of errors!</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb25-1" data-line-number="1">λ<span class="fu">&gt;</span> getOptions</a>
+<a class="sourceLine" id="cb25-2" data-line-number="2"><span class="dt">Failure</span> [<span class="st">&quot;num threads required but not provided&quot;</span>]</a></code></pre></div>
+<p>You can trust me that if we had more than one thing missing it would collect them all. That's a lot of content all at once, so I'll leave some other experiments for next time. Once you start to experiment a world of opportunities opens up; you can describe validation, forms, documentations, schemas, and a bunch of other stuff I haven't even though of yet!! A challenge for the reader: try writing a proper validator using HKDTs which validates that each field fulfills specific properties. For example, check that the number of threads is &gt; 0; check that the host is non-empty, etc. You may find the following newtype helpful ;) <code>newtype Checker a = Checker (a -&gt; Maybe String)</code></p>
+<h2>Bonus: Parsing CLI Options</h2>
+<p>Just for fun here's a bonus config source for getting options from the Command Line using Optparse Applicative</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode haskell"><code class="sourceCode haskell"><a class="sourceLine" id="cb26-1" data-line-number="1"><span class="kw">import</span> <span class="dt">Options.Applicative</span> <span class="kw">hiding</span> (<span class="dt">Failure</span>, <span class="dt">Success</span>)</a>
+<a class="sourceLine" id="cb26-2" data-line-number="2"><span class="co">---</span></a>
+<a class="sourceLine" id="cb26-3" data-line-number="3"><span class="ot">cliOptsParser ::</span> <span class="dt">Options_</span> <span class="dt">Parser</span></a>
+<a class="sourceLine" id="cb26-4" data-line-number="4">cliOptsParser <span class="fu">=</span></a>
+<a class="sourceLine" id="cb26-5" data-line-number="5">    <span class="dt">Options_</span></a>
+<a class="sourceLine" id="cb26-6" data-line-number="6">    { serverHost <span class="fu">=</span></a>
+<a class="sourceLine" id="cb26-7" data-line-number="7">          strOption (long <span class="st">&quot;serverHost&quot;</span> <span class="fu">&lt;&gt;</span> metavar <span class="st">&quot;HOST&quot;</span> <span class="fu">&lt;&gt;</span> help <span class="st">&quot;host for API interactions&quot;</span>)</a>
+<a class="sourceLine" id="cb26-8" data-line-number="8">    , numThreads <span class="fu">=</span></a>
+<a class="sourceLine" id="cb26-9" data-line-number="9">          option auto</a>
+<a class="sourceLine" id="cb26-10" data-line-number="10">                 (long <span class="st">&quot;threads&quot;</span> <span class="fu">&lt;&gt;</span> short <span class="ch">&#39;t&#39;</span> <span class="fu">&lt;&gt;</span> help <span class="st">&quot;number of threads&quot;</span> <span class="fu">&lt;&gt;</span> metavar <span class="st">&quot;INT&quot;</span>)</a>
+<a class="sourceLine" id="cb26-11" data-line-number="11">    , verbosity  <span class="fu">=</span> option auto</a>
+<a class="sourceLine" id="cb26-12" data-line-number="12">                          (long <span class="st">&quot;verbosity&quot;</span></a>
+<a class="sourceLine" id="cb26-13" data-line-number="13">                           <span class="fu">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span></a>
+<a class="sourceLine" id="cb26-14" data-line-number="14">                           <span class="fu">&lt;&gt;</span> help <span class="st">&quot;Level of verbosity&quot;</span></a>
+<a class="sourceLine" id="cb26-15" data-line-number="15">                           <span class="fu">&lt;&gt;</span> metavar <span class="st">&quot;VERBOSITY&quot;</span>)</a>
+<a class="sourceLine" id="cb26-16" data-line-number="16">    }</a>
+<a class="sourceLine" id="cb26-17" data-line-number="17"></a>
+<a class="sourceLine" id="cb26-18" data-line-number="18"></a>
+<a class="sourceLine" id="cb26-19" data-line-number="19"><span class="ot">mkOptional ::</span> <span class="dt">FunctorB</span> b <span class="ot">=&gt;</span> b <span class="dt">Parser</span> <span class="ot">-&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb26-20" data-line-number="20">mkOptional <span class="fu">=</span> bmap (<span class="dt">Compose</span> <span class="fu">.</span> optional)</a>
+<a class="sourceLine" id="cb26-21" data-line-number="21"></a>
+<a class="sourceLine" id="cb26-22" data-line-number="22"><span class="ot">toParserInfo ::</span> (<span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">ParserInfo</span> (b <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb26-23" data-line-number="23">toParserInfo b <span class="fu">=</span> info (bsequence b) briefDesc</a>
+<a class="sourceLine" id="cb26-24" data-line-number="24"></a>
+<a class="sourceLine" id="cb26-25" data-line-number="25"><span class="ot">cliOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</a>
+<a class="sourceLine" id="cb26-26" data-line-number="26">cliOpts <span class="fu">=</span> execParser <span class="fu">$</span> toParserInfo (mkOptional cliOptsParser)</a>
+<a class="sourceLine" id="cb26-27" data-line-number="27"></a>
+<a class="sourceLine" id="cb26-28" data-line-number="28"><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</a>
+<a class="sourceLine" id="cb26-29" data-line-number="29">getOptions <span class="fu">=</span></a>
+<a class="sourceLine" id="cb26-30" data-line-number="30">  validateOptions optErrors <span class="fu">&lt;$&gt;</span> fold [cliOpts, envOpts, jsonOptsCustom <span class="fu">&lt;$&gt;</span> readConfigFile]</a></code></pre></div>
 
     <p>Hopefully you learned something 🤞; If so, consider supporting more posts like this by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
@@ -954,11 +1039,11 @@
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/update-monad" data-text="Check out: Update Monads: Variation on State Monads - " data-via="chrislpenner">Tweet</a>
+                data-url="https://chrispenner.ca/posts/hkd-options" data-text="Check out: Higher Kinded Option Parsing - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/update-monad" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+            <div class="fb-like" data-href="https://chrispenner.ca/hkd-options" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
 <!-- Disqus Comments -->
