@@ -49,7 +49,7 @@ getOptions =
 ```
 
 This is slightly disingenuous as some of the logic is abstracted away behind the scenes
-in the second example; but he point here is that the logic CAN be abstracted, whereas
+in the second example; but the point here is that the logic CAN be abstracted, whereas
 it's very difficult to abstract over the steps in the first example without creating
 a bunch of intermediate types.
 
@@ -360,6 +360,7 @@ Options_ {serverHost = Just "example.com", numThreads = Just 1337, verbosity = J
 
 -- We've set things up so that environment variables override our JSON config.
 λ> setEnv "SERVER_HOST" "chrispenner.ca"
+λ> getOptions
 Options_ {serverHost = Just "chrispenner.ca", numThreads = Just 1337, verbosity = Just 42}
 ```
 
