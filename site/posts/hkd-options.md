@@ -127,7 +127,7 @@ import Data.Functor.Compose (Compose(..))
 
 -- Add a Compose to our helper
 readEnv :: Read a => String -> (IO `Compose` Maybe) a
-readEnv envKey = Compose $ do
+readEnv envKey = Compose $
     ...
 
 envOpts :: Options_ (IO `Compose` Maybe)
