@@ -95,10 +95,8 @@ import System.Environment (lookupEnv, setEnv)
 import Text.Read (readMaybe)
 
 readEnv :: Read a => String -> IO (Maybe a)
-readEnv envKey = do
-    lookupEnv envKey >>= pure . \case
-        Just x -> readMaybe x
-        Nothing -> Nothing
+readEnv envKey =
+    (>>= readMaybe) <$> lookupEnv envKey
 ```
 
 This function looks up the given key in the environment, returning a
