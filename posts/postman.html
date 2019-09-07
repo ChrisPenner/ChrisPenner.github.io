@@ -769,7 +769,7 @@
 <p>Let's get started, first go ahead and <a href="https://www.getpostman.com/">GET POSTMAN</a>;</p>
 <p>Here's roughly what you'll see when you start it up:</p>
 <p><img src="/images/postman/overview.png" alt="Overview" /></p>
-<h1>Requests</h1>
+<h1 id="requests">Requests</h1>
 <p>Let's walk through the Request interface (in order of importance, stop when you get bored)</p>
 <p><img src="/images/postman/request.png" alt="Requests" /></p>
 <ol>
@@ -808,7 +808,7 @@
 <li>Choosing Basic Auth will encode a username and password into the request for you.</li>
 </ul></li>
 </ol>
-<h1>Responses</h1>
+<h1 id="responses">Responses</h1>
 <p><img src="/images/postman/response.png" alt="Responses" /></p>
 <p>Cool stuff; we can set up our request. Now let's say we hit the big blue SEND button and we have a response!</p>
 <ol>
@@ -826,7 +826,7 @@
 </ul></li>
 <li>Utilities
 <ul>
-<li>First one is &quot;Copy to Clipboard&quot;; handy for sharing with your helpful co-workers</li>
+<li>First one is "Copy to Clipboard"; handy for sharing with your helpful co-workers</li>
 <li>Second opens a search in the response</li>
 <li>Third let's you save it for later</li>
 </ul></li>
@@ -836,24 +836,24 @@
 </ul></li>
 </ol>
 <p>So that's pretty much it for making simple requests, but I've missed a few of the more useful things about postman; you can save collections of requests to share with people; and also save lists of environment variables which can be interpolated into requests.</p>
-<h2>History</h2>
+<h2 id="history">History</h2>
 <p><img src="/images/postman/history.png" alt="History" /></p>
 <p>You can see your request history via the tab at the top and load up any past requests, which is handy if you've edited a request and want to get back to a previous version of it; or you're like me and you can't remember anything that happened more than 15 minutes ago.</p>
-<h2>Collections</h2>
+<h2 id="collections">Collections</h2>
 <p><img src="/images/postman/collections.png" alt="Collections" /></p>
 <p>This panel on the left will probably have nothing in it when you start. At any time you can hit the 'save' button to the right of the URL bar to save a request for later.</p>
 <p>I keep collections of requests around when I'm testing, and I often make collections to share with my team.</p>
-<h1>Environments</h1>
+<h1 id="environments">Environments</h1>
 <p><img src="/images/postman/environments.png" alt="Environments" /></p>
 <p>Here we can set a context to execute our requests in. An environment can contain a set of key-value settings which we can use anywhere in our request. This is great if you're testing api's as different users, or if you have to test the same calls against several different hosts.</p>
 <p>If you set up some environment variables you can interpolate them into your requests using double curly braces. For example you might make a request to <code>example.com/my-endpoint?apiKey={{apiKey}}&amp;apiUser={{apiUser}}</code>, now if you have postman environments set up for each user and key you can switch between them easily. You can use <code>{{}}</code> anywhere it would make sense; e.g. urls, params, POST bodies, etc.</p>
-<h1>Need a session with the site? Use Interceptor</h1>
+<h1 id="need-a-session-with-the-site-use-interceptor">Need a session with the site? Use Interceptor</h1>
 <p>Interceptor is one of Postman's cooler features; it allows the Postman app to route the requests through your chrome instance; this means they'll include any cookies (and therefore sessions) you have in chrome.</p>
 <p><img src="/images/postman/interceptor.png" alt="Interceptor" /></p>
 <p>NOTE! Interceptor is currently only available in the chrome Postman plugin, NOT the desktop app; so if you don't see this icon, you're probably using the desktop app and will need to switch over to <a href="https://chrome.google.com/webstore/detail/postman/fhbjgbiflinjbdggehcddcbncdddomop">Postman chrome app</a> to use it. You'll also need to install the <a href="https://chrome.google.com/webstore/detail/postman-interceptor/aicmkgpgakddgnaphhhpliifpcfhicfo?hl=en">Postman Interceptor Chrome Extension</a>.</p>
 <p>Now if we click to enable the chrome interceptor plugin, all our requests will pick up any cookies that exist in our chrome session! Handy! You can also flip a switch in the browser extension and have it track requests happening in your browser through Postman's history.</p>
-<h1>Importing/Exporting</h1>
-<p>Postman has the ability to import curl requests using the &quot;import&quot; button on the top left, but you can also export code for each request in a language of your choice using the &quot;code&quot; button on the right. You can export as Python, HTTP, curl, Go, Java, Node, etc.</p>
+<h1 id="importingexporting">Importing/Exporting</h1>
+<p>Postman has the ability to import curl requests using the "import" button on the top left, but you can also export code for each request in a language of your choice using the "code" button on the right. You can export as Python, HTTP, curl, Go, Java, Node, etc.</p>
 <p>That's pretty much it for Postman. Tip your <em><em>servers</em></em>, I'm here all week.</p>
 
     <p>Hopefully you learned something 🤞; If so, consider supporting more posts like this by pledging on my <a
