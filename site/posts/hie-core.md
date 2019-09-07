@@ -1,5 +1,5 @@
 ---
-title: "hie-core"
+title: "Haskell IDE Support (hie-core lsp Sept. 2019)"
 author: Chris Penner
 date: Sep 7, 2019
 tags: [haskell]
@@ -74,7 +74,7 @@ Also make sure to read the [Sample Vim Configuration](https://github.com/neoclid
 
 After you've done all that, I **hope** it's working for you, if not, something crazy has probably changed and you're probably on your own. Good luck!
 
-PS; I have a little bash script I use for installing this in every new project in case you want to see how terrible I am at writing BASH. It includes a helper which auto-adds all the necessary extra-deps for you: [My crappy bash script]()
+PS; I have a little bash script I use for installing this in every new project in case you want to see how terrible I am at writing BASH. It includes a helper which auto-adds all the necessary extra-deps for you: [My crappy bash script](https://github.com/ChrisPenner/dotfiles/blob/master/bin/hie-init)
 
 You'll probably need to run the script more than once as it attempts to add all the needed extra-deps. Hopefully this'll get better as these tools get added to stackage.
 
