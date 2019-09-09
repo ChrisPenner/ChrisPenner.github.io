@@ -8,38 +8,29 @@ description: Fusing lenses and regular expressions is greater than the sum of th
 
 
 
+Regular expressions are a core tool in the programmer's toolbox; they're veritable swiss-army knives. Armed with regular expressions the programmer becomes a master of the arcane arts, battling an endless slew of text armed only with their Magyver-esque ability to string together archaic symbols in exactly the right order to return exactly the text they need.
 
-
-Regular expressions are a core tool in the programmer's toolbox; they're veritable swiss-army knives. The programmer becomes a master of the arcane arts, battling an endless army of text armed only with they're Magyver-esque ability to string together archaic symbols in exactly the right order to return exactly the text they need.
-
-When I first came to Haskell from mostly Python and Golang I practiced my budding Haskell skills by trying a programming problems from things like [Advent of Code](https://adventofcode.com). Almost every one of these puzzles includes 
-
-Naturally I assumed that EVERY language would want to provide its patrons with such power and immediately searched for how to use regular expressions in Hasekll. Except... this is weird... Haskell's "base" library doesn't have any regular expression tools in it?? Wut!? I was aghast! How was I expected to extract the precise bits & bobs I needed from the flood of text that is stdin so I could solve my problem and win my stars?
-
-After a bit of google practice I discovered that Haskell is much more partial to parsers; but as a baby Haskeller who just wanted to parse a handfull of numbers this seemed to be an entirely excessive and unnecessary diversion.  Parsers are great, I did eventually follow that rabbit hole and reap the benefits, but there's such a thing as "overkill"; and learning parser combinators to extract the numbers from `"42 x 27"` is the definition.
-
-I was wise enough to realize this at the time, so I kept looking; and came across the plethora of regex libraries, all trying to solve a different problem, nearly none of them supporting the wonderful `PCRE` compliant goodness I'd come to know and love. Almost all of them required installing a separate regex implementation as a C-dependency. Even after I managed to pick one and get the C-libraries installed I now needed to traverse the dangerous obfuscated terrain surrounding the dangerously overloaded `=~` operator.
-
-If you haven't seen it before, basically everything you want to do with the regex lib is done using the same operator; here's the signature:
+This post isn't here to dunk on the other regular expression libraries out there, but in my opinion some of them are a bit tricky to use and don't give me the flexibility to do what I want with the clean interface I want. For instance, most of the libs in use these days use the following combinator for pretty much everything:
 
 ```haskell
 (=~) :: (RegexMaker Regex CompOption ExecOption source, RegexContext Regex source1 target) => source1 -> source -> target
 ```
 
-Eazy-peazy-lemon-squeazy right? After regaining consciousness from my brain shutting down on the first read I sought out some examples to figure out how to use this thing.
-I'll make the long story short and just say that it was pretty confusing and complicated, not a great experience.
+Eazy-peazy-lemon-squeazy right? 
+
+Anyways; I'm going to show you a new interface which I hope I can convince you is sensible, adaptable, and practical. Even better; you might already have used it without even knowing it!
 
 # Something Different
 
 Introducing `lens-regex-pcre`; a Haskell regular expression library which uses optics as its primary interface. Why would we be so bold as to do something like that? Consider the things people like to do with regular expressions:
 
 * Determine whether a **match** exists in this **text**
-* Collect all the **matches** of this expression from this **text**
+* Collect all the **match** of this expression from this **text**
 * Replace or modify every **match** with this **text**
 
-Replace every instance of **match** with **focus** and replace **text** with **structure** and we've just describe the value proposition of optics!
+Re-read those points replacing every instance of **match** with **focus** and replace **text** with **structure** and we've basically just described what optics was created to do!
 
-Why would we try to invent a whole new vocabular of combinators and functions to perform these tasks when we already have a **vast**, **composable** language which most folks already have included in their applications? Granted, it's still not a great experience for newbies, but at least this way any gained knowledge is transferable; and combinators for performing different tasks are different from one another.
+Why would we try to invent a whole new vocabulary of combinators and functions to perform these tasks when we already have a **vast**, **composable** language which most folks already have included in their applications? Granted, it's still not a great experience for newbies, but at least this way any gained knowledge is transferable; and combinators for performing different tasks are different from one another.
 
 Skeptical about how it works out? Check it out.
 
@@ -59,15 +50,15 @@ True
 
 Looks like we found it!
 
-The `regex` combinator constructs a traversal over everything that matches the pattern you pass to it; `rx` is a QuasiQuoter from `pcre-light` which will compile and check your regex for you at compile time! Look; if we give it a bad pattern we find out right away!
+The `regex` combinator constructs a traversal over all the text that matches the pattern you pass to it; `rx` is an alias of a QuasiQuoter from `pcre-light` which will compile and check your regex for you at compile time! Look; if we give it a bad pattern we find out right away!
 
 ```haskell
 -- Search
->>> has (regex [rx|(kitten|]) txt
+>>> has (regex [rx|?|]) txt
 
 <interactive>:1:12: error:
     • Exception when trying to run compile-time code:
-        Text.Regex.PCRE.Light: Error in regex: missing ")"
+        Text.Regex.PCRE.Light: Error in regex: nothing to repeat
 ```
 
 Handy!
@@ -89,7 +80,7 @@ Just "kittens"
 
 Next we want to get ALL the matches for a pattern, this one is probably the most common task we want to perform, luckily it's common when working with optics too!
 
-Let's find all the words starting with 'r' using a regex; `^..`
+Let's find all the words starting with 'r' using `toListOf`
 
 ```haskell
 >>> toListOf (regex [rx|\br\w*|] . match) txt
@@ -110,11 +101,11 @@ What if we want to count the number of matches instead?
 Basically anything you can think to ask is already provided by `lens`
 
 ```haskell
--- Any matches contain "drop"?
+-- Are any matches contain "drop"?
 >>> anyOf (regex [rx|\br\w*|] . match) (T.isInfixOf "drop") txt
 True
 
--- All of our matches greater than 3 chars?
+-- Are all of our matches greater than 3 chars?
 >>> allOf (regex [rx|\br\w*|] . match) ((>3) . T.length) txt
 True
 
@@ -140,7 +131,7 @@ We can do the boring basic regex replace without even breaking a sweat:
 
 Now for the fun stuff; we can **mutate** a match in-place!
 
-Let's reverse all ov our matches:
+Let's reverse all of our matches:
 
 ```haskell
 >>> over (regex [rx|\br\w*|] . match) T.reverse txt
@@ -154,21 +145,21 @@ Let's reverse all ov our matches:
 Want to replace matches using a list of substitutions? No problem! We can use `partsOf`
 
 ```haskell
->>> set (partsOf (regex [rx|\br\w*|] . match)) ["one", "two"] txt
+>>> txt & partsOf (regex [rx|\br\w*|] . match) .~ ["one", "two"]
 "one on two and whiskers on kittens"
 
 -- Providing too few simply leaves extras alone
->>> set (partsOf (regex [rx|\br\w*|] . match)) ["one"] txt
+>>> txt & partsOf (regex [rx|\br\w*|] . match) .~ ["one"]
 "one on two and whiskers on kittens"
 
 -- Providing too many performs as many substitutions as it can
->>> set (partsOf (regex [rx|\br\w*|] . match)) ["one", "two", "three"] txt
+>>> txt & partsOf (regex [rx|\br\w*|] . match) .~ ["one", "two", "three"]
 "one on two and whiskers on kittens"
 ```
 
 We can even do mutations which require effects!
 
-Let's replace every Haskell filename with it's contents from our hard-drive:
+Let's replace every Haskell filename in a block of text with its contents from our hard-drive:
 
 ```haskell
 manuscript :: T.Text
@@ -185,14 +176,14 @@ Fibonacci.hs
 
 |]
 
->>> traverseOf (regex [rx|\w+\.hs|] . match) (T.readFile . T.unpack) manuscript >>= T.putStr
--- Prints:
+--                    Match hs files          Read file contents as text
+>>> traverseOf (regex [rx|\w+\.hs|] . match) (T.readFile . T.unpack) manuscript 
+-- Prints (assuming you have these files sitting around):
 # My Awesome Book
 
 Check out this cool code snippet:
 
 print "Hello, world!"
-
 
 And this one too!
 
@@ -201,7 +192,7 @@ fix $ \fibs -> 0 : 1 : Prelude.zipWith (+) fibs (Prelude.tail fibs)
 
 That may be a smidge confusing at first, but when you think about what we've managed to do in a single line of code I think it's pretty impressive.
 
-It works with any traversal, so you can do dictionary lookups, database requests, even perform operations concurrently!
+It works with any traversal, so you can do dictionary lookups, database requests, even perform operations concurrently if we like.
 
 And we haven't even looked at groups yet!
 
@@ -217,15 +208,15 @@ Let's say we want to collect only the names of every variable in a template stri
 template :: T.Text
 template = "Hello $NAME, glad you came to $PLACE"
 
->>> toListOf (regex [rx|\$(\w+)|] . groups . d) template
+>>> toListOf (regex [rx|\$(\w+)|] . groups . _head) template
 ["NAME","PLACE"]
 ```
 
-We need to use `_head` to select the first group because there may be many groups!
+We need to use `_head` to select the first group because there may be many groups.
 
 You can substitute/edit groups too!
 
-What if we got all our our area codes and local numbers messed up in our phone numbers? We can fix that in one fell swoop!
+What if we got all our our area codes and local numbers messed up in our phone numbers? We can fix that in one fell swoop:
 
 ```haskell
 phoneNumbers :: T.Text
@@ -235,4 +226,6 @@ phoneNumbers = "555-123-4567, 999-876-54321"
 "123-555-4567, 876-999-54321"
 ```
 
-Anyways, at this point I'm rambling, but I hope you see that this is too useful of an abstractin for us to give up!
+Anyways, at this point I'm rambling, but I hope you see that this is too useful of an abstraction for us to give up!
+
+Huge thanks to everyone who has done work on `pcre-light` and `pcre-heavy`; and of course everyone who helped to build `lens` too! This wouldn't be possible without both of them!
