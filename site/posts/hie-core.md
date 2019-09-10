@@ -18,7 +18,7 @@ We need separate binaries for every GHC version, so to avoid getting them all co
 
 * First navigate to the project you want to run `hie-core` with
 * Now `stack update`; sometimes stack doesn't keep your hackage index up-to-date and most of the packages we'll be using are pretty new.
-* `stack build hie-bios hie-core haskell-lts --copy-compiler-tool`
+* `stack build hie-bios hie-core haskell-lsp --copy-compiler-tool`
     * We need these three executables installed, using `stack build` doesn't install them globally (which is what we want to avoid conflicts), but `--copy-compiler-tool` allows us to share binaries with other projects of the same LTS.
     * This will probably FAIL the first time you run it, stack will suggest that you add extra-deps to your `stack.yaml`; go ahead and do that and try again. Repeat this process until success!
 
