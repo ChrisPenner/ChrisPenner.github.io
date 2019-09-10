@@ -770,7 +770,7 @@
 <ul>
 <li>First navigate to the project you want to run <code>hie-core</code> with</li>
 <li>Now <code>stack update</code>; sometimes stack doesn't keep your hackage index up-to-date and most of the packages we'll be using are pretty new.</li>
-<li><code>stack build hie-bios hie-core haskell-lts --copy-compiler-tool</code>
+<li><code>stack build hie-bios hie-core haskell-lsp --copy-compiler-tool</code>
 <ul>
 <li>We need these three executables installed, using <code>stack build</code> doesn't install them globally (which is what we want to avoid conflicts), but <code>--copy-compiler-tool</code> allows us to share binaries with other projects of the same LTS.</li>
 <li>This will probably FAIL the first time you run it, stack will suggest that you add extra-deps to your <code>stack.yaml</code>; go ahead and do that and try again. Repeat this process until success!</li>
