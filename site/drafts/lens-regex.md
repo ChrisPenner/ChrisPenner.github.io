@@ -6,17 +6,58 @@ tags: [haskell]
 description: Fusing lenses and regular expressions is greater than the sum of their parts.
 ---
 
+Regardless which language you're coming from, regular expressions are a core tool in the programmer's toolbox. Regex is a veritable swiss-army knife. They're succinct and well-defined; a power tool of choice whenever you need to get something done quickly. Though there may be more readable options out there, it's indisputably an important part of the programming landscape.
 
-
-Regular expressions are a core tool in the programmer's toolbox; they're veritable swiss-army knives. Armed with regular expressions the programmer becomes a master of the arcane arts, battling an endless slew of text armed only with their Magyver-esque ability to string together archaic symbols in exactly the right order to return exactly the text they need.
-
-This post isn't here to dunk on the other regular expression libraries out there, but in my opinion some of them are a bit tricky to use and don't give me the flexibility to do what I want with the clean interface I want. For instance, most of the libs in use these days use the following combinator for pretty much everything:
+This is all a lead-up to how surprised I was at **just how hard** it is to use regular expressions in Haskell! A common response when beginners ask how to use regex in Haskell is to "learn parser combinators"; or they post a link to one of the myriad of disjointed front-end back-end combinations which must be stitched together in order to work. Or perhaps they link to the magical "do everything" operator, which uses type annotations to change its behaviour:
 
 ```haskell
-(=~) :: (RegexMaker Regex CompOption ExecOption source, RegexContext Regex source1 target) => source1 -> source -> target
+(=~) :: ( RegexMaker Regex CompOption ExecOption source2
+        , RegexContext Regex source1 target
+        ) => source1 -> source2 -> target
 ```
 
 Eazy-peazy-lemon-squeazy right? 
+
+Nah, not so much!
+
+Now let's say you not only want a regex library that's fast, you're greedy enough to want it to support [PCRE](https://www.pcre.org/)! For those who don't know what PCRE is, that's likely because it's been around since 1997, so you probably just know it as "Regular Expressions". As it turns out, many of the cornucopia of regex libs don't support it! 
+
+That means:
+
+* No extended character classes like `\d`, `\w`, etc.
+* You need to escape all your modifiers like `+`, `()`, etc.
+* No greedy or possesive matches like `.*?` or `.*+`
+* No Lookahead/Lookbehind
+* No Named capture groups (These also aren't supported by all PCRE versions)
+
+
+Read more [here](https://en.wikipedia.org/wiki/Regular_expression#POSIX_basic_and_extended)
+
+Long story short, you want PCRE. It came out over 20 years ago after all, it'd be starting University by now.
+
+---
+
+Okay, so we need PCRE, anything else?
+
+Believe it or not, most Haskell regex libs have zero support for replacement/substitution!
+
+This has been a long standing problem; here's a [blog post from 2010](http://0xfe.blogspot.com/2010/09/regex-substitution-in-haskell.html) which starts off with the familiar sentiment:
+
+> I'm shocked and appalled at the fact that there is no generic regex substitution function in the GHC libraries. All I'm looking for is a simple function equivalent to perl's s/.../.../ expression.
+
+Continuing on...
+
+> While this [regex-compat] works well, it does not use PCRE, and as far as I can tell, there's no support for ByteStrings.
+
+Also check out [this stack overflow post](https://stackoverflow.com/questions/3847475/haskell-regex-substitution) where effectively the only solution was to implement a method of substitution yourself.
+
+Even if you could find a way to do substution, I have yet to find a **single** regex library in **any** language which allows you to do anything other than a **static** **global** replacement. That is, you must replace EVERY instance of a given string with the **same** replacement string. You can't 'edit' or 'update' the match, and you can't replace different matches with different strings. This seems like something we would have figured out by now.
+
+---
+
+I don't link to these to throw shade at any of these libraries; implementing a (fast) regular expression library is really hard, and so is interface design!
+
+I just think there's still room for improvement, hopefully this helps set the stage for why I decided to add yet another regex library (YARL) to all this chaos.
 
 Anyways; I'm going to show you a new interface which I hope I can convince you is sensible, adaptable, and practical. Even better; you might already have used it without even knowing it!
 
