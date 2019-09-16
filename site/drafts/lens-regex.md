@@ -270,3 +270,8 @@ phoneNumbers = "555-123-4567, 999-876-54321"
 Anyways, at this point I'm rambling, but I hope you see that this is too useful of an abstraction for us to give up!
 
 Huge thanks to everyone who has done work on `pcre-light` and `pcre-heavy`; and of course everyone who helped to build `lens` too! This wouldn't be possible without both of them!
+
+
+---
+
+Adaptability; if there's a strong desire for it `lens-regex-pcre` can easily and efficiently support other strange operations like inverting a match; (e.g. focusing all text that ISN'T in a match), splitting a file on matches, annotating text with whether it's in a capture group, etc.
