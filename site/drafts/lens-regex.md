@@ -3,12 +3,13 @@ title: "A cleaner Haskell regular expression interface"
 author: Chris Penner
 date: Sep 8, 2019
 tags: [haskell]
-description: Fusing lenses and regular expressions is greater than the sum of their parts.
+description: Lenses plus regex: greater than the sum of their parts.
 ---
 
-Regardless which language you're coming from, regular expressions are a core tool in the programmer's toolbox. Regex is a veritable swiss-army knife. They're succinct and well-defined; a power tool of choice whenever you need to get something done quickly. Though there may be more readable options out there, it's indisputably an important part of the programming landscape.
+Regardless which language you're coming from, regular expressions are a core tool in the programmer's toolbox. Though some have a distate for their difficult to maintain nature, they're an adaptable quick'n'dirty way to get things done. I tend to use small programming puzzle to learn new programming languages, and most of these involve some simple parsing of problem input from a file or stdin. In most languages I reach for regex as a natural way to do this, so naturally when I started solving problems with Haskell I google for Regular Expressions in Haskell.
 
-This is all a lead-up to how surprised I was at **just how hard** it is to use regular expressions in Haskell! A common response when beginners ask how to use regex in Haskell is to "learn parser combinators"; or they post a link to one of the myriad of disjointed front-end back-end combinations which must be stitched together in order to work. Or perhaps they link to the magical "do everything" operator, which uses type annotations to change its behaviour:
+I was faced with a deluge of options, and none really stood out as being "the standard".
+A common response when beginners ask how to use regex in Haskell is to "learn parser combinators"; or they post a link to one of the myriad of disjointed front-end back-end combinations which must be stitched together in order to work. Even if you find a library which you can figure out how to install and properly import you're then faced with the magical "do everything" operator, which uses type inference to fundamentally change its behaviour:
 
 ```haskell
 (=~) :: ( RegexMaker Regex CompOption ExecOption source2
@@ -16,64 +17,31 @@ This is all a lead-up to how surprised I was at **just how hard** it is to use r
         ) => source1 -> source2 -> target
 ```
 
-Eazy-peazy-lemon-squeazy right? 
-
-Nah, not so much!
-
-Now let's say you not only want a regex library that's fast, you're greedy enough to want it to support [PCRE](https://www.pcre.org/)! For those who don't know what PCRE is, that's likely because it's been around since 1997, so you probably just know it as "Regular Expressions". As it turns out, many of the cornucopia of regex libs don't support it! 
-
-That means:
-
-* No extended character classes like `\d`, `\w`, etc.
-* You need to escape all your modifiers like `+`, `()`, etc.
-* No greedy or possesive matches like `.*?` or `.*+`
-* No Lookahead/Lookbehind
-* No Named capture groups (These also aren't supported by all PCRE versions)
+While this is handy for a Haskeller who knows what they're doing, I find it makes code harder to reason about, and makes it nigh impossible for a beginner to decipher and use.
 
 
-Read more [here](https://en.wikipedia.org/wiki/Regular_expression#POSIX_basic_and_extended)
+Long story short, I DID eventually end up learning to use parser combinators (and they're awesome), but it still seems silly and even a bit rude to require that of all Haskell developers. Why is this problem so hard? I revisited it recently now that I'm a lot more comfortable with the language and realized that the situation is still pretty rough. After a quick look around I realized that the jury is still very much still deliberating on what the best interface to use for regex is. And as I was looking at it, I started to realize some similarities to something I've been obsessing about lately, and that drove me to try something new!
 
-Long story short, you want PCRE. It came out over 20 years ago after all, it'd be starting University by now.
-
----
-
-Okay, so we need PCRE, anything else?
-
-Believe it or not, most Haskell regex libs have zero support for replacement/substitution!
-
-This has been a long standing problem; here's a [blog post from 2010](http://0xfe.blogspot.com/2010/09/regex-substitution-in-haskell.html) which starts off with the familiar sentiment:
-
-> I'm shocked and appalled at the fact that there is no generic regex substitution function in the GHC libraries. All I'm looking for is a simple function equivalent to perl's s/.../.../ expression.
-
-Continuing on...
-
-> While this [regex-compat] works well, it does not use PCRE, and as far as I can tell, there's no support for ByteStrings.
-
-Also check out [this stack overflow post](https://stackoverflow.com/questions/3847475/haskell-regex-substitution) where effectively the only solution was to implement a method of substitution yourself.
-
-Even if you could find a way to do substution, I have yet to find a **single** regex library in **any** language which allows you to do anything other than a **static** **global** replacement. That is, you must replace EVERY instance of a given string with the **same** replacement string. You can't 'edit' or 'update' the match, and you can't replace different matches with different strings. This seems like something we would have figured out by now.
-
----
-
-I don't link to these to throw shade at any of these libraries; implementing a (fast) regular expression library is really hard, and so is interface design!
-
-I just think there's still room for improvement, hopefully this helps set the stage for why I decided to add yet another regex library (YARL) to all this chaos.
-
-Anyways; I'm going to show you a new interface which I hope I can convince you is sensible, adaptable, and practical. Even better; you might already have used it without even knowing it!
+Note that I definitely don't mean to throw shade at any of these other libraries; implementing a (fast) regular expression library is really hard, and so is interface design!
+I just think there's still room for improvement, and I found something that fit the bill so perfectly I couldn't stop myself from trying! Hopefully this helps set the stage for why I decided to add yet another regex library (YARL) to all this chaos.
 
 # Something Different
 
-Introducing `lens-regex-pcre`; a Haskell regular expression library which uses optics as its primary interface. Why would we be so bold as to do something like that? Consider the things people like to do with regular expressions:
+Introducing `lens-regex-pcre`; a Haskell regular expression library which uses optics as its primary interface. Why would we be so crazy as to do something like that? Consider the things people like to do with regular expressions:
 
 * Determine whether a **match** exists in this **text**
-* Collect all the **match** of this expression from this **text**
-* Replace or modify every **match** with this **text**
+* Collect all the **matches** of this expression from this **text**
+* Replace or modify every **match** in this **text**
+
 
 Re-read those points replacing every instance of **match** with **focus** and replace **text** with **structure** and we've basically just described what optics was created to do!
+If your problem matches a shape like this, then you can build an optics interface for it! Interop with optics means you **instantly** benefit from the plethora of existing optics combinators! In fact, optics fit this problem **so nicely** that the lensy wrapper I built supports **more features**, with **less code**, and runs **faster** and than the regex library it wraps! Stay tuned for more on how that's even possible near the end!
 
 Why would we try to invent a whole new vocabulary of combinators and functions to perform these tasks when we already have a **vast**, **composable** language which most folks already have included in their applications? Granted, it's still not a great experience for newbies, but at least this way any gained knowledge is transferable; and combinators for performing different tasks are different from one another.
 
-Skeptical about how it works out? Check it out.
+Skeptical about how it works out? Check it out; note how many of these solutions read almost like a normal sentence!
+
+`lens-regex-pcre` provides `regex`, `rx`, `match`, `group` and `groups` in the following examples, everything else is regular ol' optics from the `lens` library!
 
 We'll search through this text in the following examples:
 
@@ -249,11 +217,9 @@ Let's say we want to collect only the names of every variable in a template stri
 template :: T.Text
 template = "Hello $NAME, glad you came to $PLACE"
 
->>> toListOf (regex [rx|\$(\w+)|] . groups . _head) template
+>>> toListOf (regex [rx|\$(\w+)|] . group 0) template
 ["NAME","PLACE"]
 ```
-
-We need to use `_head` to select the first group because there may be many groups.
 
 You can substitute/edit groups too!
 
@@ -271,7 +237,12 @@ Anyways, at this point I'm rambling, but I hope you see that this is too useful 
 
 Huge thanks to everyone who has done work on `pcre-light` and `pcre-heavy`; and of course everyone who helped to build `lens` too! This wouldn't be possible without both of them!
 
+The library also has a Text interface wor supporting regex over unicode!
 
----
+# Performance
 
-Adaptability; if there's a strong desire for it `lens-regex-pcre` can easily and efficiently support other strange operations like inverting a match; (e.g. focusing all text that ISN'T in a match), splitting a file on matches, annotating text with whether it's in a capture group, etc.
+Typically one would expect that the more expressive an interface, the worse it would perform, in this case the opposite is true! `lens-regex-pcre` utilizes `pcre-heavy` ONLY for regex compilation and finding match positions with `scanRanges`, that's it! In fact, I don't use `pcre-heavy`'s built-in support for replacements **at all**! After finding the match positions it lazily walks over the full bytestring splitting it into chunks. Chunks are tagged with whether they're a match or not, then the "match" chunks are split further to represent whether the text is in a group or not. This allows us to implement all of our regex operations as a simple traversal over a nested list of Either's. These traversals are the ONLY things we actually need to implement, all other functionality including listing matches, filtering matches, and even setting or updating matches already exists in `lens` as generic optics combinators!
+
+This means I didn't need to optimize for replacements or for viewing separately, because I didn't optimize for specific actions **at all**! I just built a single Traversal, and everything else follows from that. There was a little bit of fiddly logic involved with splitting the text up into chunks, but after that it all gets pretty easy to reason about. To optimize the Traversal itself I was easily able to refactor things to use ByteString 'Builder's rather than full ByteStrings, which have much better concatenation performance. This single change took `lens-regex-pcre` from being about **half the speed** of `pcre-heavy` to being on the fast side of **equal** for search, and **~10% faster** for replacements. It's just as fast for arbitrary **modifications**, which is something other regex libraries simply don't support. If there's a need for it, it can also support things like inverting the match to operate over all **unmatched** text, or things like splitting up a text on matches, etc.
+
+I suspect that these performance improvements could also be back-ported to pcre-heavy if anyone has the desire to do so, I'd be curious if it works just as well for `pcre-heavy` as it did for `lens-regex-pcre`.
