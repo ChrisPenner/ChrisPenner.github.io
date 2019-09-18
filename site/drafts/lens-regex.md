@@ -1,9 +1,9 @@
 ---
-title: "A cleaner Haskell regular expression interface"
+title: "Optics \& Regex: Greater than the sum of their parts"
 author: Chris Penner
 date: Sep 8, 2019
 tags: [haskell]
-description: Lenses plus regex: greater than the sum of their parts.
+description: Optics \& regex: greater than the sum of their parts.
 ---
 
 Regardless which language you're coming from, regular expressions are a core tool in the programmer's toolbox. Though some have a distate for their difficult to maintain nature, they're an adaptable quick'n'dirty way to get things done. I tend to use small programming puzzle to learn new programming languages, and most of these involve some simple parsing of problem input from a file or stdin. In most languages I reach for regex as a natural way to do this, so naturally when I started solving problems with Haskell I google for Regular Expressions in Haskell.
