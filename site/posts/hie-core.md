@@ -6,6 +6,8 @@ tags: [haskell]
 description: Configuring editor support for Haskell (hie-core 2019)
 ---
 
+**EDIT**: This project has been renamed to `ghcide` now; you can find it [here](https://github.com/digital-asset/ghcide)!
+
 Here's a super quick guide on adding hie-core to your workflow!
 
 Disclaimer; this post depends on the state of the world as of Saturday Morning, Sept. 7th 2019; it's likely changed since then. I'm not a maintainer of any of these libraries, and this is a complicated and confusing process. There's a good chance this won't work for you, but I'm afraid I can't support every possible set up. Use it as a guide-post, but you'll probably need to fix a few problems yourself. Feel free to let me know if things are broken, but I make no guarantees that I can help, sorry! Good luck!
