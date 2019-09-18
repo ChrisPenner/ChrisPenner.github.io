@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-09-18T16:41:09Z</updated>
+  <updated>2019-09-18T16:43:23Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -126,7 +126,8 @@
       <updated>2019-09-07T00:00:00Z</updated>
       <summary>Configuring editor support for Haskell (hie-core 2019)</summary>
       <content type="html"><![CDATA[
-              <p>Here's a super quick guide on adding hie-core to your workflow!</p>
+              <p><strong>EDIT</strong>: This project has been renamed to <code>ghcide</code> now; you can find it <a href="https://github.com/digital-asset/ghcide">here</a>!</p>
+<p>Here's a super quick guide on adding hie-core to your workflow!</p>
 <p>Disclaimer; this post depends on the state of the world as of Saturday Morning, Sept. 7th 2019; it's likely changed since then. I'm not a maintainer of any of these libraries, and this is a complicated and confusing process. There's a good chance this won't work for you, but I'm afraid I can't support every possible set up. Use it as a guide-post, but you'll probably need to fix a few problems yourself. Feel free to let me know if things are broken, but I make no guarantees that I can help, sorry! Good luck!</p>
 <p>This is a guide for using it with stack projects, or at least using the stack tool. If your project isn't a stack project, you can probably just run <code>stack init</code> first.</p>
 <p><code>hie-core</code> currently requires a whole suite of tools to run, including <code>hie-bios</code>, <code>hie-core</code>, and <code>haskell-lsp</code>. Each of these need to be installed against the proper GHC version and LTS that you'll be using in your project. This is a bit annoying of course, but the end result is worth it.</p>
