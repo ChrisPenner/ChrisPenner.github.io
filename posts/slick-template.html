@@ -8,10 +8,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="A Practical Introduction to Finger Trees">
-    <meta name="twitter:description" content="How to use finger trees to solve problems by choosing the appropriate monoid measure.">
-    <meta name="twitter:image" content="http://chrispenner.ca/images/intro-to-finger-trees/finger-tree.jpg">
-    <title>A Practical Introduction to Finger Trees</title>
+    <meta name="twitter:title" content="Slick 1.0 Release - Now with a quick and easy template!">
+    <meta name="twitter:description" content="Build a static site using Haskell, Shake and Pandoc!">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/slick.jpg">
+    <title>Slick 1.0 Release - Now with a quick and easy template!</title>
     <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
@@ -737,94 +737,129 @@
         </div>
     </header>
 
-     <a id="leftarrow" class="arrow" href="/posts/monoid-sort">&larr;</a> 
-     <a id="rightarrow" class="arrow" href="/posts/postman">&rarr;</a> 
+    
+     <a id="rightarrow" class="arrow" href="/posts/hie-core">&rarr;</a> 
 
 <div id="page">
     <div class="wrapper">
         <div class="masthead">
             <span class="title">
-                A Practical Introduction to Finger Trees
+                Slick 1.0 Release - Now with a quick and easy template!
             </span>
             <br>
 
-            <img class="post-image" src="/images/intro-to-finger-trees/finger-tree.jpg">
+            <img class="post-image" src="/images/slick.jpg">
             <br>
             <span class="byline">by Chris Penner</span>
             <br>
-            <span class="date">Jul 21, 2018</span>
+            <span class="date">Sep 18, 2019</span>
             <br>
             <div class="metadata">
                 <br>
                 <span class="tags">
                     Tags<br>
-                    <a class="tag" href="/tag/programming">programming</a>
                     <a class="tag" href="/tag/haskell">haskell</a>
                 </span>
             </div>
         </div>
     </div>
     <article class="post">
-        <p>Finger Trees are definitely the coolest data structure I was never taught in school. The gist of Finger Trees is that they represent sequences of elements where the elements also have a measurable 'descriptor' of some kind. If that sounds vague it's because it is! The generality here is what allows Finger Trees to solve so many different types of problems, but it does require a few examples and explanations to understand. In this post we'll talk about how the trees work at a high level, then we'll use them to build a random-access array-like structure with reasonable performance characteristics.</p>
-<p>This data structure stands on the shoulders of giants, it uses a structure called a <code>Monoid</code> at its core.</p>
-<h2 id="monoids">Monoids</h2>
-<p>If you're entirely unfamiliar with the concept of monoids, or just need a refresher, it would be a good idea to get a solid grounding there first; <a href="https://www.schoolofhaskell.com/user/mgsloan/monoids-tour">here's a good place to start</a>.</p>
-<p>Monoids are incredibly useful; and the more I learn about Category Theory the more applications I find for monoidal structures. Once you start to think in monoids you start to realize how many things you once thought were unique and interesting problems are actually just a monoid and a fold away from some other well-solved problem. We're going to start off by introducing a new tool (i.e. data structure) which employs monoids to do amazing things! Enter <a href="https://en.wikipedia.org/wiki/Finger_tree">Finger Trees</a>! Finger Trees are an adaptable purely functional data structure; they're actually an extremely general structure which makes it a bit difficult to explain without a concrete use case. This is because they utilize a Monoid in the foundation of the data structure, and the Monoid you choose can drastically affect how the structure behaves. Here's a glance at the sort of things you could do by choosing different Monoids:</p>
-<ul>
-<li>Random access/sequence slicing using <a href="https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Sum"><code>Sum</code></a>: see <a href="https://hackage.haskell.org/package/containers-0.6.0.1/docs/Data-Sequence.html">Data.Sequence</a>; we'll explore this one just below!</li>
-<li>Heap using <a href="https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Semigroup.html#t:Max"><code>Max/Min</code></a>: see <a href="https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-PriorityQueue-FingerTree.html">Data.PriorityQueue.FingerTree</a></li>
-<li>Ordered Sequence slicing using <a href="https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Last">Last</a>: see the section on <a href="http://www.staff.city.ac.uk/~ross/papers/FingerTree.pdf">Ordered Sequences</a></li>
-<li>Interval Searching using a custom interval expansion Monoid: see <a href="https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-IntervalMap-FingerTree.html">Data.IntervalMap.FingerTree</a></li>
-<li>Text slicing and dicing using a product of <code>Sum</code>s: see <a href="https://hackage.haskell.org/package/yi-rope">Yi.Rope</a></li>
-<li>Performant merge sort using a custom merge monoid: blog post coming eventually!</li>
-<li>Many more! Just use your imagination!</li>
-</ul>
-<p>How does it all work? Let's learn how to build a simple random-access &lt;air-quotes&gt; Array &lt;/air-quotes&gt; using a Finger Tree so we can get a sense of things</p>
-<h2 id="random-access-array-using-a-finger-trees">Random Access Array using a Finger Trees</h2>
-<p>Let's implement a simple random access list using a Finger Tree! After a quick glance through the <a href="https://hackage.haskell.org/package/fingertree-0.1.4.1/docs/Data-FingerTree.html">Data.FingerTree Docs</a> it's a bit tough to tell where we might start! The workhorse of the Finger Tree library is the <code>split</code> function:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">split ::</span> <span class="dt">Measured</span> v a <span class="ot">=&gt;</span> (v <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">FingerTree</span> v a <span class="ot">-&gt;</span> (<span class="dt">FingerTree</span> v a, <span class="dt">FingerTree</span> v a)</span></code></pre></div>
-<p>Yikes, let's break this down:</p>
-<ul>
-<li><code>Measured v a</code>: Measured is a simple typeclass which given an <code>a</code> can convert it into some monoid <code>v</code></li>
-<li><code>(v -&gt; Bool)</code>: This is our search predicate, <code>split</code> will use it to split a sequence into two smaller subsequences: The longest subsequence such that running the predicate on the measure of this subsequence <code>False</code>, and the everything that's left-over.</li>
-<li><code>FingerTree v a</code>: This is the tree we want to split, with a monoidal measure <code>v</code> and elements of type <code>a</code>.</li>
-<li><code>(FingerTree v a, FingerTree v a)</code>: The two (possibly empty) subsequences, the first is before the split point the second contains the inflection point of our predicate and everything past it.</li>
-</ul>
-<p>That's all great, but how can we actually use it to solve our problem? What does splitting up a sequence actually have to do with indexing into a list? Finger Trees get their performance characterics by searching through subtrees using a strategy very similar to a binary search, they run the predicate on cached "measures" of subtrees recursively honing in on the <strong>inflection point</strong> where the predicate flips from <code>False</code> to <code>True</code>. So what we need to do is find some pairing of a monoid and a predicate on that monoid which finds the place in the sequence we're looking for. Getting the first or last element of a Finger Tree is a simple <code>O(1)</code> operation, so if we can split the list either directly <em>before</em> or directly <em>after</em> the index we're looking for, then we're pretty much done!</p>
-<p>Building a predicate for this is pretty simple, we just need to be able to determine whether the index we're looking for is within some prefix of our total sequence, which phrased simply is just: <code>length sequence &gt; index</code>; we can use this predicate to recursively hone in on the point where adding a single element alters the predicate's result from false to true, and we've found our index! The predicate runs on the measure of the values, which must be a monoid; so we need to represent the length of our sequence as some monoid, the combination of the monoidal measure of two sequences must also match the measure of the combination of the sequences themselves! Luckily for us the length of the combination of two lists is just the sum of the lengths! This gives us the hint that we can use the <a href="https://hackage.haskell.org/package/base-4.11.1.0/docs/Data-Monoid.html#t:Sum"><code>Sum</code> Monoid</a> as our measure!</p>
-<p>We're so close now, let's write some code to make it happen.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="ot">{-# LANGUAGE FlexibleInstances #-}</span></span>
-<span id="cb2-3"><a href="#cb2-3"></a><span class="ot">{-# LANGUAGE MultiParamTypeClasses #-}</span></span>
-<span id="cb2-4"><a href="#cb2-4"></a></span>
-<span id="cb2-5"><a href="#cb2-5"></a><span class="kw">import</span> <span class="dt">Data.FingerTree</span></span>
-<span id="cb2-6"><a href="#cb2-6"></a><span class="kw">import</span> <span class="dt">Data.Monoid</span></span>
-<span id="cb2-7"><a href="#cb2-7"></a></span>
-<span id="cb2-8"><a href="#cb2-8"></a><span class="co">-- We need to wrap our primitive value type in a newtype;</span></span>
-<span id="cb2-9"><a href="#cb2-9"></a><span class="co">-- This allows us to store ANY value in the sequence and helps us avoid</span></span>
-<span id="cb2-10"><a href="#cb2-10"></a><span class="co">-- some trouble with functional dependencies and orphan instances.</span></span>
-<span id="cb2-11"><a href="#cb2-11"></a><span class="kw">newtype</span> <span class="dt">Size</span> a <span class="ot">=</span> <span class="dt">Size</span></span>
-<span id="cb2-12"><a href="#cb2-12"></a>  {<span class="ot"> getSize ::</span> a</span>
-<span id="cb2-13"><a href="#cb2-13"></a>  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
-<span id="cb2-14"><a href="#cb2-14"></a></span>
-<span id="cb2-15"><a href="#cb2-15"></a><span class="co">-- Measured is the typeclass we implement to tell the FingerTree how to measure</span></span>
-<span id="cb2-16"><a href="#cb2-16"></a><span class="co">-- our values into a monoid. In our case every individual element is simply of length &#39;1&#39;</span></span>
-<span id="cb2-17"><a href="#cb2-17"></a><span class="kw">instance</span> <span class="dt">Measured</span> (<span class="dt">Sum</span> <span class="dt">Int</span>) (<span class="dt">Size</span> a) <span class="kw">where</span></span>
-<span id="cb2-18"><a href="#cb2-18"></a>  measure _ <span class="ot">=</span> <span class="dt">Sum</span> <span class="dv">1</span></span>
-<span id="cb2-19"><a href="#cb2-19"></a></span>
-<span id="cb2-20"><a href="#cb2-20"></a><span class="co">-- We wrap our values in the &#39;Size&#39;i wrapper and build a Finger Tree</span></span>
-<span id="cb2-21"><a href="#cb2-21"></a><span class="ot">alphabet ::</span> <span class="dt">FingerTree</span> (<span class="dt">Sum</span> <span class="dt">Int</span>) (<span class="dt">Size</span> <span class="dt">Char</span>)</span>
-<span id="cb2-22"><a href="#cb2-22"></a>alphabet <span class="ot">=</span> fromList (<span class="fu">fmap</span> <span class="dt">Size</span> <span class="st">&quot;abcdefghijklmnopqrstuvwxyz&quot;</span>)</span>
-<span id="cb2-23"><a href="#cb2-23"></a></span>
-<span id="cb2-24"><a href="#cb2-24"></a><span class="co">-- Get a given index from the tree if it exists</span></span>
-<span id="cb2-25"><a href="#cb2-25"></a><span class="ot">atIndex ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">FingerTree</span> (<span class="dt">Sum</span> <span class="dt">Int</span>) (<span class="dt">Size</span> a) <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a</span>
-<span id="cb2-26"><a href="#cb2-26"></a>atIndex n t <span class="ot">=</span></span>
-<span id="cb2-27"><a href="#cb2-27"></a>  <span class="kw">case</span> viewl <span class="op">.</span> <span class="fu">snd</span> <span class="op">$</span> split (<span class="op">&gt;</span> <span class="dt">Sum</span> n) t <span class="kw">of</span></span>
-<span id="cb2-28"><a href="#cb2-28"></a>    <span class="dt">Size</span> c <span class="op">:&lt;</span> _ <span class="ot">-&gt;</span> <span class="dt">Just</span> c</span>
-<span id="cb2-29"><a href="#cb2-29"></a>    _ <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span></code></pre></div>
-<p>Hopefully the first bits are pretty self explanatory, we set up our datatypes so the tree knows how to measure our elements, and it already knows how to combine measures via Sum's Monoid instance. Lastly in <code>atIndex</code> we tell the tree to split open at the point where the length of the measured subsequence would surpass the index we've provided. Then we simply check if there's an element to the right of that split. This operation doesn't quite get us the <code>O(1)</code> time complexity we know and love from traditional arrays, but for an immutable, general data structure which we could build ourselves without ANY special compiler support, getting logarithmic performance isn't too bad. In fact the actual performance is <code>O(log(min(i,n-i)))</code> where <code>i</code> is the index we wish to access and <code>n</code> is the length of the sequence. If we're often accessing the first or last elements then we're down to pretty much constant time!</p>
-<p>There we go! We've used 'Sum' as a measure within a finger tree to get efficient indexing into a sequence! We can also notice that the length of the whole sequence is computed in <code>O(1)</code> if we use <code>length = measure</code>; and that we can concat two sequences relatively efficiently using <code>(&gt;&lt;)</code>; listed in <code>Data.FingerTree</code> as time complexity <code>O(log(min(n1, n2)))</code> where n1 and n2 are the length of each sequence respectively.</p>
-<p><code>Sum</code> is probably the simplest monoid we can use; take a minute to think about how other monoids you know of might behave; the majority of monoids will create SOME sort of useful structure when used with a Finger Tree!</p>
+        <p>TLDR; Build a site with <a href="https://github.com/ChrisPenner/slick">slick 1.0</a>: <a href="https://github.com/ChrisPenner/slick-template">fork the slick-template</a>.</p>
+<p>Hey folks! Slick has been around for a while already, it's a light wrapper over Shake which allows for blazing fast static site builds! It provides Pandoc helpers to load in pages or posts as markdown, or ANYTHING that Pandoc can read (which is pretty much EVERYTHING nowadays). It offers support for Mustache templates as well!</p>
+<p>Shake was always great as a build tool, but its Makefile-style of dependency targets was always a little backwards for building a site. Slick 1.0 switches to recommending using Shake's FORWARD discoverable build style. This means you can basically write normal Haskell code in the Action monad to build and render your site, and Shake will <strong>automagically</strong> cache everything for you with proper and efficient cache-busting! A dream come true.</p>
+<p>Slick lets you build and deploy a static website using Github Pages (or literally any static file host) very easily while still maintaining completely open for extensibility. You can use any shake compatible lib, or even just IO if you want; Shake's forward build tools can even detect caching rules when running arbitrary external processes (caveat emptor).</p>
+<p>Hope you like it! In case you're curious what a site might be like; this very blog is built with slick!</p>
+<p>Here's a full snippet of code for building a simple blog (with awesome caching) from markdown files; check it out:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">{-# LANGUAGE DeriveGeneric #-}</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a><span class="ot">{-# LANGUAGE DeriveAnyClass #-}</span></span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="kw">module</span> <span class="dt">Main</span> <span class="kw">where</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a></span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="kw">import</span>           <span class="dt">Control.Lens</span></span>
+<span id="cb1-8"><a href="#cb1-8"></a><span class="kw">import</span>           <span class="dt">Control.Monad</span></span>
+<span id="cb1-9"><a href="#cb1-9"></a><span class="kw">import</span>           <span class="dt">Data.Aeson</span>                 <span class="kw">as</span> <span class="dt">A</span></span>
+<span id="cb1-10"><a href="#cb1-10"></a><span class="kw">import</span>           <span class="dt">Data.Aeson.Lens</span></span>
+<span id="cb1-11"><a href="#cb1-11"></a><span class="kw">import</span>           <span class="dt">Development.Shake</span></span>
+<span id="cb1-12"><a href="#cb1-12"></a><span class="kw">import</span>           <span class="dt">Development.Shake.Classes</span></span>
+<span id="cb1-13"><a href="#cb1-13"></a><span class="kw">import</span>           <span class="dt">Development.Shake.Forward</span></span>
+<span id="cb1-14"><a href="#cb1-14"></a><span class="kw">import</span>           <span class="dt">Development.Shake.FilePath</span></span>
+<span id="cb1-15"><a href="#cb1-15"></a><span class="kw">import</span>           <span class="dt">GHC.Generics</span>               (<span class="dt">Generic</span>)</span>
+<span id="cb1-16"><a href="#cb1-16"></a><span class="kw">import</span>           <span class="dt">Slick</span></span>
+<span id="cb1-17"><a href="#cb1-17"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text</span>                  <span class="kw">as</span> <span class="dt">T</span></span>
+<span id="cb1-18"><a href="#cb1-18"></a></span>
+<span id="cb1-19"><a href="#cb1-19"></a><span class="ot">outputFolder ::</span> <span class="dt">FilePath</span></span>
+<span id="cb1-20"><a href="#cb1-20"></a>outputFolder <span class="ot">=</span> <span class="st">&quot;docs/&quot;</span></span>
+<span id="cb1-21"><a href="#cb1-21"></a></span>
+<span id="cb1-22"><a href="#cb1-22"></a><span class="co">-- | Data for the index page</span></span>
+<span id="cb1-23"><a href="#cb1-23"></a><span class="kw">data</span> <span class="dt">IndexInfo</span> <span class="ot">=</span></span>
+<span id="cb1-24"><a href="#cb1-24"></a>  <span class="dt">IndexInfo</span></span>
+<span id="cb1-25"><a href="#cb1-25"></a>    {<span class="ot"> posts ::</span> [<span class="dt">Post</span>]</span>
+<span id="cb1-26"><a href="#cb1-26"></a>    } <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">Show</span>, <span class="dt">FromJSON</span>, <span class="dt">ToJSON</span>)</span>
+<span id="cb1-27"><a href="#cb1-27"></a></span>
+<span id="cb1-28"><a href="#cb1-28"></a><span class="co">-- | Data for a blog post</span></span>
+<span id="cb1-29"><a href="#cb1-29"></a><span class="kw">data</span> <span class="dt">Post</span> <span class="ot">=</span></span>
+<span id="cb1-30"><a href="#cb1-30"></a>    <span class="dt">Post</span> {<span class="ot"> title   ::</span> <span class="dt">String</span></span>
+<span id="cb1-31"><a href="#cb1-31"></a>         ,<span class="ot"> author  ::</span> <span class="dt">String</span></span>
+<span id="cb1-32"><a href="#cb1-32"></a>         ,<span class="ot"> content ::</span> <span class="dt">String</span></span>
+<span id="cb1-33"><a href="#cb1-33"></a>         ,<span class="ot"> url     ::</span> <span class="dt">String</span></span>
+<span id="cb1-34"><a href="#cb1-34"></a>         ,<span class="ot"> date    ::</span> <span class="dt">String</span></span>
+<span id="cb1-35"><a href="#cb1-35"></a>         ,<span class="ot"> image   ::</span> <span class="dt">Maybe</span> <span class="dt">String</span></span>
+<span id="cb1-36"><a href="#cb1-36"></a>         }</span>
+<span id="cb1-37"><a href="#cb1-37"></a>    <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>, <span class="dt">FromJSON</span>, <span class="dt">ToJSON</span>, <span class="dt">Binary</span>)</span>
+<span id="cb1-38"><a href="#cb1-38"></a></span>
+<span id="cb1-39"><a href="#cb1-39"></a><span class="co">-- | given a list of posts this will build a table of contents</span></span>
+<span id="cb1-40"><a href="#cb1-40"></a><span class="ot">buildIndex ::</span> [<span class="dt">Post</span>] <span class="ot">-&gt;</span> <span class="dt">Action</span> ()</span>
+<span id="cb1-41"><a href="#cb1-41"></a>buildIndex posts&#39; <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-42"><a href="#cb1-42"></a>  indexT <span class="ot">&lt;-</span> compileTemplate&#39; <span class="st">&quot;site/templates/index.html&quot;</span></span>
+<span id="cb1-43"><a href="#cb1-43"></a>  <span class="kw">let</span> indexInfo <span class="ot">=</span> <span class="dt">IndexInfo</span> {posts <span class="ot">=</span> posts&#39;}</span>
+<span id="cb1-44"><a href="#cb1-44"></a>      indexHTML <span class="ot">=</span> T.unpack <span class="op">$</span> substitute indexT (toJSON indexInfo)</span>
+<span id="cb1-45"><a href="#cb1-45"></a>  writeFile&#39; (outputFolder <span class="op">&lt;/&gt;</span> <span class="st">&quot;index.html&quot;</span>) indexHTML</span>
+<span id="cb1-46"><a href="#cb1-46"></a></span>
+<span id="cb1-47"><a href="#cb1-47"></a><span class="co">-- | Find and build all posts</span></span>
+<span id="cb1-48"><a href="#cb1-48"></a><span class="ot">buildPosts ::</span> <span class="dt">Action</span> [<span class="dt">Post</span>]</span>
+<span id="cb1-49"><a href="#cb1-49"></a>buildPosts <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-50"><a href="#cb1-50"></a>  pPaths <span class="ot">&lt;-</span> getDirectoryFiles <span class="st">&quot;.&quot;</span> [<span class="st">&quot;site/posts//*.md&quot;</span>]</span>
+<span id="cb1-51"><a href="#cb1-51"></a>  forP pPaths buildPost</span>
+<span id="cb1-52"><a href="#cb1-52"></a></span>
+<span id="cb1-53"><a href="#cb1-53"></a><span class="co">-- | Load a post, process metadata, write it to output, then return the post object</span></span>
+<span id="cb1-54"><a href="#cb1-54"></a><span class="co">-- Detects changes to either post content or template</span></span>
+<span id="cb1-55"><a href="#cb1-55"></a><span class="ot">buildPost ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">Action</span> <span class="dt">Post</span></span>
+<span id="cb1-56"><a href="#cb1-56"></a>buildPost srcPath <span class="ot">=</span> cacheAction (<span class="st">&quot;build&quot;</span><span class="ot"> ::</span> <span class="dt">T.Text</span>, srcPath) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb1-57"><a href="#cb1-57"></a>  liftIO <span class="op">.</span> <span class="fu">putStrLn</span> <span class="op">$</span> <span class="st">&quot;Rebuilding post: &quot;</span> <span class="op">&lt;&gt;</span> srcPath</span>
+<span id="cb1-58"><a href="#cb1-58"></a>  postContent <span class="ot">&lt;-</span> readFile&#39; srcPath</span>
+<span id="cb1-59"><a href="#cb1-59"></a>  <span class="co">-- load post content and metadata as JSON blob</span></span>
+<span id="cb1-60"><a href="#cb1-60"></a>  postData <span class="ot">&lt;-</span> markdownToHTML <span class="op">.</span> T.pack <span class="op">$</span> postContent</span>
+<span id="cb1-61"><a href="#cb1-61"></a>  <span class="kw">let</span> postUrl <span class="ot">=</span> T.pack <span class="op">.</span> dropDirectory1 <span class="op">$</span> srcPath <span class="op">-&lt;.&gt;</span> <span class="st">&quot;html&quot;</span></span>
+<span id="cb1-62"><a href="#cb1-62"></a>      withPostUrl <span class="ot">=</span> _Object <span class="op">.</span> at <span class="st">&quot;url&quot;</span> <span class="op">?~</span> <span class="dt">String</span> postUrl</span>
+<span id="cb1-63"><a href="#cb1-63"></a>  <span class="co">-- Add additional metadata we&#39;ve been able to compute</span></span>
+<span id="cb1-64"><a href="#cb1-64"></a>  <span class="kw">let</span> fullPostData <span class="ot">=</span> withPostUrl <span class="op">$</span> postData</span>
+<span id="cb1-65"><a href="#cb1-65"></a>  template <span class="ot">&lt;-</span> compileTemplate&#39; <span class="st">&quot;site/templates/post.html&quot;</span></span>
+<span id="cb1-66"><a href="#cb1-66"></a>  writeFile&#39; (outputFolder <span class="op">&lt;/&gt;</span> T.unpack postUrl) <span class="op">.</span> T.unpack <span class="op">$</span> substitute template fullPostData</span>
+<span id="cb1-67"><a href="#cb1-67"></a>  <span class="co">-- Convert the metadata into a Post object</span></span>
+<span id="cb1-68"><a href="#cb1-68"></a>  convert fullPostData</span>
+<span id="cb1-69"><a href="#cb1-69"></a></span>
+<span id="cb1-70"><a href="#cb1-70"></a><span class="co">-- | Copy all static files from the listed folders to their destination</span></span>
+<span id="cb1-71"><a href="#cb1-71"></a><span class="ot">copyStaticFiles ::</span> <span class="dt">Action</span> ()</span>
+<span id="cb1-72"><a href="#cb1-72"></a>copyStaticFiles <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-73"><a href="#cb1-73"></a>    filepaths <span class="ot">&lt;-</span> getDirectoryFiles <span class="st">&quot;./site/&quot;</span> [<span class="st">&quot;images//*&quot;</span>, <span class="st">&quot;css//*&quot;</span>, <span class="st">&quot;js//*&quot;</span>]</span>
+<span id="cb1-74"><a href="#cb1-74"></a>    void <span class="op">$</span> forP filepaths <span class="op">$</span> \filepath <span class="ot">-&gt;</span></span>
+<span id="cb1-75"><a href="#cb1-75"></a>        copyFileChanged (<span class="st">&quot;site&quot;</span> <span class="op">&lt;/&gt;</span> filepath) (outputFolder <span class="op">&lt;/&gt;</span> filepath)</span>
+<span id="cb1-76"><a href="#cb1-76"></a></span>
+<span id="cb1-77"><a href="#cb1-77"></a><span class="co">-- | Specific build rules for the Shake system</span></span>
+<span id="cb1-78"><a href="#cb1-78"></a><span class="co">--   defines workflow to build the website</span></span>
+<span id="cb1-79"><a href="#cb1-79"></a><span class="ot">buildRules ::</span> <span class="dt">Action</span> ()</span>
+<span id="cb1-80"><a href="#cb1-80"></a>buildRules <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-81"><a href="#cb1-81"></a>  allPosts <span class="ot">&lt;-</span> buildPosts</span>
+<span id="cb1-82"><a href="#cb1-82"></a>  buildIndex allPosts</span>
+<span id="cb1-83"><a href="#cb1-83"></a>  copyStaticFiles</span>
+<span id="cb1-84"><a href="#cb1-84"></a></span>
+<span id="cb1-85"><a href="#cb1-85"></a><span class="co">-- | Kick it all off</span></span>
+<span id="cb1-86"><a href="#cb1-86"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb1-87"><a href="#cb1-87"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-88"><a href="#cb1-88"></a>  <span class="kw">let</span> shOpts <span class="ot">=</span> forwardOptions <span class="op">$</span> shakeOptions { shakeVerbosity <span class="ot">=</span> <span class="dt">Chatty</span>}</span>
+<span id="cb1-89"><a href="#cb1-89"></a>  shakeArgsForward shOpts buildRules</span></code></pre></div>
+<p>See you next time!</p>
 
     <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
@@ -839,11 +874,11 @@
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/intro-to-finger-trees" data-text="Check out: A Practical Introduction to Finger Trees - " data-via="chrislpenner">Tweet</a>
+                data-url="https://chrispenner.ca/posts/slick-template" data-text="Check out: Slick 1.0 Release - Now with a quick and easy template! - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/intro-to-finger-trees" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+            <div class="fb-like" data-href="https://chrispenner.ca/slick-template" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
 <!-- Disqus Comments -->
