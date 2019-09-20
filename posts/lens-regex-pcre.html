@@ -830,54 +830,54 @@
 <span id="cb5-6"><a href="#cb5-6"></a><span class="dt">Just</span> <span class="st">&quot;kittens&quot;</span></span></code></pre></div>
 <p>Next we want to get <strong>ALL</strong> the matches for a pattern, this one is probably the most common task we want to perform, luckily it's common when working with optics too!</p>
 <p>Let's find all the words starting with <code>r</code> using <code>toListOf</code></p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="op">&gt;&gt;&gt;</span> toListOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) txt</span>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="op">&gt;&gt;&gt;</span> toListOf ([regex|\br\w*|] <span class="op">.</span> match) txt</span>
 <span id="cb6-2"><a href="#cb6-2"></a>[<span class="st">&quot;raindrops&quot;</span>,<span class="st">&quot;roses&quot;</span>]</span>
 <span id="cb6-3"><a href="#cb6-3"></a></span>
 <span id="cb6-4"><a href="#cb6-4"></a><span class="co">-- ALIAS: ^..</span></span>
-<span id="cb6-5"><a href="#cb6-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">^..</span> [regex|\&lt;r\w*|] <span class="op">.</span> match</span>
+<span id="cb6-5"><a href="#cb6-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">^..</span> [regex|\br\w*|] <span class="op">.</span> match</span>
 <span id="cb6-6"><a href="#cb6-6"></a>[<span class="st">&quot;raindrops&quot;</span>,<span class="st">&quot;roses&quot;</span>]</span></code></pre></div>
 <p>What if we want to count the number of matches instead?</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="op">&gt;&gt;&gt;</span> lengthOf [regex|\&lt;r\w*|] txt</span>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="op">&gt;&gt;&gt;</span> lengthOf [regex|\br\w*|] txt</span>
 <span id="cb7-2"><a href="#cb7-2"></a><span class="dv">2</span></span></code></pre></div>
 <p>Basically anything you can think to ask is already provided by <code>lens</code></p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="co">-- Do any matches contain &quot;drop&quot;?</span></span>
-<span id="cb8-2"><a href="#cb8-2"></a><span class="op">&gt;&gt;&gt;</span> anyOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) (T.isInfixOf <span class="st">&quot;drop&quot;</span>) txt</span>
+<span id="cb8-2"><a href="#cb8-2"></a><span class="op">&gt;&gt;&gt;</span> anyOf ([regex|\br\w*|] <span class="op">.</span> match) (T.isInfixOf <span class="st">&quot;drop&quot;</span>) txt</span>
 <span id="cb8-3"><a href="#cb8-3"></a><span class="dt">True</span></span>
 <span id="cb8-4"><a href="#cb8-4"></a></span>
 <span id="cb8-5"><a href="#cb8-5"></a><span class="co">-- Are all of our matches greater than 3 chars?</span></span>
-<span id="cb8-6"><a href="#cb8-6"></a><span class="op">&gt;&gt;&gt;</span> allOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) ((<span class="op">&gt;</span><span class="dv">3</span>) <span class="op">.</span> T.length) txt</span>
+<span id="cb8-6"><a href="#cb8-6"></a><span class="op">&gt;&gt;&gt;</span> allOf ([regex|\br\w*|] <span class="op">.</span> match) ((<span class="op">&gt;</span><span class="dv">3</span>) <span class="op">.</span> T.length) txt</span>
 <span id="cb8-7"><a href="#cb8-7"></a><span class="dt">True</span></span>
 <span id="cb8-8"><a href="#cb8-8"></a></span>
 <span id="cb8-9"><a href="#cb8-9"></a><span class="co">-- &quot;Is &#39;roses&#39; one of our matches&quot;</span></span>
-<span id="cb8-10"><a href="#cb8-10"></a><span class="op">&gt;&gt;&gt;</span> elemOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) <span class="st">&quot;roses&quot;</span> txt</span>
+<span id="cb8-10"><a href="#cb8-10"></a><span class="op">&gt;&gt;&gt;</span> elemOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="st">&quot;roses&quot;</span> txt</span>
 <span id="cb8-11"><a href="#cb8-11"></a><span class="dt">True</span></span></code></pre></div>
 <h2 id="substitutions-and-replacements">Substitutions and replacements</h2>
 <p>But that's not all! We can edit and mutate our matches in-place! This is something that the lensy interface does much better than any regex library I've ever seen. Hold my beer.</p>
 <p>We can do the boring basic regex replace without even breaking a sweat:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&gt;&gt;&gt;</span> set ([regex|\&lt;r\w*|] <span class="op">.</span> match) <span class="st">&quot;brillig&quot;</span> txt</span>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&gt;&gt;&gt;</span> set ([regex|\br\w*|] <span class="op">.</span> match) <span class="st">&quot;brillig&quot;</span> txt</span>
 <span id="cb9-2"><a href="#cb9-2"></a><span class="st">&quot;brillig on brillig and whiskers on kittens&quot;</span></span>
 <span id="cb9-3"><a href="#cb9-3"></a></span>
 <span id="cb9-4"><a href="#cb9-4"></a><span class="co">-- Alias .~</span></span>
-<span id="cb9-5"><a href="#cb9-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\&lt;r\w*|] <span class="op">.</span> match <span class="op">.~</span> <span class="st">&quot;brillig&quot;</span></span>
+<span id="cb9-5"><a href="#cb9-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\br\w*|] <span class="op">.</span> match <span class="op">.~</span> <span class="st">&quot;brillig&quot;</span></span>
 <span id="cb9-6"><a href="#cb9-6"></a><span class="st">&quot;brillig on brillig and whiskers on kittens&quot;</span></span></code></pre></div>
 <p>Now for the fun stuff; we can <strong>mutate</strong> a match in-place!</p>
 <p>Let's reverse all of our matches:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="op">&gt;&gt;&gt;</span> over ([regex|\&lt;r\w*|] <span class="op">.</span> match) T.reverse txt</span>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="op">&gt;&gt;&gt;</span> over ([regex|\br\w*|] <span class="op">.</span> match) T.reverse txt</span>
 <span id="cb10-2"><a href="#cb10-2"></a><span class="st">&quot;spordniar on sesor and whiskers on kittens&quot;</span></span>
 <span id="cb10-3"><a href="#cb10-3"></a></span>
 <span id="cb10-4"><a href="#cb10-4"></a><span class="co">-- Alias %~</span></span>
-<span id="cb10-5"><a href="#cb10-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\&lt;r\w*|] <span class="op">.</span> match <span class="op">%~</span> T.reverse</span>
+<span id="cb10-5"><a href="#cb10-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\br\w*|] <span class="op">.</span> match <span class="op">%~</span> T.reverse</span>
 <span id="cb10-6"><a href="#cb10-6"></a><span class="st">&quot;spordniar on sesor and whiskers on kittens&quot;</span></span></code></pre></div>
 <p>Want to replace matches using a list of substitutions? No problem! We can use <code>partsOf</code> to edit our matches as a list!</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>]</span>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>]</span>
 <span id="cb11-2"><a href="#cb11-2"></a><span class="st">&quot;one on two and whiskers on kittens&quot;</span></span>
 <span id="cb11-3"><a href="#cb11-3"></a></span>
 <span id="cb11-4"><a href="#cb11-4"></a><span class="co">-- Providing too few simply leaves extras alone</span></span>
-<span id="cb11-5"><a href="#cb11-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>]</span>
-<span id="cb11-6"><a href="#cb11-6"></a><span class="st">&quot;one on two and whiskers on kittens&quot;</span></span>
+<span id="cb11-5"><a href="#cb11-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>]</span>
+<span id="cb11-6"><a href="#cb11-6"></a><span class="st">&quot;one on roses and whiskers on kittens&quot;</span></span>
 <span id="cb11-7"><a href="#cb11-7"></a></span>
 <span id="cb11-8"><a href="#cb11-8"></a><span class="co">-- Providing too many performs as many substitutions as it can</span></span>
-<span id="cb11-9"><a href="#cb11-9"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\&lt;r\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</span>
+<span id="cb11-9"><a href="#cb11-9"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</span>
 <span id="cb11-10"><a href="#cb11-10"></a><span class="st">&quot;one on two and whiskers on kittens&quot;</span></span></code></pre></div>
 <p>We can even do updates which require effects!</p>
 <p>Let's find and replace variables in a block of text with values from environment variables using <code>IO</code>!</p>
