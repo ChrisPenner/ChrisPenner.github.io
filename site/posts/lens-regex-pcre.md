@@ -1,9 +1,10 @@
 ---
-title: "Optics \& Regex: Greater than the sum of their parts"
-author: Chris Penner
-date: Sep 20, 2019
+title: "Optics + Regex: Greater than the sum of their parts"
+author: "Chris Penner"
+date: "Sep 20, 2019"
 tags: [haskell]
-description: Optics \& regex: greater than the sum of their parts.
+description: "Optics + Regex: greater than the sum of their parts."
+image: "magnifier.jpg"
 ---
 
 The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning they're ins & outs; check out the comprehensive book I'm writing on the topic: [Optics By Example](https://opticsbyexample.com)
@@ -14,7 +15,7 @@ Regardless of the programming language, regular expressions have always been a c
 
 As much love as I have for Regular Expressions, they've become an incredibly hacky thing; they support a lot of options and a lot of different behaviours, so the interfaces to regular expressions in all languages tends to leave a bit to be desired.
 
-# The Status Quo
+## The Status Quo
 
 I don't know about you, but I've found almost every regular expression interface I've ever used in any language to be a bit clunky and inelegant; that's not meant to insult or demean any of those libraries, I think it's because regular expressions have a complex set of possible operations and the combination of them makes it tough to design a clean interface. Here are just a few reasons why it's hard to design a regex interface:
 
@@ -48,9 +49,9 @@ And even that doesn't handle replacement!
 
 Overloading is one approach, but as it turns out, it requires a lot of spelunking through types and documentation to even find out what the valid possible uses are! I'm going to rule out this approach as unwieldy and tough to reason about. That leaves us with the other option; add a whole bunch of methods or options, which doesn't sound great either, mainly because I don't want someone to need to learn a dozen **specialized** functions just to use **my** library. If only there was some existing vocabulary of operations which could be composed in different permutations to express complex ideas!
 
-# Something Different
+## Something Different
 
-Introducing `lens-regex-pcre`; a Haskell regular expression library which uses optics as its primary interface.
+Introducing [`lens-regex-pcre`](https://github.com/ChrisPenner/lens-regex-pcre); a Haskell regular expression library which uses optics as its primary interface.
 
 Think about what regular expressions are meant to do; they're an interface which allows you to **get** or **set** zero or more small pieces of text in a larger whole. This is practically the **dictionary definition** of a Traversal in optics!  Interop with optics means you **instantly** benefit from the plethora of existing optics combinators! In fact, optics fit this problem **so nicely** that the lensy wrapper I built supports **more features**, with **less code**, and runs _**faster**_ (for replacements) than the regex library it wraps! Stay tuned for more on how that's even possible near the end!
 
@@ -62,7 +63,7 @@ I don't want to discount the fact that optics can be tough to work with; I'm awa
 
 Okay! I'll put my soapbox away, now it's time to see how this all actually works. Notice how most of the following examples actually read roughly like a sentence!
 
-# Examples
+## Examples
 
 `lens-regex-pcre` provides `regex`, `match`, `group` and `groups` in the following examples, everything else is regular ol' optics from the `lens` library!
 
@@ -317,4 +318,4 @@ With the caveat that I don't claim to be an expert at benchmarks; (please [take 
 
 I suspect that these performance improvements are simple enough they could also be back-ported to `pcre-heavy` if anyone has the desire to do so, I'd be curious if it works just as well for `pcre-heavy` as it did for `lens-regex-pcre`.
 
-Thanks for reading; go try out the library; and if I've piqued your interest in optics maybe try out my book, [Optics By Example](https://opticsbyexample.com/)!
+You can try out the library [here!](https://github.com/ChrisPenner/lens-regex-pcre); make sure you're using `v1.0.0.0`.
