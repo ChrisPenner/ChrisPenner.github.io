@@ -116,18 +116,18 @@ Next we want to get **ALL** the matches for a pattern, this one is probably the 
 Let's find all the words starting with `r` using `toListOf`
 
 ```haskell
->>> toListOf ([regex|\<r\w*|] . match) txt
+>>> toListOf ([regex|\br\w*|] . match) txt
 ["raindrops","roses"]
 
 -- ALIAS: ^..
->>> txt ^.. [regex|\<r\w*|] . match
+>>> txt ^.. [regex|\br\w*|] . match
 ["raindrops","roses"]
 ```
 
 What if we want to count the number of matches instead?
 
 ```haskell
->>> lengthOf [regex|\<r\w*|] txt
+>>> lengthOf [regex|\br\w*|] txt
 2
 ```
 
@@ -135,15 +135,15 @@ Basically anything you can think to ask is already provided by `lens`
 
 ```haskell
 -- Do any matches contain "drop"?
->>> anyOf ([regex|\<r\w*|] . match) (T.isInfixOf "drop") txt
+>>> anyOf ([regex|\br\w*|] . match) (T.isInfixOf "drop") txt
 True
 
 -- Are all of our matches greater than 3 chars?
->>> allOf ([regex|\<r\w*|] . match) ((>3) . T.length) txt
+>>> allOf ([regex|\br\w*|] . match) ((>3) . T.length) txt
 True
 
 -- "Is 'roses' one of our matches"
->>> elemOf ([regex|\<r\w*|] . match) "roses" txt
+>>> elemOf ([regex|\br\w*|] . match) "roses" txt
 True
 ```
 
@@ -154,11 +154,11 @@ But that's not all! We can edit and mutate our matches in-place! This is somethi
 We can do the boring basic regex replace without even breaking a sweat:
 
 ```haskell
->>> set ([regex|\<r\w*|] . match) "brillig" txt
+>>> set ([regex|\br\w*|] . match) "brillig" txt
 "brillig on brillig and whiskers on kittens"
 
 -- Alias .~
->>> txt & [regex|\<r\w*|] . match .~ "brillig"
+>>> txt & [regex|\br\w*|] . match .~ "brillig"
 "brillig on brillig and whiskers on kittens"
 ```
 
@@ -167,26 +167,26 @@ Now for the fun stuff; we can **mutate** a match in-place!
 Let's reverse all of our matches:
 
 ```haskell
->>> over ([regex|\<r\w*|] . match) T.reverse txt
+>>> over ([regex|\br\w*|] . match) T.reverse txt
 "spordniar on sesor and whiskers on kittens"
 
 -- Alias %~
->>> txt & [regex|\<r\w*|] . match %~ T.reverse
+>>> txt & [regex|\br\w*|] . match %~ T.reverse
 "spordniar on sesor and whiskers on kittens"
 ```
 
 Want to replace matches using a list of substitutions? No problem! We can use `partsOf` to edit our matches as a list!
 
 ```haskell
->>> txt & partsOf ([regex|\<r\w*|] . match) .~ ["one", "two"]
+>>> txt & partsOf ([regex|\br\w*|] . match) .~ ["one", "two"]
 "one on two and whiskers on kittens"
 
 -- Providing too few simply leaves extras alone
->>> txt & partsOf ([regex|\<r\w*|] . match) .~ ["one"]
-"one on two and whiskers on kittens"
+>>> txt & partsOf ([regex|\br\w*|] . match) .~ ["one"]
+"one on roses and whiskers on kittens"
 
 -- Providing too many performs as many substitutions as it can
->>> txt & partsOf ([regex|\<r\w*|] . match) .~ ["one", "two", "three"]
+>>> txt & partsOf ([regex|\br\w*|] . match) .~ ["one", "two", "three"]
 "one on two and whiskers on kittens"
 ```
 
