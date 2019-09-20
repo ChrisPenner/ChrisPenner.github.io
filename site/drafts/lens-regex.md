@@ -1,14 +1,18 @@
 ---
 title: "Optics \& Regex: Greater than the sum of their parts"
 author: Chris Penner
-date: Sep 8, 2019
+date: Sep 20, 2019
 tags: [haskell]
 description: Optics \& regex: greater than the sum of their parts.
 ---
 
+The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning they're ins & outs; check out the comprehensive book I'm writing on the topic: [Optics By Example](https://opticsbyexample.com)
+
+---
+
 Regardless of the programming language, regular expressions have always been a core tool in the programmer's toolbox. Though some have a distaste for their difficult to maintain nature, they're an adaptable quick'n'dirty way to get things done.
 
-As much love as I have for Regex, they've become an incredibly hacky thing; they support a lot of options and a lot of different behaviours, so the interfaces to regular expressions in all languages tends to leave a bit to be desired.
+As much love as I have for Regular Expressions, they've become an incredibly hacky thing; they support a lot of options and a lot of different behaviours, so the interfaces to regular expressions in all languages tends to leave a bit to be desired.
 
 # The Status Quo
 
@@ -52,7 +56,7 @@ Think about what regular expressions are meant to do; they're an interface which
 
 Using optics as an interface has the benefit that the user is either **already familiar** with most of the combinators and tools they'll need from using optics previously, or that everything they learn here is transferable into work with optics in the future! As more optics are discovered, added, and optimized, the regex library passively benefits without any extra work from anyone!
 
-I don't want to discount the fact that optics can be tough to work with; I'm aware that they have a reputation of being too hard to learn and sometimes have poor type-inference and tricky error messages. I'm [doing my best to address those problems through education](https://opticsbyexample.com/), and there are new optics libraries coming out every year that improve error messages and usability! Despite current inconveniences, optics are fundamental constructions which model problems well; I believe **optics are inevitable**! So rather than shying away from an incredibly elegant solution because of a few temporary issues with the domain I'd rather push through them, use all the power the domain provides me, and continue to do all I can to chip away at the usability problems over time. If optics have ever seemed inaccessible to you in the past; please be willing to give them another try with a [bit of helpful direction](https://opticsbyexample.com/)!
+I don't want to discount the fact that optics can be tough to work with; I'm aware that they have a reputation of being too hard to learn and sometimes have poor type-inference and tricky error messages. I'm [doing my best to address those problems through education](https://opticsbyexample.com/), and there are new optics libraries coming out every year that improve error messages and usability! Despite current inconveniences, optics are fundamental constructions which model problems well; I believe **optics are inevitable**! So rather than shying away from an incredibly elegant solution because of a few temporary issues with the domain I'd rather push through them, use all the power the domain provides me, and continue to do all I can to chip away at the usability problems over time.
 
 > Optics are inevitable.
 
