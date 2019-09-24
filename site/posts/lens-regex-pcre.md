@@ -7,7 +7,7 @@ description: "Optics + Regex: greater than the sum of their parts."
 image: "magnifier.jpg"
 ---
 
-The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning they're ins & outs; check out the comprehensive book I'm writing on the topic: [Optics By Example](https://opticsbyexample.com)
+The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning their ins & outs; check out the comprehensive book I'm writing on the topic: [Optics By Example](https://opticsbyexample.com)
 
 ---
 
