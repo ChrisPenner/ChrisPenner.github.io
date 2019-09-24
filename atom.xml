@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-09-20T23:03:29Z</updated>
+  <updated>2019-09-24T06:51:03Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -16,7 +16,7 @@
       <summary>Optics + Regex: greater than the sum of their parts.</summary>
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/magnifier.jpg" alt="Optics + Regex: Greater than the sum of their parts">
-              <p>The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning they're ins &amp; outs; check out the comprehensive book I'm writing on the topic: <a href="https://opticsbyexample.com">Optics By Example</a></p>
+              <p>The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning their ins &amp; outs; check out the comprehensive book I'm writing on the topic: <a href="https://opticsbyexample.com">Optics By Example</a></p>
 <hr />
 <p>Regardless of the programming language, regular expressions have always been a core tool in the programmer's toolbox. Though some have a distaste for their difficult to maintain nature, they're an adaptable quick'n'dirty way to get things done.</p>
 <p>As much love as I have for Regular Expressions, they've become an incredibly hacky thing; they support a lot of options and a lot of different behaviours, so the interfaces to regular expressions in all languages tends to leave a bit to be desired.</p>
