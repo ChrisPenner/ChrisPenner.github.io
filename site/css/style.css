@@ -566,4 +566,16 @@ a.tag, a.category {
   margin-left: 12px;
 }
 
+table {
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+}
+
+th {
+  text-align: left;
+}
+
 /*# sourceMappingURL=style.css.map */

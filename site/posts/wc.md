@@ -9,7 +9,11 @@ image: "words.jpg"
 
 Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun!
 
+You can find source code for this post [here](https://github.com/ChrisPenner/wc).
+
 The challenge is to build a *faster* clone of the hand-optimized C implementation of the `wc` utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?
+
+For reference, I'm using the Mac's version of `wc`; you can find [reference source code here](https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html).
 
 Here's the criteria we'll be considering as we go along:
 
