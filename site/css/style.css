@@ -566,4 +566,14 @@ a.tag, a.category {
   margin-left: 12px;
 }
 
+tr:nth-child(even) {background-color: #f2f2f2;}
+
+table {
+  border-collapse: collapse;
+}
+
+table, th, td {
+  border: 1px solid black;
+}
+
 /*# sourceMappingURL=style.css.map */
