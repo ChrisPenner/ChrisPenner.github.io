@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-10-15T15:35:37Z</updated>
+  <updated>2019-10-15T16:35:13Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -17,7 +17,9 @@
       <content type="html"><![CDATA[
           <img src="https://chrispenner.ca/images/words.jpg" alt="Beating decades of optimized C with 80 lines of Haskell">
               <p>Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun!</p>
+<p>You can find source code for this post <a href="https://github.com/ChrisPenner/wc">here</a>.</p>
 <p>The challenge is to build a <em>faster</em> clone of the hand-optimized C implementation of the <code>wc</code> utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?</p>
+<p>For reference, I'm using the Mac's version of <code>wc</code>; you can find <a href="https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html">reference source code here</a>.</p>
 <p>Here's the criteria we'll be considering as we go along:</p>
 <ul>
 <li>Correctness: Should return identical character, word, and line counts as <code>wc</code> on the test files.</li>
