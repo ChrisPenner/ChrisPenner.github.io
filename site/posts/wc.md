@@ -328,7 +328,7 @@ Here's how we compare to the C version now:
 | time     | 0.37s     | 0.47s                  |
 | max mem. | 1.86 MB   | 4.35 MB                |
 
-At this point we're pretty close to parity with `wc`; but we're looking at sub-second times, so I'm going to bump up the size of our test file and un a few times to see if we can learn anything new.
+At this point we're pretty close to parity with `wc`; but we're looking at sub-second times, so I'm going to bump up the size of our test file and run a few times to see if we can learn anything new.
 
 I bumped up to a 543 MB plaintext file and ran it a few times in a row to get the caches warmed up. This is clearly important because my times dropped a full 33% after a few runs.  I understand my testing method isn't exactly "scientific", but it gives us a good estimate of how we're doing. Anyways, on the much larger file here's how we perform:
 
@@ -340,7 +340,7 @@ I bumped up to a 543 MB plaintext file and ran it a few times in a row to get th
 | max mem. | 1.85 MB   | 3.97 MB                |
 
 
-From here we can see that we're actually getting pretty close! Considering we've cloned `wc` in a high-level garbage collected language in less than 50 lines of code I'd say we're doing alright!
+From here we can see that we're actually getting pretty close! Considering we've cloned `wc` in a high-level garbage collected language in around 80 lines of code I'd say we're doing alright!
 
 ## Using our Cores
 
