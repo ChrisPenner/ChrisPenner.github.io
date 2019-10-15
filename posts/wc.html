@@ -8,10 +8,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="Optics + Regex: Greater than the sum of their parts">
-    <meta name="twitter:description" content="Optics + Regex: greater than the sum of their parts.">
-    <meta name="twitter:image" content="http://chrispenner.ca/images/magnifier.jpg">
-    <title>Optics + Regex: Greater than the sum of their parts</title>
+    <meta name="twitter:title" content="Beating decades of optimized C with 80 lines of Haskell">
+    <meta name="twitter:description" content="An exploration into high-performance Haskell by cloning the wc utility">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/words.jpg">
+    <title>Beating decades of optimized C with 80 lines of Haskell</title>
     <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
@@ -737,22 +737,22 @@
         </div>
     </header>
 
-     <a id="leftarrow" class="arrow" href="/posts/wc">&larr;</a> 
-     <a id="rightarrow" class="arrow" href="/posts/slick-template">&rarr;</a> 
+    
+     <a id="rightarrow" class="arrow" href="/posts/lens-regex-pcre">&rarr;</a> 
 
 <div id="page">
     <div class="wrapper">
         <div class="masthead">
             <span class="title">
-                Optics + Regex: Greater than the sum of their parts
+                Beating decades of optimized C with 80 lines of Haskell
             </span>
             <br>
 
-            <img class="post-image" src="/images/magnifier.jpg">
+            <img class="post-image" src="/images/words.jpg">
             <br>
             <span class="byline">by Chris Penner</span>
             <br>
-            <span class="date">Sep 20, 2019</span>
+            <span class="date">Oct 15, 2019</span>
             <br>
             <div class="metadata">
                 <br>
@@ -764,203 +764,490 @@
         </div>
     </div>
     <article class="post">
-        <p>The library presented in this post is one of many steps towards getting everyone interested in the amazing world of Optics! If you're at all interested in learning their ins &amp; outs; check out the comprehensive book I'm writing on the topic: <a href="https://opticsbyexample.com">Optics By Example</a></p>
-<hr />
-<p>Regardless of the programming language, regular expressions have always been a core tool in the programmer's toolbox. Though some have a distaste for their difficult to maintain nature, they're an adaptable quick'n'dirty way to get things done.</p>
-<p>As much love as I have for Regular Expressions, they've become an incredibly hacky thing; they support a lot of options and a lot of different behaviours, so the interfaces to regular expressions in all languages tends to leave a bit to be desired.</p>
-<h2 id="the-status-quo">The Status Quo</h2>
-<p>I don't know about you, but I've found almost every regular expression interface I've ever used in any language to be a bit clunky and inelegant; that's not meant to insult or demean any of those libraries, I think it's because regular expressions have a complex set of possible operations and the combination of them makes it tough to design a clean interface. Here are just a few reasons why it's hard to design a regex interface:</p>
+        <p>Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun!</p>
+<p>The challenge is to build a <em>faster</em> clone of the hand-optimized C implementation of the <code>wc</code> utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?</p>
+<p>Here's the criteria we'll be considering as we go along:</p>
 <ul>
-<li>Regular expressions can be used to either get <strong>or</strong> set</li>
-<li>Sometimes you want only <strong>one</strong> match, sometimes a few, sometimes you want <strong>all</strong> of them!</li>
-<li>Sometimes you want <strong>just</strong> the match groups; sometimes you want the <strong>whole</strong> match, sometimes you want <strong>BOTH</strong>!</li>
-<li>Regular Expression searching is <strong>expensive</strong>; we want to be <strong>lazy</strong> to avoid work!</li>
-<li>Regular expressions patterns are written as text; what if it's not valid?</li>
+<li>Correctness: Should return identical character, word, and line counts as <code>wc</code> on the test files.</li>
+<li>Speed (wall-clock-time): How do we compare to the execution time of <code>wc</code>?</li>
+<li>Max Resident Memory: What's the peak of our memory usage? Is our memory usage constant, linear, or otherwise?</li>
 </ul>
-<p>Luckily Haskell has a few tricks that help make some of these inherently difficult things a bit easier. Inherently lazy data structures and computations allows us to punt off laziness to the language rather than worrying about how to do the minimal amount of work possible. TemplateHaskell allows us to statically check Regular Expressions to ensure they're valid at compile time, and could even possibly allow us to statically analyze the existence of match groups. But that still leaves a lot of surface area to cover! It's easy to see how come these interfaces are complicated!</p>
-<p>Think about designing a single interface which can support ALL of the following operations performantly and elegantly:</p>
-<ul>
-<li>Get me the second match group from the first three matches</li>
-<li>Replace only the first match with this text</li>
-<li>Get me all groups AND match text from ALL matches</li>
-<li>Replace the first match with this value, the next with this one, and so on...</li>
-<li>Lazily get me the full match text of the first 2 matches where match-group 1 has a certain property.</li>
-</ul>
-<p>Yikes... That's going to take either a lot of methods or a lot of options!</p>
-<p>In a language like Haskell which doesn't have keyword or optional arguments it means we have to either overload operators with a lot of different meanings based on context; or provide a LOT of functions that the user has to learn, increasing our API's surface area. You may be familiar with the laughably overloaded "do everything" regex operator in many Haskell regex libs:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">(=~) ::</span> ( <span class="dt">RegexMaker</span> <span class="dt">Regex</span> <span class="dt">CompOption</span> <span class="dt">ExecOption</span> source2</span>
-<span id="cb1-2"><a href="#cb1-2"></a>        , <span class="dt">RegexContext</span> <span class="dt">Regex</span> source1 target</span>
-<span id="cb1-3"><a href="#cb1-3"></a>        ) <span class="ot">=&gt;</span> source1 <span class="ot">-&gt;</span> source2 <span class="ot">-&gt;</span> target</span></code></pre></div>
-<p>And even that doesn't handle replacement!</p>
-<p>Overloading is one approach, but as it turns out, it requires a lot of spelunking through types and documentation to even find out what the valid possible uses are! I'm going to rule out this approach as unwieldy and tough to reason about. That leaves us with the other option; add a whole bunch of methods or options, which doesn't sound great either, mainly because I don't want someone to need to learn a dozen <strong>specialized</strong> functions just to use <strong>my</strong> library. If only there was some existing vocabulary of operations which could be composed in different permutations to express complex ideas!</p>
-<h2 id="something-different">Something Different</h2>
-<p>Introducing <a href="https://github.com/ChrisPenner/lens-regex-pcre"><code>lens-regex-pcre</code></a>; a Haskell regular expression library which uses optics as its primary interface.</p>
-<p>Think about what regular expressions are meant to do; they're an interface which allows you to <strong>get</strong> or <strong>set</strong> zero or more small pieces of text in a larger whole. This is practically the <strong>dictionary definition</strong> of a Traversal in optics! Interop with optics means you <strong>instantly</strong> benefit from the plethora of existing optics combinators! In fact, optics fit this problem <strong>so nicely</strong> that the lensy wrapper I built supports <strong>more features</strong>, with <strong>less code</strong>, and runs <em><strong>faster</strong></em> (for replacements) than the regex library it wraps! Stay tuned for more on how that's even possible near the end!</p>
-<p>Using optics as an interface has the benefit that the user is either <strong>already familiar</strong> with most of the combinators and tools they'll need from using optics previously, or that everything they learn here is transferable into work with optics in the future! As more optics are discovered, added, and optimized, the regex library passively benefits without any extra work from anyone!</p>
-<p>I don't want to discount the fact that optics can be tough to work with; I'm aware that they have a reputation of being too hard to learn and sometimes have poor type-inference and tricky error messages. I'm <a href="https://opticsbyexample.com/">doing my best to address those problems through education</a>, and there are new optics libraries coming out every year that improve error messages and usability! Despite current inconveniences, optics are fundamental constructions which model problems well; I believe <strong>optics are inevitable</strong>! So rather than shying away from an incredibly elegant solution because of a few temporary issues with the domain I'd rather push through them, use all the power the domain provides me, and continue to do all I can to chip away at the usability problems over time.</p>
-<blockquote>
-<p>Optics are inevitable.</p>
-</blockquote>
-<p>Okay! I'll put my soapbox away, now it's time to see how this all actually works. Notice how most of the following examples actually read roughly like a sentence!</p>
-<h2 id="examples">Examples</h2>
-<p><code>lens-regex-pcre</code> provides <code>regex</code>, <code>match</code>, <code>group</code> and <code>groups</code> in the following examples, everything else is regular ol' optics from the <code>lens</code> library!</p>
-<p>We'll search through this text in the following examples:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">txt ::</span> <span class="dt">Text</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a>txt <span class="ot">=</span> <span class="st">&quot;raindrops on roses and whiskers on kittens&quot;</span></span></code></pre></div>
-<p>First off, let's check if a pattern exists in the text:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="op">&gt;&gt;&gt;</span> has [regex|wh.skers|] txt</span>
-<span id="cb3-2"><a href="#cb3-2"></a><span class="dt">True</span></span></code></pre></div>
-<p>Looks like we found it!</p>
-<p><code>regex</code> is a QuasiQuoter which constructs a traversal over all the text that matches the pattern you pass to it; behind the scenes it compiles the regex with <code>pcre-heavy</code> and will check your regex for you at compile time! Look; if we give it a bad pattern we find out right away!</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="co">-- Search</span></span>
-<span id="cb4-2"><a href="#cb4-2"></a><span class="op">&gt;&gt;&gt;</span> has [regex|?|] txt</span>
+<p>Those are the main things we need to worry about.</p>
+<p>Let's dive in.</p>
+<h2 id="the-dumbest-thing-that-could-possibly-work">The dumbest thing that could possibly work</h2>
+<p>As always, we should start by just trying the dumbest possible thing and see how it goes. We can build up from there. What's the dumbest way to count characters, lines, and words in Haskell? Well, we could read the file, then run the functions <code>length</code>,<code>length . words</code>, and <code>length . lines</code> to get our counts!</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">stupid ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb1-2"><a href="#cb1-2"></a>stupid fp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-3"><a href="#cb1-3"></a>    contents <span class="ot">&lt;-</span> <span class="fu">readFile</span> fp</span>
+<span id="cb1-4"><a href="#cb1-4"></a>    <span class="fu">return</span> (<span class="fu">length</span> s, <span class="fu">length</span> (<span class="fu">words</span> s), <span class="fu">length</span> (<span class="fu">lines</span> s))</span></code></pre></div>
+<p>Amazingly enough, this actually DOES work, and gets us the same answers as <code>wc</code>, IF you're willing to wait for it... I got sick of waiting for it to finish on my large test file (it was taking more than a few minutes), but on a smaller test file (90 MB) got the following results:</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>stupid-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>17.07s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>2403 MB</td>
+</tr>
+</tbody>
+</table>
+<p>Yikes... Needless to say there's some room for improvement...</p>
+<h2 id="being-slightly-less-dumb">Being slightly less dumb</h2>
+<p>Let's think about why this is doing so poorly; the first thing that comes to mind is that we're iterating through the contents of the file 3 separate times! This also means GHC can't garbage collect our list as we iterate through it since we're still using it in other places. The fact that we're keeping every character of the file in a linked list helps explain the 2.4 GB of memory on a file that's only 90 MB! Ouch!</p>
+<p>Okay, so that's REALLY not great. Let's see if we can get this down to a SINGLE pass over the structure. We're accumulating 3 simple things, so maybe we can process all three parts at once? When iterating through a structure to get one final result I reach for folds!</p>
+<p>It's pretty easy to use a fold to count characters or lines; the character count always adds one to the total, the line count adds one when the current character is a newline; but what about the word count? We can't add one on every space character because consecutive spaces doesn't count as a new word! We'll need to keep track of whether the previous character was a space, and only add one to the counter whenever we start a completely <strong>new</strong> word. That's not too tough to do; we'll use <code>foldl'</code> from <code>Data.List</code> for our implementation.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">import</span> <span class="dt">Data.List</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a><span class="kw">import</span> <span class="dt">Data.Char</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a></span>
+<span id="cb2-4"><a href="#cb2-4"></a><span class="ot">simpleFold ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb2-5"><a href="#cb2-5"></a>simpleFold fp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>    countFile <span class="op">&lt;$&gt;</span> <span class="fu">readFile</span> fp</span>
+<span id="cb2-7"><a href="#cb2-7"></a></span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="ot">countFile ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb2-9"><a href="#cb2-9"></a>countFile s <span class="ot">=</span></span>
+<span id="cb2-10"><a href="#cb2-10"></a>    <span class="kw">let</span> (cs, ws, ls, _) <span class="ot">=</span> foldl&#39; go (<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dt">False</span>) s</span>
+<span id="cb2-11"><a href="#cb2-11"></a>     <span class="kw">in</span> (cs, ws, ls)</span>
+<span id="cb2-12"><a href="#cb2-12"></a>  <span class="kw">where</span></span>
+<span id="cb2-13"><a href="#cb2-13"></a><span class="ot">    go ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>)</span>
+<span id="cb2-14"><a href="#cb2-14"></a>    go (cs, ws, ls, wasSpace) c <span class="ot">=</span></span>
+<span id="cb2-15"><a href="#cb2-15"></a>        <span class="kw">let</span> addLine <span class="op">|</span> c <span class="op">==</span> <span class="ch">&#39;\n&#39;</span> <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb2-16"><a href="#cb2-16"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb2-17"><a href="#cb2-17"></a>            addWord <span class="op">|</span> wasSpace <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb2-18"><a href="#cb2-18"></a>                    <span class="op">|</span> <span class="fu">isSpace</span> c <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb2-19"><a href="#cb2-19"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb2-20"><a href="#cb2-20"></a>         <span class="kw">in</span> (cs <span class="op">+</span> <span class="dv">1</span>, ws <span class="op">+</span> addWord, ls <span class="op">+</span> addLine, <span class="fu">isSpace</span> c)</span></code></pre></div>
+<p>Running this version we run into an even worse problem! The program takes more than a few minutes and quickly spikes up to more than 3 GB of memory! What's gone wrong? Well, we used the strict version of <code>foldl</code> (indicated by the trailing tick <code>'</code>); BUT it's only strict up to "Weak Head Normal Form" (WHNF), which means it'll be strict in the <strong>structure</strong> of the tuple accumulator, but not the actual values! That's annoying, because it means we're building up a HUGE thunk of additions that we never fully evaluate until we've finished iterating through the whole file! Sometimes laziness sneaks in and bites us like this. This is the sort of memory leak that can easily take down web-servers if you aren't careful!</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>simple-fold-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>longer than I want to wait</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>&gt; 3 GB</td>
+</tr>
+</tbody>
+</table>
+<p>We can fix it by telling GHC to strictly evaluate the contents of the tuple on ever iteration. An easy way to do that is with the <code>BangPatterns</code> extension; it lets us use <code>!</code> in our argument list to force evaluation on each run of the function. Here's the new version of <code>go</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">{-# LANGUAGE BangPatterns #-}</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a></span>
+<span id="cb3-3"><a href="#cb3-3"></a><span class="op">...</span></span>
+<span id="cb3-4"><a href="#cb3-4"></a><span class="ot">    go ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>)</span>
+<span id="cb3-5"><a href="#cb3-5"></a>    go (<span class="op">!</span>cs, <span class="op">!</span>ws, <span class="op">!</span>ls, <span class="op">!</span>wasSpace) c <span class="ot">=</span></span>
+<span id="cb3-6"><a href="#cb3-6"></a>        <span class="kw">let</span> addLine <span class="op">|</span> c <span class="op">==</span> <span class="ch">&#39;\n&#39;</span> <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb3-7"><a href="#cb3-7"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb3-8"><a href="#cb3-8"></a>            addWord <span class="op">|</span> wasSpace <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb3-9"><a href="#cb3-9"></a>                    <span class="op">|</span> <span class="fu">isSpace</span> c <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb3-10"><a href="#cb3-10"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb3-11"><a href="#cb3-11"></a>         <span class="kw">in</span> (cs <span class="op">+</span> <span class="dv">1</span>, ws <span class="op">+</span> addWord, ls <span class="op">+</span> addLine, <span class="fu">isSpace</span> c)</span></code></pre></div>
+<p>That simple change speeds things up like <strong>CRAZY</strong>; here's our new performance breakdown:</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>strict-fold-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>8.12s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>3.7 MB</td>
+</tr>
+</tbody>
+</table>
+<p>Okay; so we're doing WAY better on memory now, a few MBs of memory on a 90 MB file means we must finally be streaming the file contents properly! Even though laziness has already bitten us on this problem, now that we've localized the laziness into the right places it provides us with streaming for free! The streaming happens naturally because <code>readFile</code> actually does <strong>lazy IO</strong>; which can be a real nuisance sometimes for things like web servers since you're never quite sure when the IO is happening, but in our case it gives us much better memory residency.</p>
+<h2 id="better-with-bytestrings">Better with ByteStrings</h2>
+<p>We can probably stop worrying about memory for now, so we're back to crunching for performance! One thing I can think to try there to switch to using a ByteString rather than a String. Using a String means we're implicitly decoding the file as we read it, which takes time, AND we have the overhead of using a linked list for the whole thing, we can't easily take advantage of batching or buffering our data as we read it.</p>
+<p>This change is actually laughably easy, the <code>bytestring</code> package provides the module: <code>Data.ByteString.Lazy.Char8</code>, which provides operations for working with Lazy ByteStrings as though they were strings of characters, but with all the performance benefits of ByteStrings. Note that it DOESN'T actually verify that each byte is a valid Character, or do any decoding, so it's on us to make sure we're passing it valid data. By default <code>wc</code> assumes its input is ASCII, so I think we're safe to do the same. If our input is ASCII then the functions in this module will behave sensibly.</p>
+<p>Literally the only changes I need to make are to switch the <code>Data.List</code> import to <code>Data.ByteString.Lazy.Char8</code> and then switch the <code>readFile</code> and <code>foldl'</code> functions to their ByteString versions:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">import</span> <span class="dt">Data.Char</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.ByteString.Lazy.Char8</span> <span class="kw">as</span> <span class="dt">BS</span></span>
 <span id="cb4-3"><a href="#cb4-3"></a></span>
-<span id="cb4-4"><a href="#cb4-4"></a><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">1</span><span class="op">:</span><span class="dv">12</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></span>
-<span id="cb4-5"><a href="#cb4-5"></a>    • <span class="dt">Exception</span> when trying to run compile<span class="op">-</span>time code<span class="op">:</span></span>
-<span id="cb4-6"><a href="#cb4-6"></a>        <span class="dt">Text.Regex.PCRE.Light</span><span class="op">:</span> <span class="dt">Error</span> <span class="kw">in</span> regex<span class="op">:</span> nothing to <span class="fu">repeat</span></span></code></pre></div>
-<p>Handy!</p>
-<p>Okay! Moving on, what if we just want to find the first match? We can use <code>firstOf</code> from <code>lens</code> to get <code>Just</code> the first focus or <code>Nothing</code>.</p>
-<p>Here we use a fun regex to return the first word with doubles of a letter inside; it turns out <code>kittens</code> has a double <code>t</code>!</p>
-<p>We use <code>match</code> to say we want to extract the text that was matched.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="op">&gt;&gt;&gt;</span> firstOf ([regex|\w*(\w)\1\w*|] <span class="op">.</span> match) txt</span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="dt">Just</span> <span class="st">&quot;kittens&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a><span class="ot">simpleFold ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb4-5"><a href="#cb4-5"></a>simpleFold fp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb4-6"><a href="#cb4-6"></a>    simpleFoldCountFile <span class="op">&lt;$&gt;</span> BS.readFile fp</span>
+<span id="cb4-7"><a href="#cb4-7"></a></span>
+<span id="cb4-8"><a href="#cb4-8"></a><span class="ot">simpleFoldCountFile ::</span> <span class="dt">BS.ByteString</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb4-9"><a href="#cb4-9"></a>simpleFoldCountFile s <span class="ot">=</span></span>
+<span id="cb4-10"><a href="#cb4-10"></a>    <span class="kw">let</span> (cs, ws, ls, _) <span class="ot">=</span> BS.foldl&#39; go (<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dt">False</span>) s</span>
+<span id="cb4-11"><a href="#cb4-11"></a>     <span class="kw">in</span> (cs, ws, ls)</span>
+<span id="cb4-12"><a href="#cb4-12"></a>  <span class="kw">where</span></span>
+<span id="cb4-13"><a href="#cb4-13"></a><span class="ot">    go ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Int</span>, <span class="dt">Bool</span>)</span>
+<span id="cb4-14"><a href="#cb4-14"></a>    go (<span class="op">!</span>cs, <span class="op">!</span>ws, <span class="op">!</span>ls, <span class="op">!</span>wasSpace) c <span class="ot">=</span></span>
+<span id="cb4-15"><a href="#cb4-15"></a>        <span class="kw">let</span> addLine <span class="op">|</span> c <span class="op">==</span> <span class="ch">&#39;\n&#39;</span> <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb4-16"><a href="#cb4-16"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb4-17"><a href="#cb4-17"></a>            addWord <span class="op">|</span> wasSpace <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb4-18"><a href="#cb4-18"></a>                    <span class="op">|</span> <span class="fu">isSpace</span> c <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb4-19"><a href="#cb4-19"></a>                    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb4-20"><a href="#cb4-20"></a>         <span class="kw">in</span> (cs <span class="op">+</span> <span class="dv">1</span>, ws <span class="op">+</span> addWord, ls <span class="op">+</span> addLine, <span class="fu">isSpace</span> c)</span></code></pre></div>
+<p>This little change chops our time down by nearly half!</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>strict-fold-wc</th>
+<th>bs-fold-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>8.12s</td>
+<td>3.41s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>3.7 MB</td>
+<td>5.48 MB</td>
+</tr>
+</tbody>
+</table>
+<p>So we're clearly still making some progress. Our memory usage has increased slightly, but it still seems to be a constant overhead. We're still orders of magnitude away from <code>wc</code> unfortunately; let's see if there's anything else we could do.</p>
+<h2 id="moving-to-monoids">Moving to Monoids</h2>
+<p>At this point I feel like experimenting a little. Modern PC's tend to have multiple cores, and it seems as though newer machines scale up the number of cores moreso than their processor speed, so it would be beneficial to take advantage of that.</p>
+<p>Splitting up a computation like this isn't exactly trivial. In order to use multiple cores we'll need to split up the job into pieces. In theory this is easy, just split the file into chunks and give one chunk to each core! As you think a bit deeper about it the problems start to appear; combining character counts is pretty easy, we can just sum the totals from each chunk. The same with line-counts, but word counts pose a problem! What happens if we split in the middle of a word, or in the middle of several consecutive spaces? In order to combine the word counts we'd need to keep track of the starting and end state of each chunk and be intelligent when we combine them together. That sounds like a lot of book-keeping that I don't really want to do.</p>
+<p>Monoids to the rescue! The associative laws of a Monoid mean that so long as we can develop a lawful monoid it WILL work properly in spite of this type of parallelism. That really just passes the buck down the line though, is it possible to write a Monoid that can handle the complexities of word-counting like this?</p>
+<p>It sure is! It may not be immediately apparent how a monoid like this works, but there's a class of counting problems that all fall into the same category like this, and luckily for me I've worked on these before. Basically we need to count the number of times a given invariant has <strong>changed</strong> from the start to the end of a sequence. I've generalized this class of monoid before, naming them <a href="http://hackage.haskell.org/package/flux-monoid"><code>flux</code> monoids</a>. What we need to do is count the number of times we change from characters which ARE spaces to those which AREN'T spaces. We could probably express this using the <code>Flux</code> monoid itself, but since we need to be so careful about strictness and performance I'm going to define a bespoke version of the Flux monoid for our purposes. Check this out:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="kw">data</span> <span class="dt">CharType</span> <span class="ot">=</span> <span class="dt">IsSpace</span> <span class="op">|</span> <span class="dt">NotSpace</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>    <span class="kw">deriving</span> <span class="dt">Show</span></span>
 <span id="cb5-3"><a href="#cb5-3"></a></span>
-<span id="cb5-4"><a href="#cb5-4"></a><span class="co">-- Alias: ^?</span></span>
-<span id="cb5-5"><a href="#cb5-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">^?</span> [regex|\w*(\w)\1\w*|] <span class="op">.</span> match</span>
-<span id="cb5-6"><a href="#cb5-6"></a><span class="dt">Just</span> <span class="st">&quot;kittens&quot;</span></span></code></pre></div>
-<p>Next we want to get <strong>ALL</strong> the matches for a pattern, this one is probably the most common task we want to perform, luckily it's common when working with optics too!</p>
-<p>Let's find all the words starting with <code>r</code> using <code>toListOf</code></p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="op">&gt;&gt;&gt;</span> toListOf ([regex|\br\w*|] <span class="op">.</span> match) txt</span>
-<span id="cb6-2"><a href="#cb6-2"></a>[<span class="st">&quot;raindrops&quot;</span>,<span class="st">&quot;roses&quot;</span>]</span>
-<span id="cb6-3"><a href="#cb6-3"></a></span>
-<span id="cb6-4"><a href="#cb6-4"></a><span class="co">-- ALIAS: ^..</span></span>
-<span id="cb6-5"><a href="#cb6-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">^..</span> [regex|\br\w*|] <span class="op">.</span> match</span>
-<span id="cb6-6"><a href="#cb6-6"></a>[<span class="st">&quot;raindrops&quot;</span>,<span class="st">&quot;roses&quot;</span>]</span></code></pre></div>
-<p>What if we want to count the number of matches instead?</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="op">&gt;&gt;&gt;</span> lengthOf [regex|\br\w*|] txt</span>
-<span id="cb7-2"><a href="#cb7-2"></a><span class="dv">2</span></span></code></pre></div>
-<p>Basically anything you can think to ask is already provided by <code>lens</code></p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="co">-- Do any matches contain &quot;drop&quot;?</span></span>
-<span id="cb8-2"><a href="#cb8-2"></a><span class="op">&gt;&gt;&gt;</span> anyOf ([regex|\br\w*|] <span class="op">.</span> match) (T.isInfixOf <span class="st">&quot;drop&quot;</span>) txt</span>
-<span id="cb8-3"><a href="#cb8-3"></a><span class="dt">True</span></span>
-<span id="cb8-4"><a href="#cb8-4"></a></span>
-<span id="cb8-5"><a href="#cb8-5"></a><span class="co">-- Are all of our matches greater than 3 chars?</span></span>
-<span id="cb8-6"><a href="#cb8-6"></a><span class="op">&gt;&gt;&gt;</span> allOf ([regex|\br\w*|] <span class="op">.</span> match) ((<span class="op">&gt;</span><span class="dv">3</span>) <span class="op">.</span> T.length) txt</span>
-<span id="cb8-7"><a href="#cb8-7"></a><span class="dt">True</span></span>
-<span id="cb8-8"><a href="#cb8-8"></a></span>
-<span id="cb8-9"><a href="#cb8-9"></a><span class="co">-- &quot;Is &#39;roses&#39; one of our matches&quot;</span></span>
-<span id="cb8-10"><a href="#cb8-10"></a><span class="op">&gt;&gt;&gt;</span> elemOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="st">&quot;roses&quot;</span> txt</span>
-<span id="cb8-11"><a href="#cb8-11"></a><span class="dt">True</span></span></code></pre></div>
-<h2 id="substitutions-and-replacements">Substitutions and replacements</h2>
-<p>But that's not all! We can edit and mutate our matches in-place! This is something that the lensy interface does much better than any regex library I've ever seen. Hold my beer.</p>
-<p>We can do the boring basic regex replace without even breaking a sweat:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&gt;&gt;&gt;</span> set ([regex|\br\w*|] <span class="op">.</span> match) <span class="st">&quot;brillig&quot;</span> txt</span>
-<span id="cb9-2"><a href="#cb9-2"></a><span class="st">&quot;brillig on brillig and whiskers on kittens&quot;</span></span>
+<span id="cb5-4"><a href="#cb5-4"></a><span class="kw">data</span> <span class="dt">Flux</span> <span class="ot">=</span></span>
+<span id="cb5-5"><a href="#cb5-5"></a>    <span class="dt">Flux</span> <span class="op">!</span><span class="dt">CharType</span></span>
+<span id="cb5-6"><a href="#cb5-6"></a>         <span class="ot">{-# UNPACK #-}</span> <span class="op">!</span><span class="dt">Int</span></span>
+<span id="cb5-7"><a href="#cb5-7"></a>         <span class="op">!</span><span class="dt">CharType</span></span>
+<span id="cb5-8"><a href="#cb5-8"></a>    <span class="op">|</span> <span class="dt">Unknown</span></span>
+<span id="cb5-9"><a href="#cb5-9"></a>    <span class="kw">deriving</span> <span class="dt">Show</span></span></code></pre></div>
+<p>We need these types only for the word-counting part of our solution.</p>
+<p>The <code>CharType</code> says whether a given character is considered a space or not; then the <code>Flux</code> type represents a chunk of text, storing fields for whether the left-most character is a space, how many words are in the full block of text, and whether the right-most character is a space. We don't actually keep the text in the structure since we don't need it for this problem. I've <code>UNPACK</code>ed the <code>Int</code> and made all the fields strict to ensure we won't run into the same problems we did with lazy tuples earlier. Using a strict data type means I don't need to use BangPatterns in my computations.</p>
+<p>Next we need a semigroup and Monoid instance for this type!</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">instance</span> <span class="dt">Semigroup</span> <span class="dt">Flux</span> <span class="kw">where</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a>  <span class="dt">Unknown</span> <span class="op">&lt;&gt;</span> x <span class="ot">=</span> x</span>
+<span id="cb6-3"><a href="#cb6-3"></a>  x <span class="op">&lt;&gt;</span> <span class="dt">Unknown</span> <span class="ot">=</span> x</span>
+<span id="cb6-4"><a href="#cb6-4"></a>  <span class="dt">Flux</span> l n <span class="dt">NotSpace</span> <span class="op">&lt;&gt;</span> <span class="dt">Flux</span> <span class="dt">NotSpace</span> n&#39; r <span class="ot">=</span> <span class="dt">Flux</span> l (n <span class="op">+</span> n&#39; <span class="op">-</span> <span class="dv">1</span>) r</span>
+<span id="cb6-5"><a href="#cb6-5"></a>  <span class="dt">Flux</span> l n _ <span class="op">&lt;&gt;</span> <span class="dt">Flux</span> _ n&#39; r <span class="ot">=</span> <span class="dt">Flux</span> l (n <span class="op">+</span> n&#39;) r</span>
+<span id="cb6-6"><a href="#cb6-6"></a></span>
+<span id="cb6-7"><a href="#cb6-7"></a><span class="kw">instance</span> <span class="dt">Monoid</span> <span class="dt">Flux</span> <span class="kw">where</span></span>
+<span id="cb6-8"><a href="#cb6-8"></a>  <span class="fu">mempty</span> <span class="ot">=</span> <span class="dt">Unknown</span></span></code></pre></div>
+<p>The <code>Unknown</code> constructor is there to represent a Monoidal identity, we could actually leave it out and use <code>Maybe</code> to promote our Semigroup into a Monoid, but <code>Maybe</code> introduces unwanted laziness into our semigroup append! I just define it as part of the type for simplicity.</p>
+<p>The <code>(&lt;&gt;)</code> operation we define checks whether the join-point of our two text blocks happens in the middle of a word, if it does then we must have counted the start and end of the same word separately, so we subtract one when we add the word totals to make it all balance out.</p>
+<p>Lastly we need a way to build a <code>Flux</code> object from individual characters.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">flux ::</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Flux</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a>flux c <span class="op">|</span> <span class="fu">isSpace</span> c <span class="ot">=</span> <span class="dt">Flux</span> <span class="dt">IsSpace</span> <span class="dv">0</span> <span class="dt">IsSpace</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a>       <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dt">Flux</span> <span class="dt">NotSpace</span> <span class="dv">1</span> <span class="dt">NotSpace</span></span></code></pre></div>
+<p>This is simple enough, we count non-space characters as 'words' which start and end with non-space charactes and for spaces have an empty word count surrounded on both sides with space chars.</p>
+<p>It may not be immediately clear, but that's all we need to count words monoidally!</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="fu">foldMap</span> flux <span class="st">&quot;testing one two three&quot;</span></span>
+<span id="cb8-2"><a href="#cb8-2"></a><span class="dt">Flux</span> <span class="dt">NotSpace</span> <span class="dv">4</span> <span class="dt">NotSpace</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a></span>
+<span id="cb8-4"><a href="#cb8-4"></a><span class="op">&gt;&gt;&gt;</span> <span class="fu">foldMap</span> flux <span class="st">&quot;testing on&quot;</span> <span class="op">&lt;&gt;</span> <span class="fu">foldMap</span> flux <span class="st">&quot;e two three&quot;</span></span>
+<span id="cb8-5"><a href="#cb8-5"></a><span class="dt">Flux</span> <span class="dt">NotSpace</span> <span class="dv">4</span> <span class="dt">NotSpace</span></span>
+<span id="cb8-6"><a href="#cb8-6"></a></span>
+<span id="cb8-7"><a href="#cb8-7"></a><span class="op">&gt;&gt;&gt;</span> <span class="fu">foldMap</span> flux <span class="st">&quot;testing one &quot;</span> <span class="op">&lt;&gt;</span> <span class="fu">foldMap</span> flux <span class="st">&quot; two three&quot;</span></span>
+<span id="cb8-8"><a href="#cb8-8"></a><span class="dt">Flux</span> <span class="dt">NotSpace</span> <span class="dv">4</span> <span class="dt">NotSpace</span></span></code></pre></div>
+<p>Looks like it's working fine!</p>
+<p>We've got the word count part covered, now we need the Monoidal version of the char count and line count. This is a snap to build:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">data</span> <span class="dt">Counts</span> <span class="ot">=</span></span>
+<span id="cb9-2"><a href="#cb9-2"></a>    <span class="dt">Counts</span> {<span class="ot"> charCount ::</span> <span class="ot">{-# UNPACK #-}</span> <span class="op">!</span><span class="dt">Int</span></span>
 <span id="cb9-3"><a href="#cb9-3"></a></span>
-<span id="cb9-4"><a href="#cb9-4"></a><span class="co">-- Alias .~</span></span>
-<span id="cb9-5"><a href="#cb9-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\br\w*|] <span class="op">.</span> match <span class="op">.~</span> <span class="st">&quot;brillig&quot;</span></span>
-<span id="cb9-6"><a href="#cb9-6"></a><span class="st">&quot;brillig on brillig and whiskers on kittens&quot;</span></span></code></pre></div>
-<p>Now for the fun stuff; we can <strong>mutate</strong> a match in-place!</p>
-<p>Let's reverse all of our matches:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="op">&gt;&gt;&gt;</span> over ([regex|\br\w*|] <span class="op">.</span> match) T.reverse txt</span>
-<span id="cb10-2"><a href="#cb10-2"></a><span class="st">&quot;spordniar on sesor and whiskers on kittens&quot;</span></span>
-<span id="cb10-3"><a href="#cb10-3"></a></span>
-<span id="cb10-4"><a href="#cb10-4"></a><span class="co">-- Alias %~</span></span>
-<span id="cb10-5"><a href="#cb10-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> [regex|\br\w*|] <span class="op">.</span> match <span class="op">%~</span> T.reverse</span>
-<span id="cb10-6"><a href="#cb10-6"></a><span class="st">&quot;spordniar on sesor and whiskers on kittens&quot;</span></span></code></pre></div>
-<p>Want to replace matches using a list of substitutions? No problem! We can use <code>partsOf</code> to edit our matches as a list!</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>]</span>
-<span id="cb11-2"><a href="#cb11-2"></a><span class="st">&quot;one on two and whiskers on kittens&quot;</span></span>
-<span id="cb11-3"><a href="#cb11-3"></a></span>
-<span id="cb11-4"><a href="#cb11-4"></a><span class="co">-- Providing too few simply leaves extras alone</span></span>
-<span id="cb11-5"><a href="#cb11-5"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>]</span>
-<span id="cb11-6"><a href="#cb11-6"></a><span class="st">&quot;one on roses and whiskers on kittens&quot;</span></span>
-<span id="cb11-7"><a href="#cb11-7"></a></span>
-<span id="cb11-8"><a href="#cb11-8"></a><span class="co">-- Providing too many performs as many substitutions as it can</span></span>
-<span id="cb11-9"><a href="#cb11-9"></a><span class="op">&gt;&gt;&gt;</span> txt <span class="op">&amp;</span> partsOf ([regex|\br\w*|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;one&quot;</span>, <span class="st">&quot;two&quot;</span>, <span class="st">&quot;three&quot;</span>]</span>
-<span id="cb11-10"><a href="#cb11-10"></a><span class="st">&quot;one on two and whiskers on kittens&quot;</span></span></code></pre></div>
-<p>We can even do updates which require effects!</p>
-<p>Let's find and replace variables in a block of text with values from environment variables using <code>IO</code>!</p>
-<p>Note that <code>%%~</code> is the combinator for running a <code>traverse</code> over the targets. We could also use <code>traverseOf</code>.</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span></span>
-<span id="cb12-2"><a href="#cb12-2"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
-<span id="cb12-3"><a href="#cb12-3"></a><span class="kw">import</span> <span class="dt">Control.Lens.Regex</span></span>
-<span id="cb12-4"><a href="#cb12-4"></a><span class="kw">import</span> <span class="dt">System.Environment</span></span>
-<span id="cb12-5"><a href="#cb12-5"></a><span class="kw">import</span> <span class="dt">Data.Text.Lens</span></span>
-<span id="cb12-6"><a href="#cb12-6"></a></span>
-<span id="cb12-7"><a href="#cb12-7"></a><span class="ot">src ::</span> <span class="dt">T.Text</span></span>
-<span id="cb12-8"><a href="#cb12-8"></a>src <span class="ot">=</span> <span class="st">&quot;Hello $NAME, how&#39;s your $THING?&quot;</span></span>
-<span id="cb12-9"><a href="#cb12-9"></a></span>
-<span id="cb12-10"><a href="#cb12-10"></a><span class="ot">replaceEnv ::</span> <span class="dt">T.Text</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">T.Text</span></span>
-<span id="cb12-11"><a href="#cb12-11"></a>replaceEnv <span class="ot">=</span> [regex|\$\w+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">%%~</span> getEnv <span class="op">.</span> <span class="fu">tail</span></span></code></pre></div>
-<p>Let's run it:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="op">&gt;&gt;&gt;</span> setEnv <span class="st">&quot;NAME&quot;</span> <span class="st">&quot;Joey&quot;</span></span>
-<span id="cb13-2"><a href="#cb13-2"></a><span class="op">&gt;&gt;&gt;</span> setEnv <span class="st">&quot;THING&quot;</span> <span class="st">&quot;dog&quot;</span></span>
-<span id="cb13-3"><a href="#cb13-3"></a><span class="op">&gt;&gt;&gt;</span> replaceWithEnv src</span>
-<span id="cb13-4"><a href="#cb13-4"></a><span class="st">&quot;Hello Joey, how&#39;s your dog?&quot;</span></span></code></pre></div>
-<p>When you think about what we've managed to do with <code>replaceWithEnv</code> in a single line of code I think it's pretty impressive.</p>
-<p>And we haven't even looked at groups yet!</p>
-<h2 id="using-groups">Using Groups</h2>
-<p>Any sufficiently tricky regex problem will need groups eventually! <code>lens-regex-pcre</code> supports that!</p>
-<p>Instead of using <code>match</code> after <code>regex</code> we just use <code>groups</code> instead! It's that easy.</p>
-<p>Let's say we want to collect only the names of every variable in a template string:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="ot">template ::</span> <span class="dt">T.Text</span></span>
-<span id="cb14-2"><a href="#cb14-2"></a>template <span class="ot">=</span> <span class="st">&quot;Hello $NAME, glad you came to $PLACE&quot;</span></span>
-<span id="cb14-3"><a href="#cb14-3"></a></span>
-<span id="cb14-4"><a href="#cb14-4"></a><span class="op">&gt;&gt;&gt;</span> toListOf ([regex|\$(\w+)|] <span class="op">.</span> <span class="fu">group</span> <span class="dv">0</span>) template</span>
-<span id="cb14-5"><a href="#cb14-5"></a>[<span class="st">&quot;NAME&quot;</span>,<span class="st">&quot;PLACE&quot;</span>]</span></code></pre></div>
-<p>You can substitute/edit groups too!</p>
-<p>What if we got all our our area codes and local numbers messed up in our phone numbers? We can fix that in one fell swoop:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="ot">phoneNumbers ::</span> <span class="dt">T.Text</span></span>
-<span id="cb15-2"><a href="#cb15-2"></a>phoneNumbers <span class="ot">=</span> <span class="st">&quot;555-123-4567, 999-876-54321&quot;</span></span>
-<span id="cb15-3"><a href="#cb15-3"></a></span>
-<span id="cb15-4"><a href="#cb15-4"></a><span class="co">-- &#39;reverse&#39; will switch the first and second groups in the list of groups matches!</span></span>
-<span id="cb15-5"><a href="#cb15-5"></a><span class="op">&gt;&gt;&gt;</span> phoneNumbers <span class="op">&amp;</span> [regex|(\d{3})-(\d{3})|] <span class="op">.</span> groups <span class="op">%~</span> Prelude.reverse</span>
-<span id="cb15-6"><a href="#cb15-6"></a><span class="st">&quot;123-555-4567, 876-999-54321&quot;</span></span></code></pre></div>
-<h2 id="bringing-it-in">Bringing it in</h2>
-<p>So with this new vocabulary how do we solve all the problems we posed earlier?</p>
+<span id="cb9-4"><a href="#cb9-4"></a>           ,<span class="ot"> wordCount ::</span>  <span class="op">!</span><span class="dt">Flux</span></span>
+<span id="cb9-5"><a href="#cb9-5"></a>           ,<span class="ot"> lineCount ::</span> <span class="ot">{-# UNPACK #-}</span> <span class="op">!</span><span class="dt">Int</span></span>
+<span id="cb9-6"><a href="#cb9-6"></a>           }</span>
+<span id="cb9-7"><a href="#cb9-7"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
+<span id="cb9-8"><a href="#cb9-8"></a></span>
+<span id="cb9-9"><a href="#cb9-9"></a><span class="kw">instance</span> <span class="dt">Semigroup</span> <span class="dt">Counts</span> <span class="kw">where</span></span>
+<span id="cb9-10"><a href="#cb9-10"></a>  (<span class="dt">Counts</span> a b c) <span class="op">&lt;&gt;</span> (<span class="dt">Counts</span> a&#39; b&#39; c&#39;) <span class="ot">=</span> <span class="dt">Counts</span> (a <span class="op">+</span> a&#39;) (b <span class="op">&lt;&gt;</span> b&#39;) (c <span class="op">+</span> c&#39;)</span>
+<span id="cb9-11"><a href="#cb9-11"></a></span>
+<span id="cb9-12"><a href="#cb9-12"></a><span class="kw">instance</span> <span class="dt">Monoid</span> <span class="dt">Counts</span> <span class="kw">where</span></span>
+<span id="cb9-13"><a href="#cb9-13"></a>  <span class="fu">mempty</span> <span class="ot">=</span> <span class="dt">Counts</span> <span class="dv">0</span> <span class="fu">mempty</span> <span class="dv">0</span></span></code></pre></div>
+<p>No problem! Similarly we'll need a way to turn a single char into a <code>Counts</code> object:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">countChar ::</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
+<span id="cb10-2"><a href="#cb10-2"></a>countChar c <span class="ot">=</span></span>
+<span id="cb10-3"><a href="#cb10-3"></a>    <span class="dt">Counts</span> { charCount <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb10-4"><a href="#cb10-4"></a>           , wordCount <span class="ot">=</span> flux c</span>
+<span id="cb10-5"><a href="#cb10-5"></a>           , lineCount <span class="ot">=</span> <span class="kw">if</span> (c <span class="op">==</span> <span class="ch">&#39;\n&#39;</span>) <span class="kw">then</span> <span class="dv">1</span> <span class="kw">else</span> <span class="dv">0</span></span>
+<span id="cb10-6"><a href="#cb10-6"></a>           }</span></code></pre></div>
+<p>Let's try that out too:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="fu">foldMap</span> countChar <span class="st">&quot;one two\nthree&quot;</span></span>
+<span id="cb11-2"><a href="#cb11-2"></a><span class="dt">Counts</span> {charCount <span class="ot">=</span> <span class="dv">13</span>, wordCount <span class="ot">=</span> <span class="dt">Flux</span> <span class="dt">NotSpace</span> <span class="dv">3</span> <span class="dt">NotSpace</span>, lineCount <span class="ot">=</span> <span class="dv">1</span>}</span></code></pre></div>
+<p>Looks good to me! Experiment to your heart's content to convince yourself it's a lawful Monoid.</p>
+<p>With a lawful Monoid we no longer need to worry about how we split our file up!</p>
+<p>Before going any further, let's try using our monoid with our existing code and make sure it gets the same answers.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="kw">module</span> <span class="dt">MonoidBSFold</span> <span class="kw">where</span></span>
+<span id="cb12-2"><a href="#cb12-2"></a></span>
+<span id="cb12-3"><a href="#cb12-3"></a><span class="kw">import</span> <span class="dt">Data.Char</span></span>
+<span id="cb12-4"><a href="#cb12-4"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.ByteString.Lazy.Char8</span> <span class="kw">as</span> <span class="dt">BS</span></span>
+<span id="cb12-5"><a href="#cb12-5"></a></span>
+<span id="cb12-6"><a href="#cb12-6"></a><span class="ot">monoidBSFold ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Counts</span></span>
+<span id="cb12-7"><a href="#cb12-7"></a>monoidBSFold paths <span class="ot">=</span> monoidFoldFile <span class="op">&lt;$&gt;</span> BS.readFile fp</span>
+<span id="cb12-8"><a href="#cb12-8"></a></span>
+<span id="cb12-9"><a href="#cb12-9"></a><span class="ot">monoidFoldFile ::</span> <span class="dt">BS.ByteString</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
+<span id="cb12-10"><a href="#cb12-10"></a>monoidFoldFile <span class="ot">=</span> BS.foldl&#39; (\a b <span class="ot">-&gt;</span> a <span class="op">&lt;&gt;</span> countChar b) <span class="fu">mempty</span></span></code></pre></div>
+<p>We've moved some complexity into our <code>Counts</code> type, which allows us to really simplify our implementation here. This is nice in general because it's much easier to test a single data-type rather than testing EVERYWHERE that we do this fold.</p>
+<p>As a side benefit, this change has <em>somehow</em> sped things up even more!</p>
+<p>We're in the ballpark now!</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>strict-bs-fold-wc</th>
+<th>monoid-bs-fold-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>3.41s</td>
+<td>1.94s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>5.48 MB</td>
+<td>3.83 MB</td>
+</tr>
+</tbody>
+</table>
+<p>We've knocked off a good chunk of time AND memory with this change... I'll admit I have no idea WHY, but I won't look a gift-horse in the mouth. It's possible that by using a fully strict data structure we've strictified some laziness that snuck in somewhere; but I'm really not sure. If you can see what happened please let me know!</p>
+<h2 id="inlining-away">Inlining away!</h2>
+<p>Next in our quest, I think I'll inline some definitions! Why? Because that's just what you do when you want performance! We can use the <code>INLINE</code> pragma to tell GHC that our function is performance critical and it'll inline it for us; possibly triggering further optimizations down the line.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">monoidBSFold ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Counts</span></span>
+<span id="cb13-2"><a href="#cb13-2"></a>monoidBSFold paths <span class="ot">=</span> monoidBSFoldFile <span class="op">&lt;$&gt;</span> BS.readFile fp</span>
+<span id="cb13-3"><a href="#cb13-3"></a><span class="ot">{-# INLINE monoidBSFold #-}</span></span>
+<span id="cb13-4"><a href="#cb13-4"></a></span>
+<span id="cb13-5"><a href="#cb13-5"></a><span class="ot">monoidBSFoldFile ::</span> <span class="dt">BS.ByteString</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
+<span id="cb13-6"><a href="#cb13-6"></a>monoidBSFoldFile <span class="ot">=</span> BS.foldl&#39; (\a b <span class="ot">-&gt;</span> a <span class="op">&lt;&gt;</span> countChar b) <span class="fu">mempty</span></span>
+<span id="cb13-7"><a href="#cb13-7"></a><span class="ot">{-# INLINE monoidBSFoldFile #-}</span></span></code></pre></div>
+<p>I also went ahead and added INLINE's to our <code>countChar</code> and <code>flux</code> functions. Let's see if it made any difference:</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>original</th>
+<th>inlined</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>1.94s</td>
+<td>0.47s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>3.83 MB</td>
+<td>4.35 MB</td>
+</tr>
+</tbody>
+</table>
+<p>Interestingly it seems to have slashed our time down by 75%! I'm really not sure if this is a fluke, or if we stumbled upon something lucky here; but I'll take it! It's bumped up our memory usage by a smidge; but not enough for me to worry.</p>
+<p>Here's how we compare to the C version now:</p>
+<p>90 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>inlined-monoid-bs-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>0.37s</td>
+<td>0.47s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>4.35 MB</td>
+</tr>
+</tbody>
+</table>
+<p>At this point we're pretty close to parity with <code>wc</code>; but we're looking at sub-second times, so I'm going to bump up the size of our test file and un a few times to see if we can learn anything new.</p>
+<p>I bumped up to a 543 MB plaintext file and ran it a few times in a row to get the caches warmed up. This is clearly important because my times dropped a full 33% after a few runs. I understand my testing method isn't exactly "scientific", but it gives us a good estimate of how we're doing. Anyways, on the much larger file here's how we perform:</p>
+<p>543 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>inlined-monoid-bs-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>2.06s</td>
+<td>2.73s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.85 MB</td>
+<td>3.97 MB</td>
+</tr>
+</tbody>
+</table>
+<p>From here we can see that we're actually getting pretty close! Considering we've cloned <code>wc</code> in a high-level garbage collected language in less than 50 lines of code I'd say we're doing alright!</p>
+<h2 id="using-our-cores">Using our Cores</h2>
+<p>One may not expect parallelizing to multiple cores to do a whole lot since presumably this whole operation is IO bounded, but I'm going to do it anyways because I'm stubborn and bored.</p>
+<p>We've already expressed our problem as a Monoid, which means it should be pretty trivial to split up the computation! The trick here is actually in reading in our data. If we try to read in all the data and THEN split it into chunks we'll have to load the whole file into memory at once, which is going to be REALLY bad for our memory residency, and will probably hurt our performance too! We could try <strong>streaming</strong> it in and splitting it that way, but then we have to <strong>process</strong> the first chunk before we get to the second split; and hopefully you can see the problem there. Instead I'm going to spin up a separate thread for each core we have then open a separate file handle in each of those threads. Then I'll seek each Handle to disjoint offsets and perform our operation on each non-overlapping piece of the file that way before combining the counts together.</p>
+<p>Here's the whole thing, did I mention how much I <strong>love</strong> writing concurrent code in Haskell?</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="kw">import</span> <span class="dt">Types</span></span>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="kw">import</span> <span class="dt">Control.Monad</span></span>
+<span id="cb14-3"><a href="#cb14-3"></a><span class="kw">import</span> <span class="dt">Data.Traversable</span></span>
+<span id="cb14-4"><a href="#cb14-4"></a><span class="kw">import</span> <span class="dt">Data.Bits</span></span>
+<span id="cb14-5"><a href="#cb14-5"></a><span class="kw">import</span> <span class="dt">GHC.Conc</span> (numCapabilities)</span>
+<span id="cb14-6"><a href="#cb14-6"></a><span class="kw">import</span> <span class="dt">Control.Concurrent.Async</span></span>
+<span id="cb14-7"><a href="#cb14-7"></a><span class="kw">import</span> <span class="dt">Data.Foldable</span></span>
+<span id="cb14-8"><a href="#cb14-8"></a><span class="kw">import</span> <span class="dt">System.IO</span></span>
+<span id="cb14-9"><a href="#cb14-9"></a><span class="kw">import</span> <span class="dt">System.Posix.Files</span></span>
+<span id="cb14-10"><a href="#cb14-10"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.ByteString.Lazy.Char8</span> <span class="kw">as</span> <span class="dt">BL</span></span>
+<span id="cb14-11"><a href="#cb14-11"></a><span class="kw">import</span> <span class="dt">Data.ByteString.Internal</span> (c2w)</span>
+<span id="cb14-12"><a href="#cb14-12"></a><span class="kw">import</span> <span class="dt">GHC.IO.Handle</span></span>
+<span id="cb14-13"><a href="#cb14-13"></a></span>
+<span id="cb14-14"><a href="#cb14-14"></a><span class="ot">multiCoreCount ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Counts</span></span>
+<span id="cb14-15"><a href="#cb14-15"></a>multiCoreCount fp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb14-16"><a href="#cb14-16"></a>    <span class="fu">putStrLn</span> (<span class="st">&quot;Using available cores: &quot;</span> <span class="op">&lt;&gt;</span> <span class="fu">show</span> numCapabilities)</span>
+<span id="cb14-17"><a href="#cb14-17"></a>    size <span class="ot">&lt;-</span> <span class="fu">fromIntegral</span> <span class="op">.</span> fileSize <span class="op">&lt;$&gt;</span> getFileStatus fp</span>
+<span id="cb14-18"><a href="#cb14-18"></a>    <span class="kw">let</span> chunkSize <span class="ot">=</span> <span class="fu">fromIntegral</span> (size <span class="ot">`div`</span> numCapabilities)</span>
+<span id="cb14-19"><a href="#cb14-19"></a>    fold <span class="op">&lt;$!&gt;</span> (forConcurrently [<span class="dv">0</span><span class="op">..</span>numCapabilities<span class="op">-</span><span class="dv">1</span>] <span class="op">$</span> \n <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb14-20"><a href="#cb14-20"></a>        <span class="co">-- Take all remaining bytes on the last capability due to integer division anomolies</span></span>
+<span id="cb14-21"><a href="#cb14-21"></a>        <span class="kw">let</span> limiter <span class="ot">=</span> <span class="kw">if</span> n <span class="op">==</span> numCapabilities <span class="op">-</span> <span class="dv">1</span></span>
+<span id="cb14-22"><a href="#cb14-22"></a>                         <span class="kw">then</span> <span class="fu">id</span></span>
+<span id="cb14-23"><a href="#cb14-23"></a>                         <span class="kw">else</span> BL.take (<span class="fu">fromIntegral</span> chunkSize)</span>
+<span id="cb14-24"><a href="#cb14-24"></a>        <span class="kw">let</span> offset <span class="ot">=</span> <span class="fu">fromIntegral</span> (n <span class="op">*</span> chunkSize)</span>
+<span id="cb14-25"><a href="#cb14-25"></a>        fileHandle <span class="ot">&lt;-</span> openBinaryFile fp <span class="dt">ReadMode</span></span>
+<span id="cb14-26"><a href="#cb14-26"></a>        hSeek fileHandle <span class="dt">AbsoluteSeek</span> offset</span>
+<span id="cb14-27"><a href="#cb14-27"></a>        countBytes <span class="op">.</span> limiter <span class="op">&lt;$!&gt;</span> BL.hGetContents fileHandle)</span>
+<span id="cb14-28"><a href="#cb14-28"></a><span class="ot">{-# INLINE handleSplitUTF #-}</span></span>
+<span id="cb14-29"><a href="#cb14-29"></a></span>
+<span id="cb14-30"><a href="#cb14-30"></a><span class="ot">countBytes ::</span> <span class="dt">BL.ByteString</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
+<span id="cb14-31"><a href="#cb14-31"></a>countBytes <span class="ot">=</span> BL.foldl&#39; (\a b <span class="ot">-&gt;</span> a <span class="op">&lt;&gt;</span> countChar b) <span class="fu">mempty</span></span>
+<span id="cb14-32"><a href="#cb14-32"></a><span class="ot">{-# INLINE countBytes #-}</span></span></code></pre></div>
+<p>There's a lot going on here, so I'll break it down as best I can.</p>
+<p>We can import the number of "capabilities" available to our program (i.e. the number of cores we have access to) from <code>GHC.Conc</code>. From there, we run a fileStat on the file we want to count to get the number of bytes in the file. From there, we use integer division to determine how many bytes should be handled by each individual core. The integer division rounds the result down, so we'll have to be careful to pick up the bytes that were possibly left out later on. We then use <code>forConcurrently</code> from <code>Control.Concurrent.Async</code> to run a separate thread for each of our capabilities.</p>
+<p>Inside each thread we check whether we're inside the thread which handls the LAST chunk of the file, if we are we should read until the EOF to pick up the leftover bytes from the earlier rounding error, otherwise we want to limit ourselves to processing only <code>chunkSize</code> bytes. Then we can calculate our offset into the file by multiplying the chunk size by our thread number. We open a binary file handle and use <code>hSeek</code> to move our handle to the starting offset for our thread. From this point we can simply read our allocated number of bytes and fold them down using the same logic as before. After we've handled each of the threads, we'll use a simple <code>fold</code> to combine the counts of each chunk into a total count.</p>
+<p>We use <code>&lt;$!&gt;</code> in a few spots to add additional strictness since we want to ensure that the folding operations happen within each thread, instead of after the threads have been joined. I might go a little overboard on strictness annotations, but it's easier to add too many than it is to track down the places we've accidentally missed them.</p>
+<p>Let's take this puppy out for a spin!</p>
+<p>After warming up the caches I ran each of them a few times on my 4 core 2013 Macbook Pro with an SSD, and averaged the results together:</p>
+<p>543 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>multicore-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>2.07s</td>
+<td>1.23s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.87 MB</td>
+<td>7.06 MB</td>
+</tr>
+</tbody>
+</table>
+<p>It seems to make a pretty big difference! We're actually going FASTER than some C code that's been hand optimized for a few decades. These results are best taken with a hefty grain of salt; it's really hard to tell what sort of caching is going on here. There are probably mutliple layers of disk caching happening. Maybe the multithreading only helps when reading files from a cache?</p>
+<p>I did a bit of skimming and it seems that SOME storage devices might experience a speed-up from doing file reads in parallel, some may actually slow down. Your mileage may vary. If anyone's an expert on SSDs I'd love to hear from you on this one. Regardless I'm still pretty happy with the results.</p>
+<p>In case you're wondering, the actual <code>User</code> time for our program comes in at <code>4.22s</code> (which is split across the 4 cores), meaning our parallel program is less efficient than the simple version in terms of actual processor cycles, but the ability to use multiple cores gets the "real" wall-clock time down.</p>
+<h2 id="handling-unicode">Handling Unicode</h2>
+<p>There's something we've been avoiding so far, we've assumed every file is simple ASCII! That's really not the way the world works. A lot of documents are encoded in UTF-8 these days; which turns out to be identical to an ASCII file IFF the file only contains valid ASCII characters, however if those crazy pre-teens put some Emoji in there then it's going to screw everything up.</p>
+<p>The problem is two-fold; firstly we currently count BYTES not CHARACTERS, because in ASCII-land they're semantically the same. With our current code, if we come across a UTF-8 encoded frowny face we're going to count it as at least 2 characters when it should only count as one. Okay, so maybe we should actually be decoding these things, but that's much easier said than done because we're splitting the file up into chunks at arbitrary byte-counts; meaning we might end up splitting that frowny face into two different chunks, leading to an invalid decoding! What a nightmare.</p>
+<p>This is another reason why doing a multi-threaded <code>wc</code> is probably a bad idea, but I'm not so easily deterred. In order to proceed I'm going to make a few assumptions:</p>
 <ul>
-<li>Get me the second match group from the first three matches</li>
+<li>Our input will be encoded using either ASCII or UTF-8 family of encodings. There are of course other popular encodings out there; but in my limited experience most modern text files prefer one of these encodings. In fact there are <a href="http://utf8everywhere.org/">entire sites</a> dedicated to making <code>UTF-8</code> the one format to rule them all.</li>
+<li>We count only ASCII spaces and newlines as spaces and newlines; sorry <code>MONGOLIAN VOWEL SEPARATOR</code>, but you're cut from the team.</li>
 </ul>
-<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="st">&quot;a:b, c:d, e:f, g:h&quot;</span> <span class="op">^..</span> taking <span class="dv">3</span> ([regex|(\w):(\w)|] <span class="op">.</span> <span class="fu">group</span> <span class="dv">1</span>)</span>
-<span id="cb16-2"><a href="#cb16-2"></a>[<span class="st">&quot;b&quot;</span>,<span class="st">&quot;d&quot;</span>,<span class="st">&quot;f&quot;</span>]</span></code></pre></div>
-<p>You can replace the call to <code>taking</code> with a simple <code>Prelude.take 3</code> on the whole list of matches if you prefer, it'll lazily do the minimum amount of work!</p>
-<ul>
-<li>Replace only the first match with this text</li>
-</ul>
-<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="st">&quot;one two three&quot;</span> <span class="op">&amp;</span> [regex|\w+|] <span class="op">.</span> <span class="fu">index</span> <span class="dv">0</span> <span class="op">.</span> match <span class="op">.~</span> <span class="st">&quot;new&quot;</span></span>
-<span id="cb17-2"><a href="#cb17-2"></a><span class="st">&quot;new two three&quot;</span></span></code></pre></div>
-<ul>
-<li>Get me all groups AND match text from ALL matches</li>
-</ul>
-<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="st">&quot;a:b, c:d, e:f&quot;</span> <span class="op">^..</span> [regex|(\w):(\w)|] <span class="op">.</span> matchAndGroups</span>
-<span id="cb18-2"><a href="#cb18-2"></a>[(<span class="st">&quot;a:b&quot;</span>,[<span class="st">&quot;a&quot;</span>,<span class="st">&quot;b&quot;</span>]),(<span class="st">&quot;c:d&quot;</span>,[<span class="st">&quot;c&quot;</span>,<span class="st">&quot;d&quot;</span>]),(<span class="st">&quot;e:f&quot;</span>,[<span class="st">&quot;e&quot;</span>,<span class="st">&quot;f&quot;</span>])]</span></code></pre></div>
-<ul>
-<li>Replace the first match with this value, the next with this one, and so on...</li>
-</ul>
-<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="co">-- If we get more matches than replacements it just leaves the extras alone</span></span>
-<span id="cb19-2"><a href="#cb19-2"></a><span class="op">&gt;&gt;&gt;</span> <span class="st">&quot;one two three four&quot;</span> <span class="op">&amp;</span> partsOf ([regex|\w+|] <span class="op">.</span> match) <span class="op">.~</span> [<span class="st">&quot;1&quot;</span>, <span class="st">&quot;2&quot;</span>, <span class="st">&quot;3&quot;</span>]</span>
-<span id="cb19-3"><a href="#cb19-3"></a><span class="st">&quot;1 2 3 four&quot;</span></span></code></pre></div>
-<ul>
-<li>Lazily get me the full match text of the first 2 matches where match-group 1 has a certain property.</li>
-</ul>
-<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="co">-- The resulting list will be lazily evaluated!</span></span>
-<span id="cb20-2"><a href="#cb20-2"></a><span class="op">&gt;&gt;&gt;</span> <span class="st">&quot;a:b, c:d, e:f, g:h&quot;</span> </span>
-<span id="cb20-3"><a href="#cb20-3"></a>      <span class="op">^..</span> [regex|(\w):(\w)|] </span>
-<span id="cb20-4"><a href="#cb20-4"></a>      <span class="op">.</span> filtered (has (<span class="fu">group</span> <span class="dv">0</span> <span class="op">.</span> filtered (<span class="op">&gt;</span> <span class="st">&quot;c&quot;</span>))) </span>
-<span id="cb20-5"><a href="#cb20-5"></a>      <span class="op">.</span> match</span>
-<span id="cb20-6"><a href="#cb20-6"></a>[<span class="st">&quot;e:f&quot;</span>,<span class="st">&quot;g:h&quot;</span>]</span></code></pre></div>
-<p>Anyways, at this point I'm rambling, but I hope you see that this is too useful of an abstraction for us to give up!</p>
-<p>Huge thanks to everyone who has done work on <code>pcre-light</code> and <code>pcre-heavy</code>; and of course everyone who helped to build <code>lens</code> too! This wouldn't be possible without both of them!</p>
-<p>The library has a Text interface which supports Unicode, and a <code>ByteString</code> interface for when you've gotta go <strong>fast</strong>!</p>
-<h1 id="performance">Performance</h1>
-<p>Typically one would expect that the more expressive an interface, the worse it would perform, in this case the opposite is true! <code>lens-regex-pcre</code> utilizes <code>pcre-heavy</code> ONLY for regex compilation and finding match positions with <code>scanRanges</code>, that's it! In fact, I don't use <code>pcre-heavy</code>'s built-in support for replacements <strong>at all</strong>! After finding the match positions it lazily walks over the full <code>ByteString</code> splitting it into chunks. Chunks are tagged with whether they're a match or not, then the "match" chunks are split further to represent whether the text is in a group or not. This allows us to implement all of our regex operations as a simple traversal over a nested list of <code>Either</code>s. These traversals are the ONLY things we actually need to implement, all other functionality including listing matches, filtering matches, and even setting or updating matches already exists in <code>lens</code> as generic optics combinators!</p>
-<p>This means I didn't need to optimize for replacements or for viewing separately, because I didn't optimize for specific actions <strong>at all</strong>! I just built a single Traversal, and everything else follows from that.</p>
-<p>You heard that right! I didn't write ANY special logic for viewing, updating, setting, or anything else! I just provided the appropriate traversals, optics combinators do the rest, and it's still performant!</p>
-<p>There was a little bit of fiddly logic involved with splitting the text up into chunks, but after that it all gets pretty easy to reason about. To optimize the Traversal itself I was easily able to refactor things to use <code>ByteString</code> 'Builder's rather than full <code>ByteString</code>s, which have much better concatenation performance.</p>
-<p>With the caveat that I don't claim to be an expert at benchmarks; (please <a href="https://github.com/ChrisPenner/lens-regex-pcre/blob/master/bench/Bench.hs">take a look</a> and tell me if I'm making any critical mistakes!) this single change took <code>lens-regex-pcre</code> from being about <strong>half the speed</strong> of <code>pcre-heavy</code> to being within 0.6% of <strong>equal</strong> for search, and <strong>~10% faster</strong> for replacements. It's just as fast for arbitrary pure or effectful <strong>modifications</strong>, which is something other regex libraries simply don't support. If there's a need for it, it can also trivially support things like inverting the match to operate over all <strong>unmatched</strong> text, or things like splitting up a text on matches, etc.</p>
-<p>I suspect that these performance improvements are simple enough they could also be back-ported to <code>pcre-heavy</code> if anyone has the desire to do so, I'd be curious if it works just as well for <code>pcre-heavy</code> as it did for <code>lens-regex-pcre</code>.</p>
-<p>You can try out the library <a href="https://github.com/ChrisPenner/lens-regex-pcre">here!</a>; make sure you're using <code>v1.0.0.0</code>.</p>
+<p>By making these two assumptions we can exploit a few details of the UTF-8 encoding scheme to solve our problem. Firstly, we know from the UTF-8 spec that it's completely back-compatible with ASCII. What this means is that every ASCII byte is encoded in UTF-8 as exactly that same byte. Secondly, we know that NO other bytes in the file will conflict in encoding with a valid ASCII byte; you can see why in a chart on the <a href="https://en.wikipedia.org/wiki/UTF-8">UTF-8 wikipedia page</a>. Continuation bytes start with a leading '1', and no ASCII bytes start with a '1'.</p>
+<p>These two facts mean we can safely leave our current 'space' detection logic the same! It's impossible for us to 'split' a space or newline because they're all encoded in a single byte, and we know we won't accidentally count some byte that's part of a different codepoint because there's no overlap in encoding for the ASCII bytes. We do however need to change our character-counting logic.</p>
+<p>One last fact about UTF-8 is that every UTF-8 encoded codepoint contains exactly one byte from the set: <code>0xxxxxxx, 110xxxxx, 1110xxxx, 11110xxx</code>. Continuation bytes ALL start with <code>10</code>, so if we count all bytes OTHER than those starting with <code>10</code> then we'll count each code-point exactly once, even if we split a codepoint across different chunks!</p>
+<p>All of these facts combined means we can write a per-byte monoid for counting UTF-8 OR ASCII characters all in one!</p>
+<p>Actually, our current <code>Counts</code> monoid is fine, we'll just need to adapt our <code>countChar</code> function:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="kw">import</span> <span class="dt">Data.Bits</span></span>
+<span id="cb15-2"><a href="#cb15-2"></a><span class="kw">import</span> <span class="dt">Data.ByteString.Internal</span> (c2w)</span>
+<span id="cb15-3"><a href="#cb15-3"></a><span class="ot">countByte ::</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
+<span id="cb15-4"><a href="#cb15-4"></a>countByte c <span class="ot">=</span></span>
+<span id="cb15-5"><a href="#cb15-5"></a>  <span class="dt">Counts</span> {</span>
+<span id="cb15-6"><a href="#cb15-6"></a>            <span class="co">-- Only count bytes at the START of a codepoint, not continuation bytes</span></span>
+<span id="cb15-7"><a href="#cb15-7"></a>            charCount <span class="ot">=</span> <span class="kw">if</span> (bitAt <span class="dv">7</span> <span class="op">&amp;&amp;</span> <span class="fu">not</span> (bitAt <span class="dv">6</span>)) <span class="kw">then</span> <span class="dv">0</span> <span class="kw">else</span> <span class="dv">1</span></span>
+<span id="cb15-8"><a href="#cb15-8"></a>            , wordCount <span class="ot">=</span> flux c</span>
+<span id="cb15-9"><a href="#cb15-9"></a>            , lineCount <span class="ot">=</span> <span class="kw">if</span> (c <span class="op">==</span> <span class="ch">&#39;\n&#39;</span>) <span class="kw">then</span> <span class="dv">1</span> <span class="kw">else</span> <span class="dv">0</span></span>
+<span id="cb15-10"><a href="#cb15-10"></a>            }</span>
+<span id="cb15-11"><a href="#cb15-11"></a>    <span class="kw">where</span></span>
+<span id="cb15-12"><a href="#cb15-12"></a>      bitAt <span class="ot">=</span> testBit (c2w c)</span>
+<span id="cb15-13"><a href="#cb15-13"></a><span class="ot">{-# INLINE countByte #-}</span></span></code></pre></div>
+<p>And that's it! Now we can handle UTF-8 or ASCII; we don't even need to know which encoding we're handling, we'll always give the right answer.</p>
+<p><code>wc</code>, at least the version on my Macbook, has a <code>-m</code> flag for handling multi-byte characters when counting. A few quick experiments shows that telling <code>wc</code> to handle multi-byte chars slows down the process pretty significantly (it now decodes every byte); let's see how our version does in comparison. (I've confirmed they get the same results when running on a large UTF-8 encoded document with many non-ASCII characters)</p>
+<p>543 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc -mwl</th>
+<th>multicore-utf8-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>5.56s</td>
+<td>3.07s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>7.52 MB</td>
+</tr>
+</tbody>
+</table>
+<p>Just as we suspect, we come out pretty far ahead! Our new version is a bit slower than when we just counted every byte (we're now doing a few extra bit-checks), so it's probably a good idea to add a <code>utf</code> flag to our program so we can always run as fast as possible for a given input.</p>
+<h2 id="conclusions">Conclusions</h2>
+<p>So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring <code>wc</code>. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our <code>wc</code> clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we're still winning this one.</p>
+<p>Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing much higher-level fully type-checked code then I'll call that a win any day.</p>
 
     <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
@@ -975,11 +1262,11 @@
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/lens-regex-pcre" data-text="Check out: Optics + Regex: Greater than the sum of their parts - " data-via="chrislpenner">Tweet</a>
+                data-url="https://chrispenner.ca/posts/wc" data-text="Check out: Beating decades of optimized C with 80 lines of Haskell - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/lens-regex-pcre" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+            <div class="fb-like" data-href="https://chrispenner.ca/wc" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
 <!-- Disqus Comments -->
