@@ -1102,7 +1102,7 @@
 </tr>
 </tbody>
 </table>
-<p>At this point we're pretty close to parity with <code>wc</code>; but we're looking at sub-second times, so I'm going to bump up the size of our test file and un a few times to see if we can learn anything new.</p>
+<p>At this point we're pretty close to parity with <code>wc</code>; but we're looking at sub-second times, so I'm going to bump up the size of our test file and run a few times to see if we can learn anything new.</p>
 <p>I bumped up to a 543 MB plaintext file and ran it a few times in a row to get the caches warmed up. This is clearly important because my times dropped a full 33% after a few runs. I understand my testing method isn't exactly "scientific", but it gives us a good estimate of how we're doing. Anyways, on the much larger file here's how we perform:</p>
 <p>543 MB test file:</p>
 <table>
@@ -1126,7 +1126,7 @@
 </tr>
 </tbody>
 </table>
-<p>From here we can see that we're actually getting pretty close! Considering we've cloned <code>wc</code> in a high-level garbage collected language in less than 50 lines of code I'd say we're doing alright!</p>
+<p>From here we can see that we're actually getting pretty close! Considering we've cloned <code>wc</code> in a high-level garbage collected language in around 80 lines of code I'd say we're doing alright!</p>
 <h2 id="using-our-cores">Using our Cores</h2>
 <p>One may not expect parallelizing to multiple cores to do a whole lot since presumably this whole operation is IO bounded, but I'm going to do it anyways because I'm stubborn and bored.</p>
 <p>We've already expressed our problem as a Monoid, which means it should be pretty trivial to split up the computation! The trick here is actually in reading in our data. If we try to read in all the data and THEN split it into chunks we'll have to load the whole file into memory at once, which is going to be REALLY bad for our memory residency, and will probably hurt our performance too! We could try <strong>streaming</strong> it in and splitting it that way, but then we have to <strong>process</strong> the first chunk before we get to the second split; and hopefully you can see the problem there. Instead I'm going to spin up a separate thread for each core we have then open a separate file handle in each of those threads. Then I'll seek each Handle to disjoint offsets and perform our operation on each non-overlapping piece of the file that way before combining the counts together.</p>
