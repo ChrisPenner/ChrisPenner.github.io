@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-10-16T17:12:02Z</updated>
+  <updated>2019-10-16T18:24:15Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -300,6 +300,7 @@
 </tbody>
 </table>
 <p>We've knocked off a good chunk of time AND memory with this change... I'll admit I have no idea WHY, but I won't look a gift-horse in the mouth. It's possible that by using a fully strict data structure we've strictified some laziness that snuck in somewhere; but I'm really not sure. If you can see what happened please let me know!</p>
+<p><strong>UPDATE</strong>: <strong>guibou</strong> pointed out to me that our <code>Flux</code> and <code>Counts</code> type use <code>UNPACK</code> pragmas, whereas beforehand we used a regular ol' tuple. Apparently GHC is sometimes smart enough to UNPACK tuples, but it's likely that wasn't happening in this case. By <code>UNPACK</code>ing we can save a few pointer indirections and use less memory!</p>
 <h2 id="inlining-away">Inlining away!</h2>
 <p>Next in our quest, I think I'll inline some definitions! Why? Because that's just what you do when you want performance! We can use the <code>INLINE</code> pragma to tell GHC that our function is performance critical and it'll inline it for us; possibly triggering further optimizations down the line.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">monoidBSFold ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Counts</span></span>
@@ -447,6 +448,7 @@
 </table>
 <p>It seems to make a pretty big difference! We're actually going FASTER than some C code that's been hand optimized for a few decades. These results are best taken with a hefty grain of salt; it's really hard to tell what sort of caching is going on here. There are probably mutliple layers of disk caching happening. Maybe the multithreading only helps when reading files from a cache?</p>
 <p>I did a bit of skimming and it seems that SOME storage devices might experience a speed-up from doing file reads in parallel, some may actually slow down. Your mileage may vary. If anyone's an expert on SSDs I'd love to hear from you on this one. Regardless I'm still pretty happy with the results.</p>
+<p><strong>UPDATE</strong>: Turns out some folks out there ARE experts on SSDs! Paul Tanner wrote me an email explaining that modern NVME drives can typically benefit from this sort of parallelism, so long as we're not accessing the same block (and here we're not). Unfortunately, my ancient macbook doesn't have one, but on the plus side that means this code might actually run even FASTER on a modern drive. Thanks Paul!</p>
 <p>In case you're wondering, the actual <code>User</code> time for our program comes in at <code>4.22s</code> (which is split across the 4 cores), meaning our parallel program is less efficient than the simple version in terms of actual processor cycles, but the ability to use multiple cores gets the "real" wall-clock time down.</p>
 <h2 id="handling-unicode">Handling Unicode</h2>
 <p>There's something we've been avoiding so far, we've assumed every file is simple ASCII! That's really not the way the world works. A lot of documents are encoded in UTF-8 these days; which turns out to be identical to an ASCII file IFF the file only contains valid ASCII characters, however if those crazy pre-teens put some Emoji in there then it's going to screw everything up.</p>
@@ -500,8 +502,131 @@
 </tbody>
 </table>
 <p>Just as we suspect, we come out pretty far ahead! Our new version is a bit slower than when we just counted every byte (we're now doing a few extra bit-checks), so it's probably a good idea to add a <code>utf</code> flag to our program so we can always run as fast as possible for a given input.</p>
+<h1 id="interjection">Interjection!</h1>
+<p>Since posting the article, the wonderful <a href="https://github.com/harendra-kumar">Harendra Kumar</a> has provided me with a new performance tweak to try, which (spoiler alert) gives us better memory and performance while also allowing us to STREAM input from stdin! Wow! The code is pretty too!</p>
+<p>The secret lies in the <a href="https://github.com/composewell/streamly"><code>streamly</code> library</a>, a wonderful high-level high-performance streaming library. I'd seen it in passing, but these result will definitely have me reaching for it in the future! Enough talk, let's see some code! Thanks again to Harendra Kumar for this implementation:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="kw">module</span> <span class="dt">Streaming</span> <span class="kw">where</span></span>
+<span id="cb16-2"><a href="#cb16-2"></a></span>
+<span id="cb16-3"><a href="#cb16-3"></a><span class="kw">import</span> <span class="dt">Types</span></span>
+<span id="cb16-4"><a href="#cb16-4"></a><span class="kw">import</span> <span class="dt">Data.Traversable</span></span>
+<span id="cb16-5"><a href="#cb16-5"></a><span class="kw">import</span> <span class="dt">GHC.Conc</span> (numCapabilities)</span>
+<span id="cb16-6"><a href="#cb16-6"></a><span class="kw">import</span> <span class="dt">System.IO</span> (openFile, <span class="dt">IOMode</span>(..))</span>
+<span id="cb16-7"><a href="#cb16-7"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Streamly</span> <span class="kw">as</span> <span class="dt">S</span></span>
+<span id="cb16-8"><a href="#cb16-8"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Streamly.Data.String</span> <span class="kw">as</span> <span class="dt">S</span></span>
+<span id="cb16-9"><a href="#cb16-9"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Streamly.Prelude</span> <span class="kw">as</span> <span class="dt">S</span></span>
+<span id="cb16-10"><a href="#cb16-10"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Streamly.Internal.Memory.Array</span> <span class="kw">as</span> <span class="dt">A</span></span>
+<span id="cb16-11"><a href="#cb16-11"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Streamly.Internal.FileSystem.Handle</span> <span class="kw">as</span> <span class="dt">FH</span></span>
+<span id="cb16-12"><a href="#cb16-12"></a></span>
+<span id="cb16-13"><a href="#cb16-13"></a><span class="ot">streamingBytestream ::</span> <span class="dt">FilePath</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Counts</span></span>
+<span id="cb16-14"><a href="#cb16-14"></a>streamingBytestream fp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb16-15"><a href="#cb16-15"></a>    src <span class="ot">&lt;-</span> openFile fp <span class="dt">ReadMode</span></span>
+<span id="cb16-16"><a href="#cb16-16"></a>    S.foldl&#39; <span class="fu">mappend</span> <span class="fu">mempty</span></span>
+<span id="cb16-17"><a href="#cb16-17"></a>        <span class="op">$</span> S.aheadly</span>
+<span id="cb16-18"><a href="#cb16-18"></a>        <span class="op">$</span> S.maxThreads numCapabilities</span>
+<span id="cb16-19"><a href="#cb16-19"></a>        <span class="op">$</span> S.mapM countBytes</span>
+<span id="cb16-20"><a href="#cb16-20"></a>        <span class="op">$</span> FH.toStreamArraysOf <span class="dv">1024000</span> src</span>
+<span id="cb16-21"><a href="#cb16-21"></a>    <span class="kw">where</span></span>
+<span id="cb16-22"><a href="#cb16-22"></a>    countBytes <span class="ot">=</span></span>
+<span id="cb16-23"><a href="#cb16-23"></a>          S.foldl&#39; (\acc c <span class="ot">-&gt;</span> acc <span class="op">&lt;&gt;</span> countByte c) <span class="fu">mempty</span></span>
+<span id="cb16-24"><a href="#cb16-24"></a>        <span class="op">.</span> S.decodeChar8</span>
+<span id="cb16-25"><a href="#cb16-25"></a>        <span class="op">.</span> A.toStream</span>
+<span id="cb16-26"><a href="#cb16-26"></a></span>
+<span id="cb16-27"><a href="#cb16-27"></a><span class="ot">{-# INLINE streamingBytestream #-}</span></span></code></pre></div>
+<p>Note; this uses streamly version <code>7.10</code> straight from their Github repo, it'll likely be published to hackage soon. It also uses a few internal modules, but hopefully use-cases like this will prove that these combinators have enough valid uses to expose them.</p>
+<p>First things first we simply open the file, nothing fancy there.</p>
+<p>Next is the streaming code, we'll read it from the bottom to the top to follow the flow of information.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a>FH.toStreamArraysOf <span class="dv">1024000</span> src</span></code></pre></div>
+<p>This chunks the bytes from the file handle into streams of Byte arrays. Using Byte arrays ends up being even faster than using something like a Lazy ByteString! We'll use a separate array for approximately each MB of the file, you can tweak this to your heart's content.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a>S.mapM countBytes</span></code></pre></div>
+<p>This uses <code>mapM</code> to run the <code>countBytes</code> function over the array; <code>countBytes</code> itself creates a stream from the array and runs a streaming fold over it with our Monoidal byte counter:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a>countBytes <span class="ot">=</span></span>
+<span id="cb19-2"><a href="#cb19-2"></a>      S.foldl&#39; (\acc c <span class="ot">-&gt;</span> acc <span class="op">&lt;&gt;</span> countByte c) <span class="fu">mempty</span></span>
+<span id="cb19-3"><a href="#cb19-3"></a>    <span class="op">.</span> S.decodeChar8</span>
+<span id="cb19-4"><a href="#cb19-4"></a>    <span class="op">.</span> A.toStream</span></code></pre></div>
+<p>Next we tell streamly to run the map over arrays in parallel, allowing separate threads to handle each 1MB chunk. We limit the number of threads to our number of capabilities. Once we've read in the data we can process it immediately, and our counting code doesn't have any reasons to block, so adding more threads than capabilities would likely just add more work for the scheduler.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a>S.maxThreads numCapabilities</span></code></pre></div>
+<p>Streamly provides many different stream evaluation strategies, We use <code>aheadly</code> as our strategy which allows stream elements to be processed in parallel, but still guarantees output will be emitted in the order corresponding to the input. Since we're using a Monoid, so long as everything ends up in the appropriate order we can chunk up the computations any way we like:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1"></a>S.aheadly</span></code></pre></div>
+<p>At this point we've counted 1 MB chunks of our input, but we still need to aggregate all the chunks together, we can do this by <code>mappending</code> them all in another streaming fold:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1"></a>S.foldl&#39; <span class="fu">mappend</span> <span class="fu">mempty</span></span></code></pre></div>
+<p>That's the gist! Let's take it for a spin!</p>
+<p>Here's the non-utf version on our 543 MB test file:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc</th>
+<th>multicore-wc</th>
+<th>streaming-wc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>2.07s</td>
+<td>1.23s</td>
+<td>1.07s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.87 MB</td>
+<td>7.06 MB</td>
+<td>17.81 MB</td>
+</tr>
+</tbody>
+</table>
+<p>We can see it gets even faster, at the expense of a significant amount of memory, which I suspect could be mitigated by tuning our input chunking, let's try it out. Here's a comparison of the 100 KB chunks vs 1 MB chunks:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>streaming-wc (100 KB chunks)</th>
+<th>streaming-wc (1 MB chunks)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>1.20s</td>
+<td>1.07s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>8.02 MB</td>
+<td>17.81 MB</td>
+</tr>
+</tbody>
+</table>
+<p>That's about what I suspected, we can trade a bit of performance for a decent hunk of memory. I'm already pretty happy with our results, but feel free to test other tuning strategies.</p>
+<p>Lastly let's try the UTF8 version on our 543 MB test file, here's everything side by side:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>wc -mwl</th>
+<th>multicore-utf8-wc</th>
+<th>streaming-utf-wc (1 MB chunks)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>time</td>
+<td>5.56s</td>
+<td>3.07s</td>
+<td>2.67s</td>
+</tr>
+<tr class="even">
+<td>max mem.</td>
+<td>1.86 MB</td>
+<td>7.52 MB</td>
+<td>17.92 MB</td>
+</tr>
+</tbody>
+</table>
+<p>We're still getting faster! For the final version we may want to cut the memory usage down a bit though!</p>
+<p>Overall I think the streaming version is my favourite, it's very high-level, very readable, and reads from an arbitrary file handle, including <code>stdin</code>, which is a very common use-case for <code>wc</code>. Streamly is pretty cool.</p>
 <h2 id="conclusions">Conclusions</h2>
-<p>So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring <code>wc</code>. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our <code>wc</code> clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we managed to build something faster!</p>
+<p>So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring <code>wc</code>. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our <code>wc</code> clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we managed to build something faster! The streaming version shouldn't have the same dependencies on disk caching to be optimal.</p>
 <p>Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing high-level fully type-checked code then I'll call that a win any day.</p>
         <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
