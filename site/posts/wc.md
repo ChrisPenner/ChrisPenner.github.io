@@ -298,6 +298,8 @@ We're in the ballpark now!
 
 We've knocked off a good chunk of time AND memory with this change... I'll admit I have no idea WHY, but I won't look a gift-horse in the mouth. It's possible that by using a fully strict data structure we've strictified some laziness that snuck in somewhere; but I'm really not sure. If you can see what happened please let me know!
 
+**UPDATE**: **guibou** pointed out to me that our `Flux` and `Counts` type use `UNPACK` pragmas, whereas beforehand we used a regular ol' tuple. Apparently GHC is sometimes smart enough to UNPACK tuples, but it's likely that wasn't happening in this case. By `UNPACK`ing we can save a few pointer indirections and use less memory!
+
 ## Inlining away!
 
 Next in our quest, I think I'll inline some definitions! Why? Because that's just what you do when you want performance! We can use the `INLINE` pragma to tell GHC that our function is performance critical and it'll inline it for us; possibly triggering further optimizations down the line.
