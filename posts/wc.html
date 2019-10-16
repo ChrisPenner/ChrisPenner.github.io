@@ -8,10 +8,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="Beating decades of optimized C with 80 lines of Haskell">
+    <meta name="twitter:title" content="Beating C with 80 lines of Haskell: wc">
     <meta name="twitter:description" content="An exploration into high-performance Haskell by cloning the wc utility">
     <meta name="twitter:image" content="http://chrispenner.ca/images/words.jpg">
-    <title>Beating decades of optimized C with 80 lines of Haskell</title>
+    <title>Beating C with 80 lines of Haskell: wc</title>
     <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
@@ -744,7 +744,7 @@
     <div class="wrapper">
         <div class="masthead">
             <span class="title">
-                Beating decades of optimized C with 80 lines of Haskell
+                Beating C with 80 lines of Haskell: wc
             </span>
             <br>
 
@@ -764,10 +764,10 @@
         </div>
     </div>
     <article class="post">
-        <p>Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun!</p>
+        <p>Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun! This article makes no claims that Haskell is "better" than C, nor does it make claims about the respective value of either language, or either implementation. It's simply an exploration into high-performance Haskell, with a few fun tricks and hacks along the way.</p>
 <p>You can find source code for this post <a href="https://github.com/ChrisPenner/wc">here</a>.</p>
+<p>For reference, I'm using the Mac's version of <code>wc</code>; you can find <a href="https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html">reference source code here</a>. Yes, there are faster <code>wc</code> implementations out there.</p>
 <p>The challenge is to build a <em>faster</em> clone of the hand-optimized C implementation of the <code>wc</code> utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?</p>
-<p>For reference, I'm using the Mac's version of <code>wc</code>; you can find <a href="https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html">reference source code here</a>.</p>
 <p>Here's the criteria we'll be considering as we go along:</p>
 <ul>
 <li>Correctness: Should return identical character, word, and line counts as <code>wc</code> on the test files.</li>
@@ -1207,7 +1207,8 @@
 <p>By making these two assumptions we can exploit a few details of the UTF-8 encoding scheme to solve our problem. Firstly, we know from the UTF-8 spec that it's completely back-compatible with ASCII. What this means is that every ASCII byte is encoded in UTF-8 as exactly that same byte. Secondly, we know that NO other bytes in the file will conflict in encoding with a valid ASCII byte; you can see why in a chart on the <a href="https://en.wikipedia.org/wiki/UTF-8">UTF-8 wikipedia page</a>. Continuation bytes start with a leading '1', and no ASCII bytes start with a '1'.</p>
 <p>These two facts mean we can safely leave our current 'space' detection logic the same! It's impossible for us to 'split' a space or newline because they're all encoded in a single byte, and we know we won't accidentally count some byte that's part of a different codepoint because there's no overlap in encoding for the ASCII bytes. We do however need to change our character-counting logic.</p>
 <p>One last fact about UTF-8 is that every UTF-8 encoded codepoint contains exactly one byte from the set: <code>0xxxxxxx, 110xxxxx, 1110xxxx, 11110xxx</code>. Continuation bytes ALL start with <code>10</code>, so if we count all bytes OTHER than those starting with <code>10</code> then we'll count each code-point exactly once, even if we split a codepoint across different chunks!</p>
-<p>All of these facts combined means we can write a per-byte monoid for counting UTF-8 OR ASCII characters all in one!</p>
+<p>All of these facts combined means we can write a per-byte monoid for counting UTF-8 codepoints OR ASCII characters all in one!</p>
+<p>Note that technically Unicode <strong>codepoints</strong> are not the same as "characters", there are many codepoints like diacritics which will "fuse" themselves to be displayed as a single character, but so far as I know <code>wc</code> doesn't handle these separately either.</p>
 <p>Actually, our current <code>Counts</code> monoid is fine, we'll just need to adapt our <code>countChar</code> function:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="kw">import</span> <span class="dt">Data.Bits</span></span>
 <span id="cb15-2"><a href="#cb15-2"></a><span class="kw">import</span> <span class="dt">Data.ByteString.Internal</span> (c2w)</span>
@@ -1248,8 +1249,8 @@
 </table>
 <p>Just as we suspect, we come out pretty far ahead! Our new version is a bit slower than when we just counted every byte (we're now doing a few extra bit-checks), so it's probably a good idea to add a <code>utf</code> flag to our program so we can always run as fast as possible for a given input.</p>
 <h2 id="conclusions">Conclusions</h2>
-<p>So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring <code>wc</code>. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our <code>wc</code> clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we're still winning this one.</p>
-<p>Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing much higher-level fully type-checked code then I'll call that a win any day.</p>
+<p>So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring <code>wc</code>. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our <code>wc</code> clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we managed to build something faster!</p>
+<p>Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing high-level fully type-checked code then I'll call that a win any day.</p>
 
     <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
@@ -1264,7 +1265,7 @@
         <!--Share buttons-->
         <div class="social-buttons">
             <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/wc" data-text="Check out: Beating decades of optimized C with 80 lines of Haskell - " data-via="chrislpenner">Tweet</a>
+                data-url="https://chrispenner.ca/posts/wc" data-text="Check out: Beating C with 80 lines of Haskell: wc - " data-via="chrislpenner">Tweet</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
             <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
             <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
