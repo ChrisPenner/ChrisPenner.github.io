@@ -1,5 +1,5 @@
 ---
-title: "Beating decades of optimized C with 80 lines of Haskell"
+title: "Beating C with 80 lines of Haskell: wc"
 author: "Chris Penner"
 date: "Oct 15, 2019"
 tags: [haskell]
@@ -7,13 +7,13 @@ description: "An exploration into high-performance Haskell by cloning the wc uti
 image: "words.jpg"
 ---
 
-Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun!
+Despite the click-bait title I hope you'll find this post generally illuminating, or at the very least a bit of fun! This article makes no claims that Haskell is "better" than C, nor does it make claims about the respective value of either language, or either implementation. It's simply an exploration into high-performance Haskell, with a few fun tricks and hacks along the way.
 
 You can find source code for this post [here](https://github.com/ChrisPenner/wc).
 
-The challenge is to build a *faster* clone of the hand-optimized C implementation of the `wc` utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?
+For reference, I'm using the Mac's version of `wc`; you can find [reference source code here](https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html).  Yes, there are faster `wc` implementations out there.
 
-For reference, I'm using the Mac's version of `wc`; you can find [reference source code here](https://opensource.apple.com/source/text_cmds/text_cmds-68/wc/wc.c.auto.html).
+The challenge is to build a *faster* clone of the hand-optimized C implementation of the `wc` utility in our favourite high-level garbage-collected runtime-based language: Haskell! Sounds simple enough right?
 
 Here's the criteria we'll be considering as we go along:
 
@@ -431,7 +431,9 @@ These two facts mean we can safely leave our current 'space' detection logic the
 
 One last fact about UTF-8 is that every UTF-8 encoded codepoint contains exactly one byte from the set: `0xxxxxxx, 110xxxxx, 1110xxxx, 11110xxx`. Continuation bytes ALL start with `10`, so if we count all bytes OTHER than those starting with `10` then we'll count each code-point exactly once, even if we split a codepoint across different chunks!
 
-All of these facts combined means we can write a per-byte monoid for counting UTF-8 OR ASCII characters all in one!
+All of these facts combined means we can write a per-byte monoid for counting UTF-8 codepoints OR ASCII characters all in one!
+
+Note that technically Unicode **codepoints** are not the same as "characters", there are many codepoints like diacritics which will "fuse" themselves to be displayed as a single character, but so far as I know `wc` doesn't handle these separately either.
 
 Actually, our current `Counts` monoid is fine, we'll just need to adapt our `countChar` function:
 
@@ -467,6 +469,6 @@ Just as we suspect, we come out pretty far ahead! Our new version is a bit slowe
 
 ## Conclusions
 
-So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring `wc`. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our `wc` clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we're still winning this one. 
+So; how does our high-level garbage-collected runtime-based language Haskell stack up? Pretty dang well I'd say! We ended up really quite close with our single-core lazy-bytestring `wc`. Switching to a multi-core approach ultimately allowed us to pull ahead! Whether our `wc` clone is faster in practice without a warmed up disk-cache is something that should be considered, but in terms of raw performance we managed to build something faster!
 
-Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing much higher-level fully type-checked code then I'll call that a win any day.
+Haskell as a language isn't perfect, but if I can get ball-park comparable performance to a C program while writing high-level fully type-checked code then I'll call that a win any day.
