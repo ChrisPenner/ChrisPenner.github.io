@@ -1161,7 +1161,7 @@
 <span id="cb14-25"><a href="#cb14-25"></a>        fileHandle <span class="ot">&lt;-</span> openBinaryFile fp <span class="dt">ReadMode</span></span>
 <span id="cb14-26"><a href="#cb14-26"></a>        hSeek fileHandle <span class="dt">AbsoluteSeek</span> offset</span>
 <span id="cb14-27"><a href="#cb14-27"></a>        countBytes <span class="op">.</span> limiter <span class="op">&lt;$!&gt;</span> BL.hGetContents fileHandle)</span>
-<span id="cb14-28"><a href="#cb14-28"></a><span class="ot">{-# INLINE handleSplitUTF #-}</span></span>
+<span id="cb14-28"><a href="#cb14-28"></a><span class="ot">{-# INLINE multiCoreCount #-}</span></span>
 <span id="cb14-29"><a href="#cb14-29"></a></span>
 <span id="cb14-30"><a href="#cb14-30"></a><span class="ot">countBytes ::</span> <span class="dt">BL.ByteString</span> <span class="ot">-&gt;</span> <span class="dt">Counts</span></span>
 <span id="cb14-31"><a href="#cb14-31"></a>countBytes <span class="ot">=</span> BL.foldl&#39; (\a b <span class="ot">-&gt;</span> a <span class="op">&lt;&gt;</span> countChar b) <span class="fu">mempty</span></span>
