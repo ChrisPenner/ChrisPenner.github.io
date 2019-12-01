@@ -13,7 +13,7 @@ I'm not sure how many I'll do, or even if any problems will yield interesting so
 
 You can find the first puzzle [here](https://adventofcode.com/2019/day/1).
 
----
+## Part One
 
 So the gist of this one is that we have a series of input numbers (mass of ship modules) which each need to pass through a pipeline of mathematic operations (fuel calculations) before being summed together to get our puzzle solution (total fuel required).
 
@@ -26,6 +26,8 @@ Assuming we have a `String` representing our problem input we need to break it i
 Here's what we've got so far:
 
 ```haskell
+import Control.Lens
+
 solve :: IO ()
 solve =  do
   input <- readFile "./src/Y2019/day01.txt"
@@ -39,9 +41,19 @@ Running this yields something like this:
 ["76542","97993","79222"...] -- You get the idea
 ```
 
-Now we need to "parse" the strings into actual numeric types. There's a handy prism in `lens` which will use `Read` instances to parse strings, simply skipping elements which have a bad parse. Our input is valid, so we don't need to worry about errors, that means we can use it confidently. I'll add a type-application to tell it what the output type should be so it knows what to parse:
+Now we need to parse the strings into a numeric type like `Double`. There's a handy prism in `lens` called `_Show` which will use `Read` instances to parse strings, simply skipping elements which fail to parse. Our input is valid, so we don't need to worry about errors, meaning we can use this prism confidently. 
+
+Here's the type of `_Show` by the way:
 
 ```haskell
+_Show :: (Read a, Show a) => Prism' String a
+```
+
+I'll add a type-application to tell it what the output type should be so it knows what type to parse into (i.e. which `Read` instance to use for the parsing):
+
+```haskell
+{-# LANGUAGE TypeApplications #-}
+
 solve :: IO ()
 solve =  do
   input <- readFile "./src/Y2019/day01.txt"
@@ -54,7 +66,7 @@ solve =  do
 
 Looks like that's working!
 
-Next we need to pipe it through several numeric operations. I like to read my optics code like a sequential pipeline, so I'll use `to` to string each transformation together. If you prefer you can simply compose all the arithmetic into a single function and use only one `to` instead, but here's how I like to do it.
+Next we need to pipe it through several numeric operations. I like to read my optics pipelines sequentially, so I'll use `to` to string each transformation together. If you prefer you can simply compose all the arithmetic into a single function and use only one `to` instead, but this is how I like to do it.
 
 The steps are:
 
@@ -80,8 +92,7 @@ solve =  do
 
 I moved the type application to `floor` so it knows what its converting between, but other than that it's pretty straight forward.
 
-Almost done! Lastly we need to sum all these adapted numbers together. We can simply change our aggregation action from `^..` a.k.a. `toListOf` into `sumOf` and we'll now collect results by summing!
-
+Almost done! Lastly we need to sum all these adapted numbers together. We can simply change our aggregation action from `^..` (a.k.a. `toListOf`) into `sumOf` and we'll now collect results by summing!
 
 ```haskell
 solve :: IO ()
@@ -104,6 +115,9 @@ As a fun side-note, we could have computed the ENTIRE thing in a fold by using `
 
 
 ```haskell
+import Control.Lens
+import Control.Lens.Action ((^!), act)
+
 solve' :: IO (Sum Int)
 solve' =  "./src/Y2019/day01.txt"
           ^! act readFile
@@ -130,7 +144,7 @@ Okay, so the gist of part two is that we need to ALSO account for the fuel requi
 
 So to adapt our code for this twist we should split it up a bit! First we've got a few optics for **parsing** the input, those are boring and don't need any iteration. Next we've got the pipeline part, we need to run this on **each input number**, but will also need to run it on **each iteration** of each input number. We'll need to somehow loop our input through this pipeline.
 
-As it turns out, an iteration like we need to do here is technically an **unfold** (or **catamorphism** if you're eccentric). In optics-land unfolds can be represented as a normal `Fold` which **adds** more elements when it runs. Lensy folds can focus an arbitrary (possibly infinite) number of focuses! Even better, there's already a fold in `lens` which does basically what we need!
+As it turns out, an iteration like we need to do here is technically an **unfold** (or **anamorphism** if you're feeling eccentric). In optics-land unfolds can be represented as a normal `Fold` which **adds** more elements when it runs. Lensy folds can focus an arbitrary (possibly infinite) number of focuses! Even better, there's already a fold in `lens` which does basically what we need!
 
 ```haskell
 iterated :: (a -> a) -> Fold a a
@@ -178,12 +192,12 @@ The puzzle states we can ignore everything past the point where numbers go negat
 solve2 :: IO ()
 solve2 =  do
   input <- readFile "./src/Y2019/day01.txt"
-  print
-    $ input
-    & toListOf ( worded
-               . _Show
-               . takingWhile (>0) (iterated calculateRequiredFuel)
-               )
+  print $ 
+    input & toListOf 
+            ( worded
+            . _Show
+            . takingWhile (>0) (iterated calculateRequiredFuel)
+            )
 
 >>> solve2
 [76542.0,25512.0,8502.0,2832.0,942.0,312.0,102.0,32.0,8.0
@@ -192,15 +206,15 @@ solve2 =  do
 
 We don't need the `taking 20` limiter anymore since now we stop when we hit `0` or below. In this case we technically filter out an actual `0`; but since `0` has no effect on a `sum` it's totally fine.
 
-Okay, we're really close! On my first try I summed up all these numbers and got the wrong answer! As I drew attention to earlier, when we use `iterated` it passes through the original value as well! We don't want the weight of our module in our final sum, so we need to remove the **first** element from each set of iterations. I'll use ANOTHER higher-order optic to wrap our iteration code, dropping the first output from each iteration:
+Okay, we're really close! On my first try I summed up all these numbers and got the wrong answer! As I drew attention to earlier, when we use `iterated` it passes through the original value as well. We don't want the weight of our module in our final sum, so we need to remove the **first** element from each set of iterations. I'll use ANOTHER higher-order optic to wrap our iteration optic, dropping the first output from each iteration:
 
 ```haskell
 solve2 :: IO ()
 solve2 =  do
   input <- readFile "./src/Y2019/day01.txt"
-  print
-    $ input
-    & sumOf ( worded
+  print $ 
+    input & sumOf 
+            ( worded
             . _Show
             . takingWhile (>0) (dropping 1 (iterated calculateRequiredFuel))
             )
@@ -227,6 +241,6 @@ solve2 =  do
 
 That'll do it!
 
-Once you get comfortable with how folds nest inside paths of optics, and how to use higher-order folds (spoilers: there's a whole chapter on this in my book launching later this month): [Optics By Example](https://leanpub.com/optics-by-example/)), then we can solve this problem very naturally with optics! I hope some of the other problems work out just as well.
+Once you get comfortable with how folds nest inside paths of optics, and how to use higher-order folds (spoilers: there's a whole chapter on this in my book launching later this month: [Optics By Example](https://leanpub.com/optics-by-example/)), then we can solve this problem very naturally with optics! I hope some of the other problems work out just as well.
 
 See you again soon!
