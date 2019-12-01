@@ -2,12 +2,184 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-10-16T18:24:15Z</updated>
+  <updated>2019-12-01T07:49:30Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Advent of Optics: Day 1</title>
+      <link href="https://chrispenner.ca/posts/advent-of-optics-01"/>
+      <id>https://chrispenner.ca/posts/advent-of-optics-01</id>
+      <updated>2019-12-01T00:00:00Z</updated>
+      <summary>Day one of Advent of Code solved using optics</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/pinecones.jpg" alt="Advent of Optics: Day 1">
+              <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a book on practical lenses and optics</a> later this month I thought it would be fun to do a few of this year's Advent of Code puzzles using optics as much as possible!</p>
+<p>I'm not sure how many I'll do, or even if any problems will yield interesting solutions with optics, but there's no harm trying! The goal is to use optics for as much of the solution as possible, even if it's awkward, silly, or just plain overkill. Maybe we'll both learn something along the way. Let's have some fun!</p>
+<p>You can find the first puzzle <a href="https://adventofcode.com/2019/day/1">here</a>.</p>
+<h2 id="part-one">Part One</h2>
+<p>So the gist of this one is that we have a series of input numbers (mass of ship modules) which each need to pass through a pipeline of mathematic operations (fuel calculations) before being summed together to get our puzzle solution (total fuel required).</p>
+<p>This immediately makes me think of a <strong>reducing</strong> operation, we want to <strong>fold</strong> many inputs down into a single solution. We also need to <strong>map</strong> each input through the pipeline of transformations before adding them. Were I to use "normal" Haskell I could just <code>foldMap</code> to do both the <strong>fold</strong> and <strong>map</strong> at once! With optics however, the ideas of <strong>folds</strong> <em>already</em> encompass both the folding and mapping pieces. The optic we use provides the selection of elements as well as the mapping, and the action we run on it provides the reductions step (the fold).</p>
+<p>Let's see if we can build up a fold in pieces to do what we need.</p>
+<p>Assuming we have a <code>String</code> representing our problem input we need to break it into tokens to get each number from the file. Writing a parser is overkill for such a simple task; we can just use the <code>worded</code> fold which splits a String on whitespace and folds over each word individually!</p>
+<p>Here's what we've got so far:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a></span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="ot">solve ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb1-4"><a href="#cb1-4"></a>solve <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a>  <span class="fu">print</span> <span class="op">$</span> input <span class="op">^..</span> worded</span></code></pre></div>
+<p>Running this yields something like this:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="op">&gt;&gt;&gt;</span> solve</span>
+<span id="cb2-2"><a href="#cb2-2"></a>[<span class="st">&quot;76542&quot;</span>,<span class="st">&quot;97993&quot;</span>,<span class="st">&quot;79222&quot;</span><span class="op">...</span>] <span class="co">-- You get the idea</span></span></code></pre></div>
+<p>Now we need to parse the strings into a numeric type like <code>Double</code>. There's a handy prism in <code>lens</code> called <code>_Show</code> which will use <code>Read</code> instances to parse strings, simply skipping elements which fail to parse. Our input is valid, so we don't need to worry about errors, meaning we can use this prism confidently.</p>
+<p>Here's the type of <code>_Show</code> by the way:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">_Show ::</span> (<span class="dt">Read</span> a, <span class="dt">Show</span> a) <span class="ot">=&gt;</span> <span class="dt">Prism&#39;</span> <span class="dt">String</span> a</span></code></pre></div>
+<p>I'll add a type-application to tell it what the output type should be so it knows what type to parse into (i.e. which <code>Read</code> instance to use for the parsing):</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">{-# LANGUAGE TypeApplications #-}</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a></span>
+<span id="cb4-3"><a href="#cb4-3"></a><span class="ot">solve ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb4-4"><a href="#cb4-4"></a>solve <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb4-5"><a href="#cb4-5"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb4-6"><a href="#cb4-6"></a>  <span class="fu">print</span> <span class="op">$</span> input <span class="op">^..</span> worded</span>
+<span id="cb4-7"><a href="#cb4-7"></a>                  <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Double</span></span>
+<span id="cb4-8"><a href="#cb4-8"></a></span>
+<span id="cb4-9"><a href="#cb4-9"></a><span class="op">&gt;&gt;&gt;</span> solve</span>
+<span id="cb4-10"><a href="#cb4-10"></a>[<span class="fl">76542.0</span>,<span class="fl">97993.0</span>,<span class="fl">79222.0</span><span class="op">...</span>]</span></code></pre></div>
+<p>Looks like that's working!</p>
+<p>Next we need to pipe it through several numeric operations. I like to read my optics pipelines sequentially, so I'll use <code>to</code> to string each transformation together. If you prefer you can simply compose all the arithmetic into a single function and use only one <code>to</code> instead, but this is how I like to do it.</p>
+<p>The steps are:</p>
+<ol>
+<li>Divide by 3</li>
+<li>Round down</li>
+<li>Subtract 2</li>
+</ol>
+<p>No problem:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">solve ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb5-2"><a href="#cb5-2"></a>solve <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb5-4"><a href="#cb5-4"></a>  <span class="fu">print</span> <span class="op">$</span> input <span class="op">^..</span> worded</span>
+<span id="cb5-5"><a href="#cb5-5"></a>                  <span class="op">.</span> _Show</span>
+<span id="cb5-6"><a href="#cb5-6"></a>                  <span class="op">.</span> to (<span class="op">/</span> <span class="dv">3</span>)</span>
+<span id="cb5-7"><a href="#cb5-7"></a>                  <span class="op">.</span> to (<span class="fu">floor</span> <span class="op">@</span><span class="dt">Double</span> <span class="op">@</span><span class="dt">Int</span>)</span>
+<span id="cb5-8"><a href="#cb5-8"></a>                  <span class="op">.</span> to (<span class="fu">subtract</span> <span class="dv">2</span>)</span>
+<span id="cb5-9"><a href="#cb5-9"></a></span>
+<span id="cb5-10"><a href="#cb5-10"></a><span class="op">&gt;&gt;&gt;</span> solve</span>
+<span id="cb5-11"><a href="#cb5-11"></a>[<span class="dv">25512</span>,<span class="dv">32662</span>,<span class="dv">26405</span><span class="op">...</span>]</span></code></pre></div>
+<p>I moved the type application to <code>floor</code> so it knows what its converting between, but other than that it's pretty straight forward.</p>
+<p>Almost done! Lastly we need to sum all these adapted numbers together. We can simply change our aggregation action from <code>^..</code> (a.k.a. <code>toListOf</code>) into <code>sumOf</code> and we'll now collect results by summing!</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">solve ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb6-2"><a href="#cb6-2"></a>solve <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb6-4"><a href="#cb6-4"></a>  <span class="fu">print</span> <span class="op">$</span> input <span class="op">&amp;</span> sumOf ( worded</span>
+<span id="cb6-5"><a href="#cb6-5"></a>                        <span class="op">.</span> _Show</span>
+<span id="cb6-6"><a href="#cb6-6"></a>                        <span class="op">.</span> to (<span class="op">/</span> <span class="dv">3</span>)</span>
+<span id="cb6-7"><a href="#cb6-7"></a>                        <span class="op">.</span> to (<span class="fu">floor</span> <span class="op">@</span><span class="dt">Double</span> <span class="op">@</span><span class="dt">Int</span>)</span>
+<span id="cb6-8"><a href="#cb6-8"></a>                        <span class="op">.</span> to (<span class="fu">subtract</span> <span class="dv">2</span>)</span>
+<span id="cb6-9"><a href="#cb6-9"></a>                        )</span>
+<span id="cb6-10"><a href="#cb6-10"></a></span>
+<span id="cb6-11"><a href="#cb6-11"></a><span class="op">&gt;&gt;&gt;</span> solve</span>
+<span id="cb6-12"><a href="#cb6-12"></a><span class="dv">3154112</span></span></code></pre></div>
+<p>First part's all done! That's the correct answer.</p>
+<p>As a fun side-note, we could have computed the ENTIRE thing in a fold by using <code>lens-action</code> to thread the <code>readFile</code> into IO as well. Here's that version:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="kw">import</span> <span class="dt">Control.Lens.Action</span> ((^!), act)</span>
+<span id="cb7-3"><a href="#cb7-3"></a></span>
+<span id="cb7-4"><a href="#cb7-4"></a><span class="ot">solve&#39; ::</span> <span class="dt">IO</span> (<span class="dt">Sum</span> <span class="dt">Int</span>)</span>
+<span id="cb7-5"><a href="#cb7-5"></a>solve&#39; <span class="ot">=</span>  <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb7-6"><a href="#cb7-6"></a>          <span class="op">^!</span> act <span class="fu">readFile</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a>          <span class="op">.</span> worded</span>
+<span id="cb7-8"><a href="#cb7-8"></a>          <span class="op">.</span> _Show</span>
+<span id="cb7-9"><a href="#cb7-9"></a>          <span class="op">.</span> to (<span class="op">/</span><span class="dv">3</span>)</span>
+<span id="cb7-10"><a href="#cb7-10"></a>          <span class="op">.</span> to <span class="fu">floor</span> <span class="op">@</span><span class="dt">Double</span> <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb7-11"><a href="#cb7-11"></a>          <span class="op">.</span> to (<span class="fu">subtract</span> <span class="dv">2</span>)</span>
+<span id="cb7-12"><a href="#cb7-12"></a>          <span class="op">.</span> to <span class="dt">Sum</span></span>
+<span id="cb7-13"><a href="#cb7-13"></a></span>
+<span id="cb7-14"><a href="#cb7-14"></a><span class="op">&gt;&gt;&gt;</span> solve&#39;</span>
+<span id="cb7-15"><a href="#cb7-15"></a><span class="dt">Sum</span> {getSum <span class="ot">=</span> <span class="dv">3154112</span>}</span></code></pre></div>
+<p>The <code>^!</code> is an action from <code>lens-action</code> which lets us 'view' a result from a Fold which requires IO. <code>act</code> allows us to lift a monadic action into a fold. By <code>viewing</code> we implicitly fold down the output using it's Monoid (in this case <code>Sum</code>).</p>
+<p>I think the first version is cleaner though.</p>
+<p>On to part 2!</p>
+<h2 id="part-2">Part 2</h2>
+<p>Okay, so the gist of part two is that we need to ALSO account for the fuel required to transport all the fuel we add! Rather than using calculus for this we're told to fudge the numbers and simply iterate on our calculations until we hit a negative fuel value.</p>
+<p>So to adapt our code for this twist we should split it up a bit! First we've got a few optics for <strong>parsing</strong> the input, those are boring and don't need any iteration. Next we've got the pipeline part, we need to run this on <strong>each input number</strong>, but will also need to run it on <strong>each iteration</strong> of each input number. We'll need to somehow loop our input through this pipeline.</p>
+<p>As it turns out, an iteration like we need to do here is technically an <strong>unfold</strong> (or <strong>anamorphism</strong> if you're feeling eccentric). In optics-land unfolds can be represented as a normal <code>Fold</code> which <strong>adds</strong> more elements when it runs. Lensy folds can focus an arbitrary (possibly infinite) number of focuses! Even better, there's already a fold in <code>lens</code> which does basically what we need!</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">iterated ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Fold</span> a a</span></code></pre></div>
+<p><code>iterated</code> takes an iteration function and, well, iterates! Let's try it out on it's own first to see how it does its thing:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="dv">1</span> <span class="op">^..</span> taking <span class="dv">10</span> (iterated (<span class="op">+</span><span class="dv">1</span>))</span>
+<span id="cb9-2"><a href="#cb9-2"></a>[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>,<span class="dv">6</span>,<span class="dv">7</span>,<span class="dv">8</span>,<span class="dv">9</span>,<span class="dv">10</span>]</span>
+<span id="cb9-3"><a href="#cb9-3"></a><span class="op">&gt;&gt;&gt;</span></span></code></pre></div>
+<p>Notice that I have to limit it with <code>taking 10</code> or it'd go on forever. So it definitely does what we expect! Notice also that it also emits its first input without any iteration; so we see the <code>1</code> appear unaffected in the output. This tripped me up at first.</p>
+<p>Okay, so we've got all our pieces, let's try patching them together!</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">solve2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb10-2"><a href="#cb10-2"></a>solve2 <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb10-3"><a href="#cb10-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb10-4"><a href="#cb10-4"></a>  <span class="fu">print</span></span>
+<span id="cb10-5"><a href="#cb10-5"></a>    <span class="op">$</span> input</span>
+<span id="cb10-6"><a href="#cb10-6"></a>    <span class="op">&amp;</span> toListOf ( worded</span>
+<span id="cb10-7"><a href="#cb10-7"></a>               <span class="op">.</span> _Show</span>
+<span id="cb10-8"><a href="#cb10-8"></a>               <span class="op">.</span> taking <span class="dv">20</span> (iterated calculateRequiredFuel)</span>
+<span id="cb10-9"><a href="#cb10-9"></a>               )</span>
+<span id="cb10-10"><a href="#cb10-10"></a>  <span class="kw">where</span></span>
+<span id="cb10-11"><a href="#cb10-11"></a><span class="ot">    calculateRequiredFuel ::</span> <span class="dt">Double</span> <span class="ot">-&gt;</span> <span class="dt">Double</span></span>
+<span id="cb10-12"><a href="#cb10-12"></a>    calculateRequiredFuel <span class="ot">=</span> (<span class="fu">fromIntegral</span> <span class="op">.</span> <span class="fu">subtract</span> <span class="dv">2</span> <span class="op">.</span> <span class="fu">floor</span> <span class="op">@</span><span class="dt">Double</span> <span class="op">@</span><span class="dt">Int</span> <span class="op">.</span> (<span class="op">/</span> <span class="dv">3</span>))</span>
+<span id="cb10-13"><a href="#cb10-13"></a></span>
+<span id="cb10-14"><a href="#cb10-14"></a><span class="op">&gt;&gt;&gt;</span> solve2</span>
+<span id="cb10-15"><a href="#cb10-15"></a>[<span class="fl">76542.0</span>,<span class="fl">25512.0</span>,<span class="fl">8502.0</span>,<span class="fl">2832.0</span>,<span class="fl">942.0</span>,<span class="fl">312.0</span>,<span class="fl">102.0</span>,<span class="fl">32.0</span>,<span class="fl">8.0</span>,<span class="fl">0.0</span>,<span class="op">-</span><span class="fl">2.0</span>,<span class="op">-</span><span class="fl">3.0</span>,<span class="op">-</span><span class="fl">3.0</span></span>
+<span id="cb10-16"><a href="#cb10-16"></a><span class="op">...</span><span class="fl">79222.0</span>,<span class="fl">26405.0</span>,<span class="fl">8799.0</span>,<span class="fl">2931.0</span><span class="op">...</span>]</span></code></pre></div>
+<p>I've limited our iteration again here while we're still figuring things out, I also switched back to <code>toListOf</code> so we can see what's happening clearly. I also moved the fuel calculations into a single pure function, and added a <code>fromIntegral</code> so we can go from <code>Double -&gt; Double</code> as is required by <code>iterated</code>.</p>
+<p>In the output we can see the fuel numbers getting smaller on each iteration, until they eventually go negative (just like the puzzle predicted). Eventually we finish our 20 iterations and the fold moves onto the next input so we can see the numbers jump back up again as a new iteration starts.</p>
+<p>The puzzle states we can ignore everything past the point where numbers go negative, so we can stop iterating at that point. That's pretty easy to do using the higher-order optic <code>takingWhile</code>; it accepts a predicate and <strong>another optic</strong> and will consume elements from the other optic until the predicate fails, at which point it will yield no more elements. In our case we can use it to consume from each iteration until it hits a negative number, then move on to the next iteration.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">solve2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb11-2"><a href="#cb11-2"></a>solve2 <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb11-3"><a href="#cb11-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb11-4"><a href="#cb11-4"></a>  <span class="fu">print</span> <span class="op">$</span> </span>
+<span id="cb11-5"><a href="#cb11-5"></a>    input <span class="op">&amp;</span> toListOf </span>
+<span id="cb11-6"><a href="#cb11-6"></a>            ( worded</span>
+<span id="cb11-7"><a href="#cb11-7"></a>            <span class="op">.</span> _Show</span>
+<span id="cb11-8"><a href="#cb11-8"></a>            <span class="op">.</span> takingWhile (<span class="op">&gt;</span><span class="dv">0</span>) (iterated calculateRequiredFuel)</span>
+<span id="cb11-9"><a href="#cb11-9"></a>            )</span>
+<span id="cb11-10"><a href="#cb11-10"></a></span>
+<span id="cb11-11"><a href="#cb11-11"></a><span class="op">&gt;&gt;&gt;</span> solve2</span>
+<span id="cb11-12"><a href="#cb11-12"></a>[<span class="fl">76542.0</span>,<span class="fl">25512.0</span>,<span class="fl">8502.0</span>,<span class="fl">2832.0</span>,<span class="fl">942.0</span>,<span class="fl">312.0</span>,<span class="fl">102.0</span>,<span class="fl">32.0</span>,<span class="fl">8.0</span></span>
+<span id="cb11-13"><a href="#cb11-13"></a>,<span class="fl">97993.0</span>,<span class="fl">32662.0</span>,<span class="fl">10885.0</span>,<span class="fl">3626.0</span>,<span class="fl">1206.0</span>,<span class="fl">400.0</span>,<span class="fl">131.0</span>,<span class="fl">41.0</span>,<span class="fl">11.0</span><span class="op">...</span>]</span></code></pre></div>
+<p>We don't need the <code>taking 20</code> limiter anymore since now we stop when we hit <code>0</code> or below. In this case we technically filter out an actual <code>0</code>; but since <code>0</code> has no effect on a <code>sum</code> it's totally fine.</p>
+<p>Okay, we're really close! On my first try I summed up all these numbers and got the wrong answer! As I drew attention to earlier, when we use <code>iterated</code> it passes through the original value as well. We don't want the weight of our module in our final sum, so we need to remove the <strong>first</strong> element from each set of iterations. I'll use ANOTHER higher-order optic to wrap our iteration optic, dropping the first output from each iteration:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">solve2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb12-2"><a href="#cb12-2"></a>solve2 <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb12-3"><a href="#cb12-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb12-4"><a href="#cb12-4"></a>  <span class="fu">print</span> <span class="op">$</span> </span>
+<span id="cb12-5"><a href="#cb12-5"></a>    input <span class="op">&amp;</span> sumOf </span>
+<span id="cb12-6"><a href="#cb12-6"></a>            ( worded</span>
+<span id="cb12-7"><a href="#cb12-7"></a>            <span class="op">.</span> _Show</span>
+<span id="cb12-8"><a href="#cb12-8"></a>            <span class="op">.</span> takingWhile (<span class="op">&gt;</span><span class="dv">0</span>) (dropping <span class="dv">1</span> (iterated calculateRequiredFuel))</span>
+<span id="cb12-9"><a href="#cb12-9"></a>            )</span>
+<span id="cb12-10"><a href="#cb12-10"></a></span>
+<span id="cb12-11"><a href="#cb12-11"></a><span class="op">&gt;&gt;&gt;</span> solve2</span>
+<span id="cb12-12"><a href="#cb12-12"></a><span class="fl">4728317.0</span></span></code></pre></div>
+<p>Great! That's the right answer!</p>
+<p>It depends on how you like to read your optics, but I think the multiple nested higher-order-optics is a bit messy, we can re-arrange it to use fewer brackets like this; but it really depends on which you find more readable:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">solve2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb13-2"><a href="#cb13-2"></a>solve2 <span class="ot">=</span>  <span class="kw">do</span></span>
+<span id="cb13-3"><a href="#cb13-3"></a>  input <span class="ot">&lt;-</span> <span class="fu">readFile</span> <span class="st">&quot;./src/Y2019/day01.txt&quot;</span></span>
+<span id="cb13-4"><a href="#cb13-4"></a>  <span class="fu">print</span></span>
+<span id="cb13-5"><a href="#cb13-5"></a>    <span class="op">$</span> input</span>
+<span id="cb13-6"><a href="#cb13-6"></a>    <span class="op">&amp;</span> sumOf (worded</span>
+<span id="cb13-7"><a href="#cb13-7"></a>             <span class="op">.</span> _Show</span>
+<span id="cb13-8"><a href="#cb13-8"></a>             <span class="op">.</span> (takingWhile (<span class="op">&gt;</span> <span class="dv">0</span>) <span class="op">.</span> dropping <span class="dv">1</span> <span class="op">.</span> iterated) calculateRequiredFuel</span>
+<span id="cb13-9"><a href="#cb13-9"></a>            )</span></code></pre></div>
+<p>That'll do it!</p>
+<p>Once you get comfortable with how folds nest inside paths of optics, and how to use higher-order folds (spoilers: there's a whole chapter on this in my book launching later this month: <a href="https://leanpub.com/optics-by-example/">Optics By Example</a>), then we can solve this problem very naturally with optics! I hope some of the other problems work out just as well.</p>
+<p>See you again soon!</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Beating C with 80 lines of Haskell: wc</title>
       <link href="https://chrispenner.ca/posts/wc"/>
@@ -503,7 +675,7 @@
 </table>
 <p>Just as we suspect, we come out pretty far ahead! Our new version is a bit slower than when we just counted every byte (we're now doing a few extra bit-checks), so it's probably a good idea to add a <code>utf</code> flag to our program so we can always run as fast as possible for a given input.</p>
 <h1 id="interjection">Interjection!</h1>
-<p>Since posting the article, the wonderful <a href="https://github.com/harendra-kumar">Harendra Kumar</a> has provided me with a new performance tweak to try, which (spoiler alert) gives us better memory and performance while also allowing us to STREAM input from stdin! Wow! The code is pretty too!</p>
+<p>Since posting the article, the wonderful <a href="https://github.com/harendra-kumar">Harendra Kumar</a> has provided me with a new performance tweak to try, which (spoiler alert) gives us even better performance while also allowing us to STREAM input from stdin! Wow! The code is pretty too!</p>
 <p>The secret lies in the <a href="https://github.com/composewell/streamly"><code>streamly</code> library</a>, a wonderful high-level high-performance streaming library. I'd seen it in passing, but these result will definitely have me reaching for it in the future! Enough talk, let's see some code! Thanks again to Harendra Kumar for this implementation:</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="kw">module</span> <span class="dt">Streaming</span> <span class="kw">where</span></span>
 <span id="cb16-2"><a href="#cb16-2"></a></span>
