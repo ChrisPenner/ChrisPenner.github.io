@@ -140,7 +140,7 @@ solve1 = do
     print result
 ```
 
-This runs ONE iteration of our program, but we'll need to run the program until completion! The perfect combinator for this is `whileM`:
+This runs ONE iteration of our program, but we'll need to run the program until completion! The perfect combinator for this is `untilM`:
 
 ```haskell
 untilM :: Monad m => m a -> m Bool -> m [a] 
