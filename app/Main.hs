@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Main where
 
@@ -21,50 +22,28 @@ import Data.Time
 import Development.Shake hiding (Resource)
 import Development.Shake.Classes
 import Development.Shake.FilePath
+import Development.Shake.Forward
 import GHC.Generics (Generic)
 import Slick
+import Control.Monad
+
+outputFolder :: FilePath
+outputFolder = "dist/"
 
 main :: IO ()
 main =
-  shakeArgs shakeOptions {shakeVerbosity = Chatty, shakeThreads = 4} $
-    -- Set up caches
-   do
-    postCache <- jsonCache' loadPost
-    allPostsCache <-
-      simpleJsonCache'
-        (SortedPostsCache ())
-        (sortByDate <$> (postNames >>= traverse (postCache . PostFilePath)))
-    sortedPostURLsCache <-
-      simpleJsonCache'
-        (SortedPostURLsCache ())
-        (fmap (url :: Post -> String) <$> allPostsCache)
-    allTagsCache <- simpleJsonCache' (TagCache ()) (getTags <$> allPostsCache)
-    -- Require all the things we need to build the whole site
-    "site" ~>
-      need ["static", "posts", "tags", "dist/index.html", "dist/atom.xml"]
-    -- Require all static assets
-    "static" ~> do
-      staticFiles <-
-        getDirectoryFiles "." ["site/css//*", "site/js//*", "site/images//*"]
-      need (("dist" </>) . dropDirectory1 <$> staticFiles)
-    -- Rule for handling static assets, just copy them from source to dest
-    ["dist/css//*", "dist/js//*", "dist/images//*"] |%> \out -> do
-      copyFileChanged ("site" </> dropDirectory1 out) out
-    -- build the main table of contents
-    "dist/index.html" %> buildIndex allPostsCache allTagsCache
-     -- Find and require every post to be built
-    "posts" ~> findPosts
-    -- Find and require every tag to be built
-    "tags" ~> findTags allTagsCache
-     -- rule for actually building tags
-    "dist/tag//*.html" %> buildTag allTagsCache
-     -- rule for actually building posts
-    "dist/posts//*.html" %> buildPost postCache sortedPostURLsCache
-    "dist/atom.xml" %> buildAtomFeed allPostsCache
+  let shOpts = forwardOptions $ shakeOptions { shakeVerbosity = Chatty, shakeThreads=4}
+   in shakeArgsForward shOpts $ do
+    allPosts <- buildPosts
+    allTags <- getTags allPosts
+    buildTags allTags
+    buildIndex allPosts allTags
+    buildFeed allPosts
+    copyStaticFiles
 
 data IndexInfo = IndexInfo
-  { posts :: [Post]
-  , tags :: [Tag]
+  { indexPosts :: [Post]
+  , indexTags :: [Tag]
   } deriving (Generic, Show)
 
 instance FromJSON IndexInfo
@@ -73,7 +52,7 @@ instance ToJSON IndexInfo
 
 data Tag = Tag
   { tag :: String
-  , posts :: [Post]
+  , tagPosts :: [Post]
   , url :: String
   } deriving (Generic, Show)
 
@@ -95,7 +74,7 @@ data Post = Post
   , srcPath :: String
   , description :: String
   , slug :: String
-  } deriving (Generic, Eq, Ord, Show)
+  } deriving (Generic, Eq, Ord, Show, Binary)
 
 instance FromJSON Post where
   parseJSON v = do
@@ -128,63 +107,64 @@ srcToDest p = "dist" </> dropDirectory1 p
 srcToURL :: FilePath -> String
 srcToURL = ("/" ++) . dropDirectory1 . dropExtension
 
-loadPost :: PostFilePath -> Action Post
-loadPost (PostFilePath postPath) = do
-  let srcPath = destToSrc postPath -<.> "md"
-  postData <- readFile' srcPath >>= markdownToHTML . T.pack
-  let postURL = T.pack . srcToURL $ postPath
-      withURL = _Object . at "url" ?~ String postURL
-      withSrc = _Object . at "srcPath" ?~ String (T.pack srcPath)
-      withSlug =
+-- | Copy all static files from the listed folders to their destination
+copyStaticFiles :: Action ()
+copyStaticFiles = do
+    filepaths <- getDirectoryFiles "./site/" ["images//*", "css//*", "js//*"]
+    void $ forP filepaths $ \filepath ->
+        copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
+
+buildPosts :: Action [Post]
+buildPosts = do
+    pPaths <- getDirectoryFiles "." ["site/posts//*.md"]
+    forP pPaths buildPost
+
+-- | Load a post, process metadata, write it to output, then return the post object
+-- Detects changes to either post content or template
+buildPost :: FilePath -> Action Post
+buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
+  liftIO . putStrLn $ "Rebuilding post: " <> srcPath
+  postContent <- readFile' srcPath
+  -- load post content and metadata as JSON blob
+  postData <- markdownToHTML . T.pack $ postContent
+  let postUrl = T.pack . dropDirectory1 $ srcPath -<.> "html"
+  let withPostUrl = _Object . at "url" ?~ String postUrl
+  let withSlug =
         _Object . at "slug" ?~
         String (T.pack . dropExtension . takeBaseName $ srcPath)
-  convert . withSlug . withSrc . withURL $ postData
+  -- Add additional metadata we've been able to compute
+  let fullPostData = withSlug . withPostUrl $ postData
+  template <- compileTemplate' "site/templates/post.html"
+  writeFile' (outputFolder </> T.unpack postUrl) . T.unpack $ substitute template fullPostData
+  convert fullPostData
 
-buildIndex :: Action [Post] -> Action [Tag] -> FilePath -> Action ()
-buildIndex allPosts allTags out = do
+-- buildIndex :: [Post] -> Action ()
+-- buildIndex posts' = do
+--   indexT <- compileTemplate' "site/templates/index.html"
+--   let indexInfo = IndexInfo {posts = posts'}
+--       indexHTML = T.unpack $ substitute indexT (withSiteMeta $ toJSON indexInfo)
+--   writeFile' (outputFolder </> "index.html") indexHTML
+
+buildIndex :: [Post] -> [Tag] -> Action ()
+buildIndex allPosts allTags = do
   indexT <- compileTemplate' "site/templates/index.html"
-  posts <- allPosts
-  tags <- allTags
-  let indexInfo = IndexInfo {posts, tags}
+  let indexInfo = IndexInfo {indexPosts=allPosts, indexTags=allTags}
       indexHTML = T.unpack $ substitute indexT (toJSON indexInfo)
-  writeFile' out indexHTML
+  writeFile' (outputFolder </> "index.html") indexHTML
 
 findPosts :: Action ()
 findPosts = do
   pNames <- postNames
   need ((\p -> srcToDest p -<.> "html") <$> pNames)
 
-findTags :: Action [Tag] -> Action ()
-findTags allTags = do
-  ts <- allTags
-  let toTarget Tag {tag} = "dist/tag/" ++ tag ++ ".html"
-  need (toTarget <$> ts)
+buildTags :: [Tag] -> Action ()
+buildTags tags = do
+    void $ forP tags writeTag
 
-buildTag :: Action [Tag] -> FilePath -> Action ()
-buildTag allTags out = do
-  tagList <- allTags
-  let tagName = (dropExtension . dropDirectory1 . dropDirectory1) out
-      findTag t@Tag {tag}
-        | tag == tagName = First (Just t)
-      findTag _ = First Nothing
-      maybeTag = getFirst $ foldMap findTag tagList
-  t <-
-    case maybeTag of
-      Nothing -> fail $ "could not find tag: " <> tagName
-      Just t' -> return t'
+writeTag :: Tag -> Action ()
+writeTag t@Tag{tag} = do
   tagTempl <- compileTemplate' "site/templates/tag.html"
-  writeFile' out . T.unpack $ substitute tagTempl (toJSON t)
-
-buildPost ::
-     (PostFilePath -> Action Post) -> Action [String] -> FilePath -> Action ()
-buildPost postCache sortedPostURLsCache out = do
-  let srcPath = destToSrc out -<.> "md"
-      postURL = srcToURL srcPath
-  (prevPostURL, nextPostURL) <- getNeighbours postURL <$> sortedPostURLsCache
-  post <- postCache (PostFilePath srcPath)
-  let withNeighbours = post {nextPostURL, prevPostURL}
-  template <- compileTemplate' "site/templates/post.html"
-  writeFile' out . T.unpack $ substitute template (toJSON withNeighbours)
+  writeFile' (outputFolder </> tag) . T.unpack $ substitute tagTempl (toJSON t)
 
 getNeighbours :: String -> [String] -> (Maybe String, Maybe String)
 getNeighbours i xs =
@@ -196,15 +176,15 @@ getNeighbours i xs =
     go (_:rest) = go rest
     go [] = (Nothing, Nothing)
 
-getTags :: [Post] -> [Tag]
-getTags posts =
-  let tagToPostsSet = M.unionsWith mappend (toMap <$> posts)
-      tagToPostsList = fmap S.toList tagToPostsSet
-      tagObjects =
-        foldMapWithKey
-          (\tag ps -> [Tag {tag, posts = sortByDate ps, url = "/tag/" <> tag}])
-          tagToPostsList
-   in tagObjects
+getTags :: [Post] -> Action [Tag]
+getTags posts = do
+   let tagToPostsSet = M.unionsWith mappend (toMap <$> posts)
+       tagToPostsList = fmap S.toList tagToPostsSet
+       tagObjects =
+         foldMapWithKey
+           (\tag ps -> [Tag {tag, tagPosts = sortByDate ps, url = "/tag/" <> tag}])
+           tagToPostsList
+   return tagObjects
   where
     toMap :: Post -> Map String (Set Post)
     toMap p@Post {tags} = M.unionsWith mappend (embed p <$> tags)
@@ -228,10 +208,9 @@ rfc3339 = Just "%H:%M:%SZ"
 toIsoDate :: UTCTime -> String
 toIsoDate = formatTime defaultTimeLocale (iso8601DateFormat rfc3339)
 
-buildAtomFeed :: Action [Post] -> FilePath -> Action ()
-buildAtomFeed postsCache out = do
+buildFeed :: [Post] -> Action ()
+buildFeed posts = do
   now <- liftIO getCurrentTime
-  posts <- postsCache
   let atomData =
         AtomData
           { title = "Chris Penner"
@@ -242,7 +221,7 @@ buildAtomFeed postsCache out = do
           , url = "/atom.xml"
           }
   atomTempl <- compileTemplate' "site/templates/atom.xml"
-  writeFile' out . T.unpack $ substitute atomTempl (toJSON atomData)
+  writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (toJSON atomData)
 
 data AtomData = AtomData
   { title :: String
@@ -254,19 +233,3 @@ data AtomData = AtomData
   } deriving (Generic, Eq, Ord, Show)
 
 instance ToJSON AtomData
-
-newtype SortedPostsCache =
-  SortedPostsCache ()
-  deriving (Show, Eq, Hashable, Binary, NFData)
-
-newtype SortedPostURLsCache =
-  SortedPostURLsCache ()
-  deriving (Show, Eq, Hashable, Binary, NFData)
-
-newtype TagCache =
-  TagCache ()
-  deriving (Show, Eq, Hashable, Binary, NFData)
-
-newtype PostFilePath =
-  PostFilePath String
-  deriving (Show, Eq, Hashable, Binary, NFData)
