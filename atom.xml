@@ -2,12 +2,275 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-12-01T07:49:30Z</updated>
+  <updated>2019-12-02T18:02:03Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Advent of Optics: Day 2</title>
+      <link href="https://chrispenner.ca/posts/advent-of-optics-02"/>
+      <id>https://chrispenner.ca/posts/advent-of-optics-02</id>
+      <updated>2019-12-02T00:00:00Z</updated>
+      <summary>Day two of Advent of Code solved with optics</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/pinecones.jpg" alt="Advent of Optics: Day 2">
+              <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a book on practical lenses and optics</a> later this month I thought it would be fun to do a few of this year's Advent of Code puzzles using as many obscure optics features as possible!</p>
+<p>To be clear, the goal is to be obscure, strange and excessive towards the goal of using as many optics as possible in a given solution, even if it's awkward, silly, or just plain overkill. These are NOT idiomatic Haskell solutions, nor are they intended to be. Maybe we'll both learn something along the way. Let's have some fun!</p>
+<p>You can find today's puzzle <a href="https://adventofcode.com/2019/day/2">here</a>.</p>
+<hr />
+<p>Every year of Advent of Code usually has some sort of assembly language simulator, looks like this year's came up early!</p>
+<p>So we have a simple computer with registers which store integers, and an instruction counter which keeps track of our current execution location in the "program". There are two operations, addition and multiplication, indicated by a <code>1</code> or a <code>2</code> respectively. Each of these operations will also consume the two integers following the instruction as the addresses of its arguments, and a final integer representing the address to store the output. We then increment the instruction counter to the next instruction and continue. The program halts if ever there's a <code>99</code> in the operation address.</p>
+<p>As usual, we'll need to start by reading in our input. Last time we could just use <code>words</code> to split the string on whitespace and everything worked out. This time there are commas in between each int; so we'll need a slightly different strategy. It's almost certainly overkill for this, but I've wanting to show it off anyways; so I'll pull in my <a href="http://hackage.haskell.org/package/lens-regex-pcre"><code>lens-regex-pcre</code></a> library for this. If you're following along at home, make sure you have at LEAST version <code>1.0.0.0</code>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">{-# LANGUAGE QuasiQuotes #-}</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a></span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="kw">import</span> <span class="dt">Control.Lens.Regex.Text</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="kw">import</span> <span class="dt">Data.Text.IO</span> <span class="kw">as</span> <span class="dt">TIO</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a></span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="ot">solve1 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb1-8"><a href="#cb1-8"></a>solve1 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-9"><a href="#cb1-9"></a>  input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span> </span>
+<span id="cb1-10"><a href="#cb1-10"></a>           <span class="op">&lt;&amp;&gt;</span> toMapOf ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>)</span>
+<span id="cb1-11"><a href="#cb1-11"></a>  <span class="fu">print</span> input</span>
+<span id="cb1-12"><a href="#cb1-12"></a></span>
+<span id="cb1-13"><a href="#cb1-13"></a><span class="op">&gt;&gt;&gt;</span> solve1</span>
+<span id="cb1-14"><a href="#cb1-14"></a>[<span class="st">&quot;1&quot;</span>,<span class="st">&quot;0&quot;</span>,<span class="st">&quot;0&quot;</span>,<span class="st">&quot;3&quot;</span>,<span class="st">&quot;1&quot;</span>,<span class="st">&quot;1&quot;</span>,<span class="st">&quot;2&quot;</span><span class="op">...</span>]</span></code></pre></div>
+<p>Okay, so to break this down a bit I'm reading in the input file as <code>Text</code>, then using <code>&lt;&amp;&gt;</code> (which is flipped (<code>&lt;$&gt;</code>)) to run the following transformation over the result. <code>&lt;&amp;&gt;</code> is exported from <code>lens</code>, but is now included in <code>base</code> as part of <code>Data.Functor</code>, I enjoy using it over <code>&lt;$&gt;</code> from time to time, it reads more like a 'pipeline', passing things from left to right.</p>
+<p>This pulls out all the integers as <code>Text</code> blocks, but we still need to parse them, I'll use the <code>unpacked</code> iso to convert from Text to String, then use the same <code>_Show</code> trick from yesterday's problem.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">solve1 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb2-2"><a href="#cb2-2"></a>solve1 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a>    input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>               <span class="op">&lt;&amp;&gt;</span> toListOf ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>)</span>
+<span id="cb2-5"><a href="#cb2-5"></a>    <span class="fu">print</span> input</span>
+<span id="cb2-6"><a href="#cb2-6"></a><span class="op">&gt;&gt;&gt;</span> solve1</span>
+<span id="cb2-7"><a href="#cb2-7"></a>[<span class="dv">1</span>,<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">3</span>,<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span><span class="op">...</span>]</span></code></pre></div>
+<p>Okay, so we've loaded our register values, but from a glance at the problem we'll need to have random access to different register values, I won't worry about performance too much unless it becomes a problem, but using a list seems a bit silly, so I'll switch from <code>toListOf</code> into <code>toMapOf</code> to build a Map out of my results. <code>toMapOf</code> uses the index of your optic as the key by default, so I can just wrap my optic in <code>indexing</code> (which adds an increasing integer as an index to an optic) to get a sequential Int count as the keys for my map:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">solve1 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb3-2"><a href="#cb3-2"></a>solve1 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb3-3"><a href="#cb3-3"></a>    input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb3-4"><a href="#cb3-4"></a>               <span class="op">&lt;&amp;&gt;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb3-5"><a href="#cb3-5"></a>    <span class="fu">print</span> input</span>
+<span id="cb3-6"><a href="#cb3-6"></a></span>
+<span id="cb3-7"><a href="#cb3-7"></a><span class="op">&gt;&gt;&gt;</span> solve1</span>
+<span id="cb3-8"><a href="#cb3-8"></a>fromList [(<span class="dv">0</span>,<span class="dv">1</span>),(<span class="dv">1</span>,<span class="dv">0</span>),(<span class="dv">2</span>,<span class="dv">0</span>),(<span class="dv">3</span>,<span class="dv">3</span>),(<span class="dv">4</span>,<span class="dv">1</span>)<span class="op">...</span>]</span></code></pre></div>
+<p>Great, we've loaded our ints into "memory".</p>
+<p>Next step, we're told at the bottom of the program to initialize the 1st and 2nd positions in memory to specific values, yours may differ, but it told me to set the 1st to <code>12</code> and the second to <code>2</code>. Easy enough to add that onto our pipeline!</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a>input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a>           <span class="op">&lt;&amp;&gt;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb4-3"><a href="#cb4-3"></a>           <span class="op">&lt;&amp;&gt;</span> ix <span class="dv">1</span> <span class="op">.~</span> <span class="dv">12</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a>           <span class="op">&lt;&amp;&gt;</span> ix <span class="dv">2</span> <span class="op">.~</span> <span class="dv">2</span></span></code></pre></div>
+<p>That'll 'pipeline' our input through and initialize the registers correctly.</p>
+<p>Okay, now for the hard part, we need to actually RUN our program! Since we're emulating a stateful computer it only makes sense to use the <code>State</code> monad right? We've got a map to represent our registers, but we'll need an integer for our "read-head" too. Let's say our state is <code>(Int, Map Int Int)</code>, the first slot is the current read-address, the second is all our register values.</p>
+<p>Let's write one iteration of our computation, then we'll figure out how to run it until the halt.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">oneStep ::</span> <span class="dt">State</span> (<span class="dt">Int</span>, <span class="dt">M.Map</span> <span class="dt">Int</span> <span class="dt">Int</span>) ()</span>
+<span id="cb5-2"><a href="#cb5-2"></a>oneStep <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>    <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb5-4"><a href="#cb5-4"></a>    <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb5-5"><a href="#cb5-5"></a>    <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb5-6"><a href="#cb5-6"></a>    out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb5-7"><a href="#cb5-7"></a>    outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb5-8"><a href="#cb5-8"></a>    _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb5-9"><a href="#cb5-9"></a></span>
+<span id="cb5-10"><a href="#cb5-10"></a><span class="ot">getOp ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>)</span>
+<span id="cb5-11"><a href="#cb5-11"></a>getOp <span class="dv">1</span> <span class="ot">=</span> (<span class="op">+</span>)</span>
+<span id="cb5-12"><a href="#cb5-12"></a>getOp <span class="dv">2</span> <span class="ot">=</span> (<span class="op">*</span>)</span>
+<span id="cb5-13"><a href="#cb5-13"></a>getOp n <span class="ot">=</span> <span class="fu">error</span> <span class="op">$</span> <span class="st">&quot;unknown op-code: &quot;</span> <span class="op">&lt;&gt;</span> <span class="fu">show</span> n</span></code></pre></div>
+<p>Believe it or not, that's one step of our computation, let's break it down!</p>
+<p>We define a few primitives we'll use at the beginning of the block. First is <code>loadRegister</code>. <code>loadRegister</code> takes a register 'address' and gets the value stored there. <code>use</code> is like <code>get</code> from <code>MonadState</code>, but allows us to get a specific piece of the state as focused by a lens. We use <code>ix</code> to get the value at a specific key out of the map (which is in the second slot of the tuple, hence the <code>_2</code>). However, <code>ix r</code> is a traversal, not a lens, we could either switch to <code>preuse</code> which returns a <code>Maybe</code>-wrapped result, or we can use <code>singular</code> to <strong>force</strong> the result and simply crash the whole program if its missing. Since we know our input is valid, I'll just go ahead and <strong>force</strong> it. Probably don't do this if you're building a REAL intcode computer :P</p>
+<p>Next is <code>loadNext</code>, this fetches the current read-location from the first slot, then loads the value at that register. There's a bit of a trick here though, we load the read-location with <code>_1 &lt;&lt;+= 1</code>; this performs the <code>+= 1</code> action to the location, which increments it by one (we've 'consumed' the current instruction), but the leading <code>&lt;&lt;</code> says to return the value there <strong>before</strong> altering it. This lets us cleanly get and increment the read-location all in one step. We then load the value in the current location using <code>loadRegister</code>.</p>
+<p>We lastly combine these two combinators to build <code>getArg</code>, which gets the value at the current read-location, then loads the register at that address.</p>
+<p>We can combine these all now! We <code>loadNext</code> to get the opcode, converting it to a Haskell function using <code>getOp</code>, then thread that computation through our two arguments getting an output value.</p>
+<p>Now we can load the output register (which will be the next value at our read-location), and simply <code>_2 . ix outputReg .= result</code> to stash it in the right spot.</p>
+<p>If you haven't seen these lensy <code>MonadState</code> helpers before, they're pretty cool. They basically let us write python-style code in Haskell!</p>
+<p>Okay, now let's add this to our pipeline! If we weren't still inside the <code>IO</code> monad we could use <code>&amp;~</code> to chain directly through the <code>MonadState</code> action!</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">(&amp;~) ::</span> s <span class="ot">-&gt;</span> <span class="dt">State</span> s a <span class="ot">-&gt;</span> s </span></code></pre></div>
+<p>Unfortunately there's no <code>&lt;&amp;~&gt;</code> combinator, so we'll have to move our pipeline out of <code>IO</code> for that. Not so tough to do though:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">solve1 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb7-2"><a href="#cb7-2"></a>solve1 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a>    input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a>    <span class="kw">let</span> result <span class="ot">=</span> input</span>
+<span id="cb7-5"><a href="#cb7-5"></a>            <span class="op">&amp;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb7-6"><a href="#cb7-6"></a>            <span class="op">&amp;</span> ix <span class="dv">1</span> <span class="op">.~</span> <span class="dv">12</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a>            <span class="op">&amp;</span> ix <span class="dv">2</span> <span class="op">.~</span> <span class="dv">2</span></span>
+<span id="cb7-8"><a href="#cb7-8"></a>            <span class="op">&amp;</span> (,) <span class="dv">0</span></span>
+<span id="cb7-9"><a href="#cb7-9"></a>            <span class="op">&amp;~</span> <span class="kw">do</span></span>
+<span id="cb7-10"><a href="#cb7-10"></a>                <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb7-11"><a href="#cb7-11"></a>                <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb7-12"><a href="#cb7-12"></a>                <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb7-13"><a href="#cb7-13"></a>                out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb7-14"><a href="#cb7-14"></a>                outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb7-15"><a href="#cb7-15"></a>                _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb7-16"><a href="#cb7-16"></a>    <span class="fu">print</span> result</span></code></pre></div>
+<p>This runs ONE iteration of our program, but we'll need to run the program until completion! The perfect combinator for this is <code>whileM</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">untilM ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> m a <span class="ot">-&gt;</span> m <span class="dt">Bool</span> <span class="ot">-&gt;</span> m [a] </span></code></pre></div>
+<p>This let's us write it something like this:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&amp;~</span> <span class="fu">flip</span> untilM ((<span class="op">==</span><span class="dv">99</span>) <span class="op">&lt;$&gt;</span> (use _1 <span class="op">&gt;&gt;=</span> loadRegister)) <span class="op">$</span> <span class="kw">do</span> <span class="op">...</span></span></code></pre></div>
+<p>This would run our computation step repeatedly until it hits the <code>99</code> instruction. However, <code>untilM</code> is in the <code>monad-loops</code> library, and I don't feel like waiting for that to install, so instead we'll just use recursion.</p>
+<p>Hrmm, using recursion here would require me to name my expression, so we could just use a <code>let</code> expression like this to explicitly recurse until we hit <code>99</code>:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="op">&amp;~</span> <span class="kw">let</span> loop <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-2"><a href="#cb10-2"></a>              <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb10-3"><a href="#cb10-3"></a>              <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb10-4"><a href="#cb10-4"></a>              <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb10-5"><a href="#cb10-5"></a>              out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb10-6"><a href="#cb10-6"></a>              outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb10-7"><a href="#cb10-7"></a>              _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb10-8"><a href="#cb10-8"></a>              use _1 <span class="op">&gt;&gt;=</span> loadRegister <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb10-9"><a href="#cb10-9"></a>                <span class="dv">99</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb10-10"><a href="#cb10-10"></a>                _ <span class="ot">-&gt;</span> loop</span>
+<span id="cb10-11"><a href="#cb10-11"></a>   <span class="kw">in</span> loop</span></code></pre></div>
+<p>But the <code>let loop = ... in loop</code> construct is kind of annoying me, not huge fan.</p>
+<p>Clearly the right move is to use anonymous recursion! (/sarcasm)</p>
+<p>We can /simplify/ this by using <code>fix</code>!</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">fix ::</span> (a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> a</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="op">&amp;~</span> fix (\continue <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb12-2"><a href="#cb12-2"></a>    <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb12-3"><a href="#cb12-3"></a>    <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb12-4"><a href="#cb12-4"></a>    <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb12-5"><a href="#cb12-5"></a>    out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb12-6"><a href="#cb12-6"></a>    outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb12-7"><a href="#cb12-7"></a>    _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb12-8"><a href="#cb12-8"></a>    use _1 <span class="op">&gt;&gt;=</span> loadRegister <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb12-9"><a href="#cb12-9"></a>      <span class="dv">99</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb12-10"><a href="#cb12-10"></a>      _ <span class="ot">-&gt;</span> continue</span>
+<span id="cb12-11"><a href="#cb12-11"></a>    )</span></code></pre></div>
+<p>Beautiful right? Well... some might disagree :P, but definitely fun and educational!</p>
+<p>I'll leave you to study the arcane arts of <code>fix</code> on your own, but here's a teaser. Working with <code>fix</code> is similar to explicit recursion, you assume that you already <strong>have</strong> your result, then you can use it in your computation. In this case, we <em>assume</em> that <code>continue</code> is a state action which will loop until the program halts, so we do one step of the computation and then hand off control to <code>continue</code> which will magically <strong>solve the rest</strong>. It's basically identical to the <code>let ... in</code> version, but more obtuse and harder to read, so obviously we'll keep it!</p>
+<p>If we slot this in it'll run the computation until it hits a <code>99</code>, and <code>&amp;~</code> returns the resulting state, so all we need to do is view the first instruction location of our registers to get our answer!</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">solve1 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb13-2"><a href="#cb13-2"></a>solve1 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-3"><a href="#cb13-3"></a>    input <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb13-4"><a href="#cb13-4"></a>    <span class="fu">print</span> <span class="op">$</span> input</span>
+<span id="cb13-5"><a href="#cb13-5"></a>            <span class="op">&amp;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb13-6"><a href="#cb13-6"></a>            <span class="op">&amp;</span> ix <span class="dv">1</span> <span class="op">.~</span> <span class="dv">12</span></span>
+<span id="cb13-7"><a href="#cb13-7"></a>            <span class="op">&amp;</span> ix <span class="dv">2</span> <span class="op">.~</span> <span class="dv">2</span></span>
+<span id="cb13-8"><a href="#cb13-8"></a>            <span class="op">&amp;</span> (,) <span class="dv">0</span></span>
+<span id="cb13-9"><a href="#cb13-9"></a>            <span class="op">&amp;~</span> fix (\continue <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb13-10"><a href="#cb13-10"></a>                <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb13-11"><a href="#cb13-11"></a>                <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb13-12"><a href="#cb13-12"></a>                <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb13-13"><a href="#cb13-13"></a>                out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb13-14"><a href="#cb13-14"></a>                outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb13-15"><a href="#cb13-15"></a>                _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb13-16"><a href="#cb13-16"></a>                use _1 <span class="op">&gt;&gt;=</span> loadRegister <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb13-17"><a href="#cb13-17"></a>                  <span class="dv">99</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb13-18"><a href="#cb13-18"></a>                  _ <span class="ot">-&gt;</span> continue</span>
+<span id="cb13-19"><a href="#cb13-19"></a>                )</span>
+<span id="cb13-20"><a href="#cb13-20"></a>            <span class="op">&amp;</span> view (_2 <span class="op">.</span> singular (ix <span class="dv">0</span>))</span>
+<span id="cb13-21"><a href="#cb13-21"></a></span>
+<span id="cb13-22"><a href="#cb13-22"></a><span class="op">&gt;&gt;&gt;</span> solve1</span>
+<span id="cb13-23"><a href="#cb13-23"></a><span class="op">&lt;</span>my answer<span class="op">&gt;</span></span></code></pre></div>
+<p>Honestly, aside from the intentional obfuscation it turned out okay!</p>
+<h2 id="part-2">Part 2</h2>
+<p>Just in case you haven't solved the first part on your own, the second part says we now need to find a specific <strong>memory initialization</strong> which <strong>results</strong> in a specific answer after running the computer. We need to find the exact values to put into slots 1 and 2 which result in this number, in my case: <code>19690720</code>.</p>
+<p>Let's see what we can do! First I'll refactor the code from step 1 so it accepts some parameters</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="ot">solveSingle ::</span> <span class="dt">M.Map</span> <span class="dt">Int</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span></span>
+<span id="cb14-2"><a href="#cb14-2"></a>solveSingle registers noun verb <span class="ot">=</span></span>
+<span id="cb14-3"><a href="#cb14-3"></a>    registers</span>
+<span id="cb14-4"><a href="#cb14-4"></a>    <span class="op">&amp;</span> ix <span class="dv">1</span> <span class="op">.~</span> noun</span>
+<span id="cb14-5"><a href="#cb14-5"></a>    <span class="op">&amp;</span> ix <span class="dv">2</span> <span class="op">.~</span> verb</span>
+<span id="cb14-6"><a href="#cb14-6"></a>    <span class="op">&amp;</span> (,) <span class="dv">0</span></span>
+<span id="cb14-7"><a href="#cb14-7"></a>    <span class="op">&amp;~</span> fix (\continue <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb14-8"><a href="#cb14-8"></a>        <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb14-9"><a href="#cb14-9"></a>        <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb14-10"><a href="#cb14-10"></a>        <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb14-11"><a href="#cb14-11"></a>        out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb14-12"><a href="#cb14-12"></a>        outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb14-13"><a href="#cb14-13"></a>        _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb14-14"><a href="#cb14-14"></a>        use _1 <span class="op">&gt;&gt;=</span> loadRegister <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb14-15"><a href="#cb14-15"></a>          <span class="dv">99</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb14-16"><a href="#cb14-16"></a>          _ <span class="ot">-&gt;</span> continue</span>
+<span id="cb14-17"><a href="#cb14-17"></a>        )</span>
+<span id="cb14-18"><a href="#cb14-18"></a>    <span class="op">&amp;</span> view (_2 <span class="op">.</span> singular (ix <span class="dv">0</span>))</span></code></pre></div>
+<p>That was pretty painless. Now we need to construct some thingamabob which runs this with different 'noun' and 'verb' numbers (that's what the puzzle calls them) until it gets the answer we need. Unless we want to do some sort of crazy analysis of how this computer works at a theoretical level, we'll have to just brute force it. There're only 10,000 combinations, so it should be fine. We can collect all possibilities using a simple list comprehension:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a>[(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]]</span></code></pre></div>
+<p>We need to run the computer on each possible set of inputs, which amounts to simply calling <code>solveSingle</code> on them:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="ot">solve2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb16-2"><a href="#cb16-2"></a>solve2 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb16-3"><a href="#cb16-3"></a>    registers <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb16-4"><a href="#cb16-4"></a>               <span class="op">&lt;&amp;&gt;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb16-5"><a href="#cb16-5"></a>    <span class="fu">print</span> <span class="op">$</span> [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]]</span>
+<span id="cb16-6"><a href="#cb16-6"></a>              <span class="op">^..</span> traversed <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers))</span>
+<span id="cb16-7"><a href="#cb16-7"></a></span>
+<span id="cb16-8"><a href="#cb16-8"></a><span class="op">&gt;&gt;&gt;</span> solve2</span>
+<span id="cb16-9"><a href="#cb16-9"></a>[<span class="dv">29891</span>,<span class="dv">29892</span>,<span class="dv">29893</span>,<span class="dv">29894</span>,<span class="dv">29895</span>,<span class="dv">29896</span>,<span class="dv">29897</span>,<span class="dv">29898</span>,<span class="dv">29899</span>,<span class="dv">29900</span><span class="op">...</span>]</span></code></pre></div>
+<p>This prints out the answers to every possible combination, but we need to <strong>find</strong> a <strong>specific</strong> combination! We can easily <strong>find</strong> the answer by using <code>filtered</code>, or <code>only</code> or even <code>findOf</code>, these are all valid:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="op">&gt;&gt;&gt;</span> [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]] </span>
+<span id="cb17-2"><a href="#cb17-2"></a>      <span class="op">^?</span> traversed <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers)) <span class="op">.</span> filtered (<span class="op">==</span> <span class="dv">19690720</span>)</span>
+<span id="cb17-3"><a href="#cb17-3"></a><span class="dt">Just</span> <span class="dv">19690720</span></span>
+<span id="cb17-4"><a href="#cb17-4"></a></span>
+<span id="cb17-5"><a href="#cb17-5"></a><span class="co">-- `only` is like `filtered` but searches for a specific value</span></span>
+<span id="cb17-6"><a href="#cb17-6"></a><span class="op">&gt;&gt;&gt;</span> [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]] </span>
+<span id="cb17-7"><a href="#cb17-7"></a>      <span class="op">^?</span> traversed <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers)) <span class="op">.</span> only <span class="dv">19690720</span></span>
+<span id="cb17-8"><a href="#cb17-8"></a><span class="dt">Just</span> <span class="dv">19690720</span></span>
+<span id="cb17-9"><a href="#cb17-9"></a></span>
+<span id="cb17-10"><a href="#cb17-10"></a><span class="op">&gt;&gt;&gt;</span> findOf </span>
+<span id="cb17-11"><a href="#cb17-11"></a>      (traversed <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers)) <span class="op">.</span> only <span class="dv">19690720</span>)</span>
+<span id="cb17-12"><a href="#cb17-12"></a>      [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]]</span>
+<span id="cb17-13"><a href="#cb17-13"></a><span class="dt">Just</span> <span class="dv">19690720</span></span></code></pre></div>
+<p>These all work, but the tricky part is that we don't actually care about the answer, we already know that! What we need is the arguments we passed in to <strong>get</strong> that answer. There are many ways to do this, but my first thought is to just <strong>stash</strong> the arguments away where we can get them later. Indexes are great for this sort of thing (I cover tricks using indexed optics <a href="https://leanpub.com/optics-by-example">in my book</a>). We can <em>stash</em> a value into the index using <code>selfIndex</code>, and it'll be carried alongside the rest of your computation for you! There's the handy <code>findIndexOf</code> combinator which will find the index of the first value which matches your predicate (in this case, the answer is equal to our required output).</p>
+<p>Here's the magic incantation:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a>findIndexOf (traversed <span class="op">.</span> selfIndex <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers)))</span>
+<span id="cb18-2"><a href="#cb18-2"></a>            (<span class="op">==</span> <span class="dv">19690720</span>)</span>
+<span id="cb18-3"><a href="#cb18-3"></a>            [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]]</span></code></pre></div>
+<p>This gets us super-duper close, but the problem says we actually need to run the following transformation over our arguments to get the real answer: <code>(100 * noun) + verb</code>. We could easily do it <em>after</em> running <code>findIndexOf</code>, but just to be ridiculous, we'll do it inline! We're stashing our "answer" in the index, so that's where we need to run the transformation. We can use <code>reindexed</code> to run a transformation over the index of an optic, so if we alter <code>selfIndex</code> (which stashes the value into the index) then we can map the index through the transformation:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a>reindexed (\(noun, verb) <span class="ot">-&gt;</span> (<span class="dv">100</span> <span class="op">*</span> noun) <span class="op">+</span> verb) selfIndex</span></code></pre></div>
+<p>That does it!</p>
+<p>Altogether now, here's the entire solution for the second part:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="ot">getOp ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> (<span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>)</span>
+<span id="cb20-2"><a href="#cb20-2"></a>getOp <span class="dv">1</span> <span class="ot">=</span> (<span class="op">+</span>)</span>
+<span id="cb20-3"><a href="#cb20-3"></a>getOp <span class="dv">2</span> <span class="ot">=</span> (<span class="op">*</span>)</span>
+<span id="cb20-4"><a href="#cb20-4"></a>getOp n <span class="ot">=</span> <span class="fu">error</span> <span class="op">$</span> <span class="st">&quot;unknown op-code: &quot;</span> <span class="op">&lt;&gt;</span> <span class="fu">show</span> n</span>
+<span id="cb20-5"><a href="#cb20-5"></a></span>
+<span id="cb20-6"><a href="#cb20-6"></a><span class="ot">solveSingle ::</span> <span class="dt">M.Map</span> <span class="dt">Int</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span></span>
+<span id="cb20-7"><a href="#cb20-7"></a>solveSingle registers noun verb <span class="ot">=</span></span>
+<span id="cb20-8"><a href="#cb20-8"></a>    registers</span>
+<span id="cb20-9"><a href="#cb20-9"></a>    <span class="op">&amp;</span> ix <span class="dv">1</span> <span class="op">.~</span> noun</span>
+<span id="cb20-10"><a href="#cb20-10"></a>    <span class="op">&amp;</span> ix <span class="dv">2</span> <span class="op">.~</span> verb</span>
+<span id="cb20-11"><a href="#cb20-11"></a>    <span class="op">&amp;</span> (,) <span class="dv">0</span></span>
+<span id="cb20-12"><a href="#cb20-12"></a>    <span class="op">&amp;~</span> fix (\continue <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb20-13"><a href="#cb20-13"></a>        <span class="kw">let</span> loadRegister r <span class="ot">=</span> use (_2 <span class="op">.</span> singular (ix r))</span>
+<span id="cb20-14"><a href="#cb20-14"></a>        <span class="kw">let</span> loadNext <span class="ot">=</span> _1 <span class="op">&lt;&lt;+=</span> <span class="dv">1</span> <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb20-15"><a href="#cb20-15"></a>        <span class="kw">let</span> getArg <span class="ot">=</span> loadNext <span class="op">&gt;&gt;=</span> loadRegister</span>
+<span id="cb20-16"><a href="#cb20-16"></a>        out <span class="ot">&lt;-</span> getOp <span class="op">&lt;$&gt;</span> loadNext <span class="op">&lt;*&gt;</span> getArg <span class="op">&lt;*&gt;</span> getArg</span>
+<span id="cb20-17"><a href="#cb20-17"></a>        outputReg <span class="ot">&lt;-</span> loadNext</span>
+<span id="cb20-18"><a href="#cb20-18"></a>        _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
+<span id="cb20-19"><a href="#cb20-19"></a>        use _1 <span class="op">&gt;&gt;=</span> loadRegister <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb20-20"><a href="#cb20-20"></a>          <span class="dv">99</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb20-21"><a href="#cb20-21"></a>          _ <span class="ot">-&gt;</span> continue</span>
+<span id="cb20-22"><a href="#cb20-22"></a>        )</span>
+<span id="cb20-23"><a href="#cb20-23"></a>    <span class="op">&amp;</span> view (_2 <span class="op">.</span> singular (ix <span class="dv">0</span>))</span>
+<span id="cb20-24"><a href="#cb20-24"></a></span>
+<span id="cb20-25"><a href="#cb20-25"></a><span class="ot">solvePart2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb20-26"><a href="#cb20-26"></a>solvePart2 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb20-27"><a href="#cb20-27"></a>    registers <span class="ot">&lt;-</span> TIO.readFile <span class="st">&quot;./src/Y2019/day02.txt&quot;</span></span>
+<span id="cb20-28"><a href="#cb20-28"></a>               <span class="op">&lt;&amp;&gt;</span> toMapOf (indexing ([regex|\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Show <span class="op">@</span><span class="dt">Int</span>))</span>
+<span id="cb20-29"><a href="#cb20-29"></a>    <span class="fu">print</span> <span class="op">$</span> findIndexOf  ( traversed</span>
+<span id="cb20-30"><a href="#cb20-30"></a>                         <span class="op">.</span> reindexed (\(noun, verb) <span class="ot">-&gt;</span> (<span class="dv">100</span> <span class="op">*</span> noun) <span class="op">+</span> verb) selfIndex</span>
+<span id="cb20-31"><a href="#cb20-31"></a>                         <span class="op">.</span> to (<span class="fu">uncurry</span> (solveSingle registers)))</span>
+<span id="cb20-32"><a href="#cb20-32"></a>            (<span class="op">==</span> <span class="dv">19690720</span>)</span>
+<span id="cb20-33"><a href="#cb20-33"></a>            [(noun, verb) <span class="op">|</span> noun <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>], verb <span class="ot">&lt;-</span> [<span class="dv">0</span><span class="op">..</span><span class="dv">99</span>]]</span></code></pre></div>
+<p>This was a surprisingly tricky problem for only day 2, but we've gotten through it okay! Today we learned about:</p>
+<ul>
+<li><code>regex</code>: for precisely extracting text</li>
+<li><code>toMapOf</code>: for building maps from an indexed fold</li>
+<li><code>&amp;~</code>: for running state monads as part of a pipeline</li>
+<li><code>&lt;&amp;&gt;</code>: for pipelining data within a context,</li>
+<li><code>&lt;&lt;+=</code>: for simultaneous modification AND access using lenses in MonadState</li>
+<li><code>fix</code>: using fix for anonymous recursion (just for fun)</li>
+<li><code>selfIndex</code>: for stashing values till later</li>
+<li><code>reindexed</code>: for editing indices</li>
+<li><code>findIndexOf</code>: for getting the index of a value matching a predicate</li>
+</ul>
+<p>Hopefully at least one of those was new for you! Maybe tomorrows will be easier :)</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Advent of Optics: Day 1</title>
       <link href="https://chrispenner.ca/posts/advent-of-optics-01"/>
