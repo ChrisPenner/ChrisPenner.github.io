@@ -14,7 +14,6 @@ import Data.Aeson.Lens
 import Data.Function (on)
 import Data.List (sortBy)
 import Data.Map as M
-import Data.Monoid
 import Data.Set as S
 import qualified Data.Text as T
 import Data.Text.Lens
@@ -39,7 +38,7 @@ main =
     buildTags allTags
     buildIndex allPosts allTags
     buildFeed allPosts
-    copyStaticFiles
+    -- copyStaticFiles
 
 data IndexInfo = IndexInfo
   { indexPosts :: [Post]
@@ -53,7 +52,7 @@ instance ToJSON IndexInfo
 data Tag = Tag
   { tag :: String
   , tagPosts :: [Post]
-  , url :: String
+  , tagUrl :: String
   } deriving (Generic, Show)
 
 instance FromJSON Tag
@@ -64,7 +63,7 @@ data Post = Post
   { title :: String
   , author :: String
   , content :: String
-  , url :: String
+  , postUrl :: String
   , image :: Maybe String
   , tags :: [String]
   , nextPostURL :: Maybe String
@@ -83,7 +82,7 @@ instance FromJSON Post where
         date = v ^. key "date" . _String . unpacked
         isoDate = formatDate date
         content = v ^. key "content" . _String . unpacked
-        url = v ^. key "url" . _String . unpacked
+        postUrl = v ^. key "url" . _String . unpacked
         tags = v ^.. key "tags" . values . _String . unpacked
         nextPostURL = Nothing
         prevPostURL = Nothing
@@ -110,7 +109,7 @@ srcToURL = ("/" ++) . dropDirectory1 . dropExtension
 -- | Copy all static files from the listed folders to their destination
 copyStaticFiles :: Action ()
 copyStaticFiles = do
-    filepaths <- getDirectoryFiles "./site/" ["images//*", "css//*", "js//*"]
+    filepaths <- getDirectoryFiles "" ["site/images//*", "site/css//*", "site/js//*"]
     void $ forP filepaths $ \filepath ->
         copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
 
@@ -162,7 +161,7 @@ buildTags tags = do
     void $ forP tags writeTag
 
 writeTag :: Tag -> Action ()
-writeTag t@Tag{tag} = do
+writeTag t@Tag{tag, tagPosts} = cacheAction ("tag" :: T.Text, postUrl <$> tagPosts) $ do
   tagTempl <- compileTemplate' "site/templates/tag.html"
   writeFile' (outputFolder </> tag) . T.unpack $ substitute tagTempl (toJSON t)
 
@@ -182,7 +181,7 @@ getTags posts = do
        tagToPostsList = fmap S.toList tagToPostsSet
        tagObjects =
          foldMapWithKey
-           (\tag ps -> [Tag {tag, tagPosts = sortByDate ps, url = "/tag/" <> tag}])
+           (\tag ps -> [Tag {tag, tagPosts = sortByDate ps, tagUrl = "/tag/" <> tag}])
            tagToPostsList
    return tagObjects
   where

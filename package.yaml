@@ -27,6 +27,7 @@ dependencies:
 - binary
 - bytestring
 - containers
+
 executables:
   build-site:
     main: Main.hs
