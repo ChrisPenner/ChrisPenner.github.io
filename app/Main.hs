@@ -133,16 +133,11 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
         String (T.pack . dropExtension . takeBaseName $ srcPath)
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
+  -- (prevPostURL, nextPostURL) <- getNeighbours postUrl <$> sortedPostURLsCache
+  -- let withNeighbours = post {nextPostURL, prevPostURL}
   template <- compileTemplate' "site/templates/post.html"
   writeFile' (outputFolder </> T.unpack postUrl) . T.unpack $ substitute template fullPostData
   convert fullPostData
-
--- buildIndex :: [Post] -> Action ()
--- buildIndex posts' = do
---   indexT <- compileTemplate' "site/templates/index.html"
---   let indexInfo = IndexInfo {posts = posts'}
---       indexHTML = T.unpack $ substitute indexT (withSiteMeta $ toJSON indexInfo)
---   writeFile' (outputFolder </> "index.html") indexHTML
 
 buildIndex :: [Post] -> [Tag] -> Action ()
 buildIndex allPosts allTags = do
