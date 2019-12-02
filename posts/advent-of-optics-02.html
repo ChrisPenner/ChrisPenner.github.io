@@ -851,7 +851,7 @@
 <span id="cb7-14"><a href="#cb7-14"></a>                outputReg <span class="ot">&lt;-</span> loadNext</span>
 <span id="cb7-15"><a href="#cb7-15"></a>                _2 <span class="op">.</span> ix outputReg <span class="op">.=</span> out</span>
 <span id="cb7-16"><a href="#cb7-16"></a>    <span class="fu">print</span> result</span></code></pre></div>
-<p>This runs ONE iteration of our program, but we'll need to run the program until completion! The perfect combinator for this is <code>whileM</code>:</p>
+<p>This runs ONE iteration of our program, but we'll need to run the program until completion! The perfect combinator for this is <code>untilM</code>:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">untilM ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> m a <span class="ot">-&gt;</span> m <span class="dt">Bool</span> <span class="ot">-&gt;</span> m [a] </span></code></pre></div>
 <p>This let's us write it something like this:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&amp;~</span> <span class="fu">flip</span> untilM ((<span class="op">==</span><span class="dv">99</span>) <span class="op">&lt;$&gt;</span> (use _1 <span class="op">&gt;&gt;=</span> loadRegister)) <span class="op">$</span> <span class="kw">do</span> <span class="op">...</span></span></code></pre></div>
