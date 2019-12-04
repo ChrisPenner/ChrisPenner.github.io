@@ -5,8 +5,14 @@
     <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
     <meta name="author" content="Chris Penner">
     <meta name=viewport content="width=device-width, initial-scale=1">
-    <title>Chris Penner's FP</title>
-    <link rel="alternative" type="application/rss+xml" title="Chris Penner RSS Feed" href="/feed" />
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@chrislpenner">
+    <meta name="twitter:creator" content="@chrislpenner">
+    <meta name="twitter:title" content="Advent of Optics: Day 4">
+    <meta name="twitter:description" content="Day 4 of Advent of Code solved with optics">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/pinecones.jpg">
+    <title>Advent of Optics: Day 4</title>
+    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
     <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -731,84 +737,143 @@
         </div>
     </header>
 
+    
+     <a id="rightarrow" class="arrow" href="/posts/advent-of-optics-03">&rarr;</a> 
+
 <div id="page">
-            <section class="table-of-contents">
-                <h1>haskell</h1>
-                <ul>
-                        <li>
-            <a href="/posts/advent-of-optics-04">Advent of Optics: Day 4 <span class="date">Dec 4, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/advent-of-optics-03">Advent of Optics: Day 3 <span class="date">Dec 3, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/advent-of-optics-02">Advent of Optics: Day 2 <span class="date">Dec 2, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/advent-of-optics-01">Advent of Optics: Day 1 <span class="date">Dec 1, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/wc">Beating C with 80 lines of Haskell: wc <span class="date">Oct 15, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/lens-regex-pcre">Optics + Regex: Greater than the sum of their parts <span class="date">Sep 20, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/slick-template">Slick 1.0 Release - Now with a quick and easy template! <span class="date">Sep 18, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/hie-core">Haskell IDE Support (hie-core lsp Sept. 2019) <span class="date">Sep 7, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/hkd-options">Higher Kinded Option Parsing <span class="date">May 4, 2019</span> </a>
-        </li>
-        <li>
-            <a href="/posts/mock-effects-with-data-kinds">Mocking Effects using Constraints and Phantom Data Kinds <span class="date">Sep 29, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/update-monad">Update Monads: Variation on State Monads <span class="date">Sep 3, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/typesafe-api-versioning">Typesafe Versioned APIs <span class="date">Aug 4, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/monoid-sort">Monoidal Sorting <span class="date">Jul 22, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/intro-to-finger-trees">A Practical Introduction to Finger Trees <span class="date">Jul 21, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/asts-with-fix-and-free">ASTs with Fix and Free <span class="date">Feb 24, 2018</span> </a>
-        </li>
-        <li>
-            <a href="/posts/monadio-considered-harmful">MonadIO Considered Harmful <span class="date">Sep 11, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/type-tac-toe">Type Tac Toe: Advanced Type Safety <span class="date">Aug 25, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/conways-game-of-life">Conway&#39;s Game of Life using Representable and Comonads <span class="date">Aug 8, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/representable-discrimination">Radix Sort, Trie Trees, and Maps from Representable Functors <span class="date">Jul 23, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/free-forgetful-functors">Free and Forgetful Functors <span class="date">Jul 20, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/adjunction-battleship">Adjunctions and Battleship <span class="date">Jul 19, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/representable-cofree-zippers">Zippers using Representable and Cofree <span class="date">Jul 5, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/homebrew-haskell">Shipping Haskell via Homebrew <span class="date">Apr 24, 2017</span> </a>
-        </li>
-        <li>
-            <a href="/posts/kleisli-endo">Kleisli Endomorphisms <span class="date">Apr 8, 2017</span> </a>
-        </li>
+    <div class="wrapper">
+        <div class="masthead">
+            <span class="title">
+                Advent of Optics: Day 4
+            </span>
+            <br>
+
+            <img class="post-image" src="/images/pinecones.jpg">
+            <br>
+            <span class="byline">by Chris Penner</span>
+            <br>
+            <span class="date">Dec 4, 2019</span>
+            <br>
+            <div class="metadata">
+                <br>
+                <span class="tags">
+                    Tags<br>
+                    <a class="tag" href="/tag/haskell">haskell</a>
+                </span>
+            </div>
+        </div>
+    </div>
+    <article class="post">
+        <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a book on practical lenses and optics</a> later this month I thought it would be fun to do a few of this year's Advent of Code puzzles using as many obscure optics features as possible!</p>
+<p>To be clear, the goal is to be obscure, strange and excessive towards the goal of using as many optics as possible in a given solution, even if it's awkward, silly, or just plain overkill. These are NOT idiomatic Haskell solutions, nor are they intended to be. Maybe we'll both learn something along the way. Let's have some fun!</p>
+<p>You can find today's puzzle <a href="https://adventofcode.com/2019/day/4">here</a>.</p>
+<hr />
+<p>Hey folks! Today's is a nice clean one! The goal is to find all the numbers within a given range which pass a series of predicates! The conditions each number has to match include:</p>
+<ul>
+<li>Should be within the range; my range is <code>307237-769058</code></li>
+<li>Should be six digits long; my range includes only 6 digit numbers, so we're all set here</li>
+<li>Two adjacent digits in the number should be the same (e.g. '223456')</li>
+<li>The digits should be in monotonically increasing order (e.g. increase or stay the same from left to right)</li>
 </ul>
-        </section>
+<p>And that's it!</p>
+<p>In normal Haskell we'd make a list of all possibilities, then either chain a series of <code>filter</code> statements or use <code>do-notation</code> with guards to narrow it down. Luckily, folds have filters too!</p>
+<p>First things first, since our checks have us analyzing the actual discrete digits we'll convert our Int to a String so we can talk about them as characters:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb1-2"><a href="#cb1-2"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show)</span>
+<span id="cb1-3"><a href="#cb1-3"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb1-6"><a href="#cb1-6"></a>[<span class="st">&quot;307237&quot;</span>,<span class="st">&quot;307238&quot;</span>,<span class="st">&quot;307239&quot;</span>,<span class="st">&quot;307240&quot;</span>,<span class="st">&quot;307241&quot;</span>,<span class="st">&quot;307242&quot;</span>,<span class="st">&quot;307243&quot;</span>,<span class="st">&quot;307244&quot;</span>,<span class="st">&quot;307245&quot;</span>,</span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="st">&quot;307246&quot;</span>, <span class="op">...</span>]</span></code></pre></div>
+<p><code>_Show</code> is the same prism we've used for parsing in the previous examples, but <code>re</code> flips it in reverse and generates a <code>Getter</code> which calls <code>show</code>! This is equivalent to <code>to show</code>, but will get you an extra 20 optics points...</p>
+<p>Now let's start adding filters! We'll start by checking that the digits are all ascending. I could write some convoluted fold which does this, but the quick and dirty way is simply to sort the digits lexicographically and see if the ordering changed at all:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb2-2"><a href="#cb2-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb2-3"><a href="#cb2-3"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb2-4"><a href="#cb2-4"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb2-5"><a href="#cb2-5"></a>                   )</span>
+<span id="cb2-6"><a href="#cb2-6"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb2-7"><a href="#cb2-7"></a></span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb2-9"><a href="#cb2-9"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
+<p><code>filtered</code> removes any focuses from the fold which don't match the predicate.</p>
+<p>We can already see this filters out a ton of possibilities. Not done yet though; we need to ensure there's at least one double consecutive digit. I'll reach for my favourite hammer: <code>lens-regex-pcre</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb3-2"><a href="#cb3-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb3-3"><a href="#cb3-3"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb3-4"><a href="#cb3-4"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb3-5"><a href="#cb3-5"></a>                    <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
+<span id="cb3-6"><a href="#cb3-6"></a>                   )</span>
+<span id="cb3-7"><a href="#cb3-7"></a></span>
+<span id="cb3-8"><a href="#cb3-8"></a></span>
+<span id="cb3-9"><a href="#cb3-9"></a><span class="op">&gt;&gt;&gt;</span> main </span>
+<span id="cb3-10"><a href="#cb3-10"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
+<p>Unfortunately we don't really see much difference in the first few options, but trust me, it did something. Let's see how it works:</p>
+<p>I'm using <code>filteredBy</code> here instead of <code>filtered</code>, <code>filteredBy</code> is brand new in <code>lens &gt;= 4.18</code>, so make sure you've got the latest version if you want to try this out. It's like <code>filtered</code>, but takes a Fold instead of a predicate. <code>filteredBy</code> will run the fold on the current element, and will filter out any focuses for which the fold yields no results.</p>
+<p>The fold I'm passing in converts the String to a <code>Text</code> using <code>packed</code>, then runs a regex which matches any digit, then requires at least one more of that digit to be next in the string. Since <code>regex</code> only yields matches, if no matches are found the candidate will be filtered out.</p>
+<p>That's all the criteria! Now we've got a list of all of them, but all we really need is the count of them, so we'll switch from <code>toListOf</code> to <code>lengthOf</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb4-2"><a href="#cb4-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb4-3"><a href="#cb4-3"></a>        <span class="op">&amp;</span> lengthOf ( traversed <span class="op">.</span> re _Show</span>
+<span id="cb4-4"><a href="#cb4-4"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb4-5"><a href="#cb4-5"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
+<span id="cb4-6"><a href="#cb4-6"></a>                   )</span>
+<span id="cb4-7"><a href="#cb4-7"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb4-8"><a href="#cb4-8"></a></span>
+<span id="cb4-9"><a href="#cb4-9"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb4-10"><a href="#cb4-10"></a><span class="dv">889</span></span></code></pre></div>
+<p>That's the right answer, not bad!</p>
+<h2 id="part-2">Part 2</h2>
+<p>Part 2 only adds one more condition:</p>
+<ul>
+<li>The number must have a group of exactly 2 consecutive numbers, e.g. <code>333</code> is no good, but <code>33322</code> is fine.</li>
+</ul>
+<p>Currently we're just checking that it has at least two consecutive numbers, but we'll need to be smarter to check for groups of exactly 2. Luckily, it's not too tricky.</p>
+<p>The <code>regex</code> traversal finds ALL non-overlapping matches within a given piece of text, and the <code>+</code> modifier is greedy, so we know that for a given string <code>33322</code> our current pattern will find the matches: <code>["333", "22"]</code>. After that it's easy enough to just check that we have at least one match of length 2!</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb5-2"><a href="#cb5-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb5-3"><a href="#cb5-3"></a>        <span class="op">&amp;</span> lengthOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb5-4"><a href="#cb5-4"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb5-5"><a href="#cb5-5"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|] <span class="op">.</span> match <span class="op">.</span> to T.length <span class="op">.</span> only <span class="dv">2</span>)</span>
+<span id="cb5-6"><a href="#cb5-6"></a>                   )</span>
+<span id="cb5-7"><a href="#cb5-7"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb5-8"><a href="#cb5-8"></a></span>
+<span id="cb5-9"><a href="#cb5-9"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb5-10"><a href="#cb5-10"></a><span class="dv">589</span></span></code></pre></div>
+<p>I just get the match text, get its length, then use <code>only 2</code> to filter down to only lengths of 2. <code>filteredBy</code> will detect whether any of the matches make it through the whole fold and kick out any numbers that don't have a group of exactly 2 consecutive numbers.</p>
+<p>That's it for today! Hopefully tomorrow's is just as optical! 🤞</p>
+
+        <p>Hopefully you learned something 🤞! Did you know I'm launching a book about lenses and optics this month? It takes you all the way from an beginner to wizard in all categories of optics! Sign up <a href="https://leanpub.com/optics-by-example/">here</a> or follow the book on <a href="https://twitter.com/opticsbyexample">twitter</a> to hear when it's released.</p>
+    <!-- <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div> -->
+
+        <br>
+        <br>
+
+        <!--Share buttons-->
+        <div class="social-buttons">
+            <a href="https://twitter.com/share" class="twitter-share-button"
+                data-url="https://chrispenner.ca/posts/advent-of-optics-04" data-text="Check out: Advent of Optics: Day 4 - " data-via="chrislpenner">Tweet</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <div class="fb-like" data-href="https://chrispenner.ca/advent-of-optics-04" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+        </div>
+
+<!-- Disqus Comments -->
+<!-- <div id="disqus_thread"></div> -->
+<!-- <script type="text/javascript"> -->
+<!--     var disqus_shortname = 'chrispenner'; -->
+<!--     var disqus_identifier = ''; -->
+<!--     var disqus_url = 'http://chrispenner.ca'; -->
+
+<!-- (function() { -->
+    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+<!-- })(); -->
+<!-- </script> -->
+</article>
+
 </div>
 
 <footer>
