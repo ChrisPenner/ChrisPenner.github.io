@@ -33,7 +33,7 @@ main :: IO ()
 main =
   let shOpts = forwardOptions $ shakeOptions { shakeVerbosity = Chatty, shakeThreads=4}
    in shakeArgsForward shOpts $ do
-    allPosts <- buildPosts
+    allPosts <- sortByDate <$> buildPosts
     allTags <- getTags allPosts
     buildTags allTags
     buildIndex allPosts allTags
@@ -133,15 +133,15 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
   postContent <- readFile' srcPath
   -- load post content and metadata as JSON blob
   postData <- markdownToHTML . T.pack $ postContent
-  let postUrl = T.pack . dropDirectory1 $ srcPath
-  let withPostUrl = _Object . at "url" ?~ String postUrl
+  let postUrl = T.pack . dropDirectory1 . dropExtension $ srcPath
+  let withPostUrl = _Object . at "url" ?~ String ("/" <> postUrl)
   let withSlug =
         _Object . at "slug" ?~
         String (T.pack . dropExtension . takeBaseName $ srcPath)
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
   template <- compileTemplate' "site/templates/post.html"
-  writeFile' (outputFolder </> T.unpack postUrl </> "html") . T.unpack $ substitute template fullPostData
+  writeFile' (outputFolder </> T.unpack postUrl -<.> "html") . T.unpack $ substitute template fullPostData
   convert fullPostData
 
 buildIndex :: [Post] -> [Tag] -> Action ()
@@ -158,7 +158,6 @@ buildTags tags = do
 writeTag :: Tag -> Action ()
 writeTag t@Tag{tag, tagPosts, tagUrl} = cacheAction ("tag" :: T.Text, tag, postUrl <$> tagPosts) $ do
   tagTempl <- compileTemplate' "site/templates/tag.html"
-  liftIO . putStrLn $  "TAG: " <> tagUrl
   writeFile' (outputFolder <> tagUrl -<.> "html") . T.unpack $ substitute tagTempl (toJSON t)
 
 getTags :: [Post] -> Action [Tag]
