@@ -38,16 +38,15 @@ main =
     buildTags allTags
     buildIndex allPosts allTags
     buildFeed allPosts
-    -- copyStaticFiles
+    copyStaticFiles
 
 data IndexInfo = IndexInfo
   { indexPosts :: [Post]
   , indexTags :: [Tag]
   } deriving (Generic, Show)
 
-instance FromJSON IndexInfo
-
-instance ToJSON IndexInfo
+instance ToJSON IndexInfo where
+  toJSON = undefined
 
 data Tag = Tag
   { tag :: String
@@ -55,44 +54,62 @@ data Tag = Tag
   , tagUrl :: String
   } deriving (Generic, Show)
 
-instance FromJSON Tag
-
-instance ToJSON Tag
+instance ToJSON Tag where
+  toJSON Tag{..} = object
+    [ "tag" A..= tag
+    , "posts" A..= tagPosts
+    , "url" A..= tagUrl
+    ]
 
 data Post = Post
-  { title :: String
-  , author :: String
-  , content :: String
+  { postTitle :: String
+  , postAuthor :: String
+  , postContent :: String
   , postUrl :: String
-  , image :: Maybe String
-  , tags :: [String]
-  , nextPostURL :: Maybe String
-  , prevPostURL :: Maybe String
-  , isoDate :: String
-  , date :: String
-  , srcPath :: String
-  , description :: String
-  , slug :: String
+  , postImage :: Maybe String
+  , postTags :: [String]
+  , postNextPostURL :: Maybe String
+  , postPrevPostURL :: Maybe String
+  , postIsoDate :: String
+  , postDate :: String
+  , postSrcPath :: String
+  , postDescription :: String
+  , postSlug :: String
   } deriving (Generic, Eq, Ord, Show, Binary)
 
 instance FromJSON Post where
   parseJSON v = do
-    let title = v ^. key "title" . _String . unpacked
-        author = v ^. key "author" . _String . unpacked
-        date = v ^. key "date" . _String . unpacked
-        isoDate = formatDate date
-        content = v ^. key "content" . _String . unpacked
+    let postTitle = v ^. key "title" . _String . unpacked
+        postAuthor = v ^. key "author" . _String . unpacked
+        postDate = v ^. key "date" . _String . unpacked
+        postIsoDate = formatDate postDate
+        postContent = v ^. key "content" . _String . unpacked
         postUrl = v ^. key "url" . _String . unpacked
-        tags = v ^.. key "tags" . values . _String . unpacked
-        nextPostURL = Nothing
-        prevPostURL = Nothing
-        srcPath = v ^. key "srcPath" . _String . unpacked
-        image = v ^? key "image" . _String . unpacked
-        description = v ^. key "description" . _String . unpacked
-        slug = v ^. key "slug" . _String . unpacked
+        postTags = v ^.. key "tags" . values . _String . unpacked
+        postNextPostURL = Nothing
+        postPrevPostURL = Nothing
+        postSrcPath = v ^. key "srcPath" . _String . unpacked
+        postImage = v ^? key "image" . _String . unpacked
+        postDescription = v ^. key "description" . _String . unpacked
+        postSlug = v ^. key "slug" . _String . unpacked
      in return Post {..}
 
-instance ToJSON Post
+instance ToJSON Post where
+  toJSON Post{..} = object
+    [ "title" A..= postTitle
+    , "author" A..= postAuthor
+    , "content" A..= postContent
+    , "postUrl" A..= postUrl
+    , "image" A..= postImage
+    , "tags" A..= postTags
+    , "nextPostURL" A..= postNextPostURL
+    , "prevPostURL" A..= postPrevPostURL
+    , "isoDate" A..= postIsoDate
+    , "date" A..= postDate
+    , "srcPath" A..= postSrcPath
+    , "description" A..= postDescription
+    , "slug" A..= postSlug
+    ]
 
 postNames :: Action [FilePath]
 postNames = getDirectoryFiles "." ["site/posts//*.md"]
@@ -181,14 +198,14 @@ getTags posts = do
    return tagObjects
   where
     toMap :: Post -> Map String (Set Post)
-    toMap p@Post {tags} = M.unionsWith mappend (embed p <$> tags)
+    toMap p@Post {postTags} = M.unionsWith mappend (embed p <$> postTags)
     embed :: Post -> String -> Map String (Set Post)
     embed post tag = M.singleton tag (S.singleton post)
 
 sortByDate :: [Post] -> [Post]
 sortByDate = sortBy (flip compareDates)
   where
-    compareDates = compare `on` isoDate
+    compareDates = compare `on` postIsoDate
 
 formatDate :: String -> String
 formatDate humanDate = toIsoDate parsedTime
