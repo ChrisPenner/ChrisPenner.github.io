@@ -2,12 +2,161 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-12-02T22:11:43Z</updated>
+  <updated>2019-12-04T06:34:00Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Advent of Optics: Day 3</title>
+      <link href="https://chrispenner.ca/posts/advent-of-optics-03"/>
+      <id>https://chrispenner.ca/posts/advent-of-optics-03</id>
+      <updated>2019-12-03T00:00:00Z</updated>
+      <summary>Day 3 of Advent of Code solved with optics</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/pinecones.jpg" alt="Advent of Optics: Day 3">
+              <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a book on practical lenses and optics</a> later this month I thought it would be fun to do a few of this year's Advent of Code puzzles using as many obscure optics features as possible!</p>
+<p>To be clear, the goal is to be obscure, strange and excessive towards the goal of using as many optics as possible in a given solution, even if it's awkward, silly, or just plain overkill. These are NOT idiomatic Haskell solutions, nor are they intended to be. Maybe we'll both learn something along the way. Let's have some fun!</p>
+<p>You can find today's puzzle <a href="https://adventofcode.com/2019/day/3">here</a>.</p>
+<hr />
+<p>Today's didn't really have any phenomenal optics insights, but I did learn about some handy types and instances for handling points in space, so we'll run through it anyways and see if we can have some fun! You know the drill by now so I'll jump right in.</p>
+<p>Sorry, this one's a bit rushed and messy, turns out writing a blog post every day is pretty time consuming.</p>
+<p>We've got two sets of instructions, each representing paths of wires, and we need to find out <strong>where</strong> in the space they cross, then determine the distances of those points from the origin.</p>
+<p>We'll start as always with parsing in the input! They made it a bit harder on us this time, but it's certainly nothing that <code>lens-regex-pcre</code> can't handle. Before we try parsing out the individual instructions we need to split our instruction sets into one for each wire! I'll just use the <code>lines</code> function to split the file in two:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb1-2"><a href="#cb1-2"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-3"><a href="#cb1-3"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span></code></pre></div>
+<p>I'm using that handy <code>&lt;&amp;&gt;</code> pipelining operator, which basically allows me to pass the contents of a monadic action through a bunch of operations. It just so happens that <code>&gt;&gt;=</code> has the right precedence to tack it on the end!</p>
+<p>Now we've got a list of two <code>Text</code>s, with a path in each!</p>
+<p>Keeping a list of the two elements is fine of course, but since this is a post about optics and obfuscation, we'll pack them into a tuple just for fun:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb2-3"><a href="#cb2-3"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb2-4"><a href="#cb2-4"></a>               <span class="op">&gt;&gt;=</span> <span class="fu">print</span></span>
+<span id="cb2-5"><a href="#cb2-5"></a></span>
+<span id="cb2-6"><a href="#cb2-6"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb2-7"><a href="#cb2-7"></a>(<span class="st">&quot;R999,U626,R854,D200,R696,...&quot;</span>, <span class="st">&quot;D424,L846,U429,L632,U122,...&quot;</span>)</span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="op">&gt;&gt;&gt;</span> </span></code></pre></div>
+<p>This is a fun (and useless) trick! If you look closely, we're actually applying <code>traverseOf</code> to all of its arguments! What we're doing is applying <code>view</code> to each traversal (i.e. <code>ix 0</code>), which creates a <strong>function</strong> over our list of wire texts. <code>traverseOf</code> then sequences the <strong>function</strong> as the effect and returns a new function: <code>[Text] -&gt; (Text, Text)</code> which is pretty cool! When we pass in the list of wires this is applied and we get the tuple we want to pass forwards. We're using <code>view</code> on a traversal here, but it's all good because <code>Text</code> is a Monoid. This of course means that if the input doesn't have at least two lines of input that we'll continue on silently without any errors... but there aren't a lot of adrenaline pumping thrills in software development so I guess I'll take them where I can get them. We'll just trust that the input is good. We could use <code>singular</code> or even <code>preview</code> to be <em>safer</em> if we wanted, but ain't nobody got time for that in a post about crazy hacks!</p>
+<p>Okay! Next step is to figure out the crazy path that these wires are taking. To do that we'll need to parse the paths into some sort of pseudo-useful form. I'm going to reach for <code>lens-regex-pcre</code> again, at least to find each instruction. We want to run this over <strong>both</strong> sides of our tuple though, so we'll add a quick incantation for that as well</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="kw">import</span> <span class="dt">Linear</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a></span>
+<span id="cb3-3"><a href="#cb3-3"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb3-4"><a href="#cb3-4"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb3-5"><a href="#cb3-5"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb3-6"><a href="#cb3-6"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb3-7"><a href="#cb3-7"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb3-8"><a href="#cb3-8"></a>               <span class="op">&lt;&amp;&gt;</span> both <span class="op">%~</span></span>
+<span id="cb3-9"><a href="#cb3-9"></a>                     (   toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput)</span>
+<span id="cb3-10"><a href="#cb3-10"></a></span>
+<span id="cb3-11"><a href="#cb3-11"></a><span class="ot">parseInput ::</span> (<span class="dt">Char</span>, <span class="dt">String</span>) <span class="ot">-&gt;</span> (<span class="dt">Int</span>, <span class="dt">V2</span> <span class="dt">Int</span>)</span>
+<span id="cb3-12"><a href="#cb3-12"></a>parseInput (d, n) <span class="ot">=</span> (,) (<span class="fu">read</span> n) <span class="op">$</span> <span class="kw">case</span> d <span class="kw">of</span></span>
+<span id="cb3-13"><a href="#cb3-13"></a>    <span class="ch">&#39;U&#39;</span> <span class="ot">-&gt;</span> <span class="dt">V2</span> <span class="dv">0</span> (<span class="op">-</span><span class="dv">1</span>)</span>
+<span id="cb3-14"><a href="#cb3-14"></a>    <span class="ch">&#39;D&#39;</span> <span class="ot">-&gt;</span> <span class="dt">V2</span> <span class="dv">0</span> <span class="dv">1</span></span>
+<span id="cb3-15"><a href="#cb3-15"></a>    <span class="ch">&#39;L&#39;</span> <span class="ot">-&gt;</span> <span class="dt">V2</span> (<span class="op">-</span><span class="dv">1</span>) <span class="dv">0</span></span>
+<span id="cb3-16"><a href="#cb3-16"></a>    <span class="ch">&#39;R&#39;</span> <span class="ot">-&gt;</span> <span class="dt">V2</span> <span class="dv">1</span> <span class="dv">0</span></span>
+<span id="cb3-17"><a href="#cb3-17"></a></span>
+<span id="cb3-18"><a href="#cb3-18"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb3-19"><a href="#cb3-19"></a>([(<span class="dv">999</span>,<span class="dt">V2</span> <span class="dv">1</span> <span class="dv">0</span>),(<span class="dv">626</span>,<span class="dt">V2</span> <span class="dv">0</span> (<span class="op">-</span><span class="dv">1</span>)),<span class="op">...</span>], [(<span class="dv">854</span>,<span class="dt">V2</span> <span class="dv">1</span> <span class="dv">0</span>),(<span class="dv">200</span>,<span class="dt">V2</span> <span class="dv">0</span> <span class="dv">1</span>),<span class="op">...</span>]</span></code></pre></div>
+<p>Okay, there's a lot happening here, first I use the simple regex <code>\w\d+</code> to find each "instruction", then grab the full match as <code>Text</code>.</p>
+<p>Next in line I <code>unpack</code> it into a <code>String</code> since I'll need to use <code>Read</code> to parse the <code>Int</code>s.</p>
+<p>After that I use the <code>_Cons</code> prism to split the string into its first char and the rest, which happens to get us the direction and the distance to travel respectively.</p>
+<p>Then I run <code>parseInput</code> which converts the String into an Int with <code>read</code>, and converts the cardinal direction into a vector equivalent of that direction. This is going to come in handy soon I promise. I'm using <code>V2</code> from the <code>linear</code> package for my vectors here.</p>
+<p>Okay, so now we've parsed a list of instructions, but we need some way to determine where the wires intersect! The simplest possible way to do that is just to enumerate every single point that each wire passes through and see which ones they have in common; simple is good enough for me!</p>
+<p>Okay here's the clever bit, the way we've organized our directions is going to come in handy, I'm going to create <code>n</code> copies of each vector in our stream so we effectively have a single instruction for each movement we'll make!</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a>(toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput <span class="op">.</span> folding (<span class="fu">uncurry</span> <span class="fu">replicate</span>))</span></code></pre></div>
+<p><code>uncurry</code> will make <code>replicate</code> into the function: <code>replicate :: (Int, V2 Int) -&gt; [V2 Int]</code>, and <code>folding</code> will run that function, then flatten out the list into the focus of the fold. Ultimately this gives us just a huge list of unit vectors like this:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a>[<span class="dt">V2</span> <span class="dv">0</span> <span class="dv">1</span>, <span class="dt">V2</span> <span class="dv">1</span> <span class="dv">0</span>, <span class="dt">V2</span> (<span class="op">-</span><span class="dv">1</span>) <span class="dv">0</span><span class="op">...</span>]</span></code></pre></div>
+<p>This is great, but we also need to keep track of which actual positions this will cause us to walk, we need to <strong>accumulate</strong> our position across the whole list. Let's use a <code>scan</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">import</span> <span class="dt">Control.Category</span> ((&gt;&gt;&gt;))</span>
+<span id="cb6-2"><a href="#cb6-2"></a></span>
+<span id="cb6-3"><a href="#cb6-3"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb6-4"><a href="#cb6-4"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb6-5"><a href="#cb6-5"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb6-6"><a href="#cb6-6"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb6-7"><a href="#cb6-7"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb6-8"><a href="#cb6-8"></a>               <span class="op">&lt;&amp;&gt;</span> both <span class="op">%~</span></span>
+<span id="cb6-9"><a href="#cb6-9"></a>                     (   toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput <span class="op">.</span> folding (<span class="fu">uncurry</span> <span class="fu">replicate</span>))</span>
+<span id="cb6-10"><a href="#cb6-10"></a>                     <span class="op">&gt;&gt;&gt;</span> <span class="fu">scanl1</span> (<span class="op">+</span>)</span>
+<span id="cb6-11"><a href="#cb6-11"></a>                     <span class="op">&gt;&gt;&gt;</span> S.fromList</span>
+<span id="cb6-12"><a href="#cb6-12"></a>                     )</span>
+<span id="cb6-13"><a href="#cb6-13"></a>                     <span class="op">&gt;&gt;=</span> <span class="fu">print</span></span>
+<span id="cb6-14"><a href="#cb6-14"></a></span>
+<span id="cb6-15"><a href="#cb6-15"></a><span class="co">-- Trying to print this Set crashed my computer, </span></span>
+<span id="cb6-16"><a href="#cb6-16"></a><span class="co">-- but here&#39;s what it looked like on the way down:</span></span>
+<span id="cb6-17"><a href="#cb6-17"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb6-18"><a href="#cb6-18"></a>(S.fromList [<span class="dt">V2</span> <span class="dv">2003</span> <span class="dv">1486</span>,<span class="dt">V2</span> <span class="dv">2003</span> <span class="dv">1487</span>,<span class="op">...</span>], S.fromList [<span class="dt">V2</span> <span class="dv">1961</span> <span class="dv">86</span>,<span class="dt">V2</span> (<span class="op">-</span><span class="dv">433</span>), <span class="dv">8873</span>,<span class="op">...</span>])</span></code></pre></div>
+<p>Normally I really don't like <code>&gt;&gt;&gt;</code>, but it allows us to keep writing code top-to-bottom here, so I'll allow it just this once.</p>
+<p>The scan uses the <code>Num</code> instance of <code>V2</code> which adds the <code>x</code> and <code>y</code> components separately. This causes us to move in the right direction after every step, and keeps track of where we've been along the way! I dump the data into a set with <code>S.fromList</code> because next we're going to <code>intersect</code>!</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb7-2"><a href="#cb7-2"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb7-5"><a href="#cb7-5"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb7-6"><a href="#cb7-6"></a>               <span class="op">&lt;&amp;&gt;</span> both <span class="op">%~</span></span>
+<span id="cb7-7"><a href="#cb7-7"></a>                     (   toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput <span class="op">.</span> folding (<span class="fu">uncurry</span> <span class="fu">replicate</span>))</span>
+<span id="cb7-8"><a href="#cb7-8"></a>                     <span class="op">&gt;&gt;&gt;</span> <span class="fu">scanl1</span> (<span class="op">+</span>)</span>
+<span id="cb7-9"><a href="#cb7-9"></a>                     <span class="op">&gt;&gt;&gt;</span> S.fromList</span>
+<span id="cb7-10"><a href="#cb7-10"></a>                     )</span>
+<span id="cb7-11"><a href="#cb7-11"></a>               <span class="op">&lt;&amp;&gt;</span> foldl1Of each S.intersection</span>
+<span id="cb7-12"><a href="#cb7-12"></a>                     <span class="op">&gt;&gt;=</span> <span class="fu">print</span></span>
+<span id="cb7-13"><a href="#cb7-13"></a></span>
+<span id="cb7-14"><a href="#cb7-14"></a><span class="co">-- This prints a significantly shorter list and doesn&#39;t crash my computer</span></span>
+<span id="cb7-15"><a href="#cb7-15"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb7-16"><a href="#cb7-16"></a>fromList [<span class="dt">V2</span> (<span class="op">-</span><span class="dv">2794</span>) (<span class="op">-</span><span class="dv">390</span>),<span class="dt">V2</span> (<span class="op">-</span><span class="dv">2794</span>) <span class="dv">42</span>,<span class="op">...</span>]</span></code></pre></div>
+<p>Okay we've jumped back out of our <code>both</code> block, now we need to intersect the sets in our tuple! A normal person would use <code>uncurry S.intersection</code>, but since this is an optics post we'll of course use the excessive version <code>foldl1Of each S.intersection</code> which folds over <strong>each</strong> set using intersection! A bonus is that this version won't need to change if we eventually switch to many wires stored in a tuple or list, it'll <em>just work</em>™.</p>
+<p>Almost done! Now we need to find which intersection is <strong>closest</strong> to the origin. In our case the origin is just <code>(0, 0)</code>, so we can get the distance by simply summing the absolute value of the aspects of the Vector (which is acting as a Point).</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb8-2"><a href="#cb8-2"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb8-4"><a href="#cb8-4"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb8-5"><a href="#cb8-5"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb8-6"><a href="#cb8-6"></a>               <span class="op">&lt;&amp;&gt;</span> both <span class="op">%~</span></span>
+<span id="cb8-7"><a href="#cb8-7"></a>                     (   toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput <span class="op">.</span> folding (<span class="fu">uncurry</span> <span class="fu">replicate</span>))</span>
+<span id="cb8-8"><a href="#cb8-8"></a>                     <span class="op">&gt;&gt;&gt;</span> <span class="fu">scanl1</span> (<span class="op">+</span>)</span>
+<span id="cb8-9"><a href="#cb8-9"></a>                     <span class="op">&gt;&gt;&gt;</span> S.fromList</span>
+<span id="cb8-10"><a href="#cb8-10"></a>                     )</span>
+<span id="cb8-11"><a href="#cb8-11"></a>               <span class="op">&lt;&amp;&gt;</span> foldl1Of each S.intersection</span>
+<span id="cb8-12"><a href="#cb8-12"></a>               <span class="op">&lt;&amp;&gt;</span> minimumOf (folded <span class="op">.</span> to (<span class="fu">sum</span> <span class="op">.</span> <span class="fu">abs</span>))</span>
+<span id="cb8-13"><a href="#cb8-13"></a>                     <span class="op">&gt;&gt;=</span> <span class="fu">print</span></span>
+<span id="cb8-14"><a href="#cb8-14"></a></span>
+<span id="cb8-15"><a href="#cb8-15"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb8-16"><a href="#cb8-16"></a><span class="dt">Just</span> <span class="dv">399</span></span></code></pre></div>
+<p>And that's my answer! Wonderful!</p>
+<h2 id="part-2">Part 2</h2>
+<p>Part 2 is a pretty reasonable twist, now we need to pick the intersection which is the fewest number of steps <strong>along the wire</strong> from the origin. We sum together the steps along each wire and optimize for the smallest total.</p>
+<p>Almost all of our code stays the same, but a Set isn't going to cut it anymore, we need to know which <strong>step</strong> we were on when we reached each location! <code>Map</code>s are kinda like sets with extra info, so we'll switch to that instead. Instead of using <code>S.fromList</code> we'll use <code>toMapOf</code>! We need the index of each element in the list (which corresponds to it's distance from the origin along the wire). a simple <code>zip [0..]</code> would do it, but we'll use the much more obtuse version:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a>toMapOf (reindexed (<span class="op">+</span><span class="dv">1</span>) traversed <span class="op">.</span> withIndex <span class="op">.</span> swapped <span class="op">.</span> ito <span class="fu">id</span>)</span></code></pre></div>
+<p>Fun right? <code>traversed</code> has a numerically increasing index by default, <code>reindexed (+1)</code> makes it start at <code>1</code> instead (since the first step still counts!). Make sure you don't forget this or you'll be confused for a few minutes before realizing your answer is off by 2...</p>
+<p><code>toMapOf</code> uses the index as the key, but in our case we actually need the vector as the key! Again, easiest would be to just use a proper <code>M.fromList</code>, but we won't give up so easily. We need to swap our index and our value within our lens path! We can pull the index down from it's hiding place into value-land using <code>withIndex</code> which adds the index to your value as a tuple, in our case: <code>(Int, V2 Int)</code>, then we swap places using the <code>swapped</code> iso, and reflect the <code>V2 Int</code> into the index using <code>ito</code>:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">ito ::</span> (s <span class="ot">-&gt;</span> (i, a)) <span class="ot">-&gt;</span> <span class="dt">IndexedGetter</span> i s a</span></code></pre></div>
+<p>Now <code>toMapOf</code> properly builds a <code>Map (V2 Int) Int</code>!</p>
+<p>Let's finish off part 2:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">main2 ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb11-2"><a href="#cb11-2"></a>main2 <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb11-3"><a href="#cb11-3"></a>    TIO.readFile <span class="st">&quot;./src/Y2019/day03.txt&quot;</span></span>
+<span id="cb11-4"><a href="#cb11-4"></a>               <span class="op">&lt;&amp;&gt;</span> T.lines</span>
+<span id="cb11-5"><a href="#cb11-5"></a>               <span class="op">&lt;&amp;&gt;</span> traverseOf both view (ix <span class="dv">0</span>, ix <span class="dv">1</span>)</span>
+<span id="cb11-6"><a href="#cb11-6"></a>               <span class="op">&lt;&amp;&gt;</span> each <span class="op">%~</span></span>
+<span id="cb11-7"><a href="#cb11-7"></a>                     (   toListOf ([regex|\w\d+|] <span class="op">.</span> match <span class="op">.</span> unpacked <span class="op">.</span> _Cons <span class="op">.</span> to parseInput <span class="op">.</span> folding (<span class="fu">uncurry</span> <span class="fu">replicate</span>))</span>
+<span id="cb11-8"><a href="#cb11-8"></a>                     <span class="op">&gt;&gt;&gt;</span> <span class="fu">scanl1</span> (<span class="op">+</span>)</span>
+<span id="cb11-9"><a href="#cb11-9"></a>                     <span class="op">&gt;&gt;&gt;</span> toMapOf (reindexed (<span class="op">+</span><span class="dv">1</span>) traversed <span class="op">.</span> withIndex <span class="op">.</span> swapped <span class="op">.</span> ito <span class="fu">id</span>)</span>
+<span id="cb11-10"><a href="#cb11-10"></a>                     )</span>
+<span id="cb11-11"><a href="#cb11-11"></a>               <span class="op">&lt;&amp;&gt;</span> foldl1Of each (M.intersectionWith (<span class="op">+</span>))</span>
+<span id="cb11-12"><a href="#cb11-12"></a>               <span class="op">&lt;&amp;&gt;</span> <span class="fu">minimum</span></span>
+<span id="cb11-13"><a href="#cb11-13"></a>               <span class="op">&gt;&gt;=</span> <span class="fu">print</span></span></code></pre></div>
+<p>We use <code>M.intersectionWith (+)</code> now so we add the distances when we hit an intersection, so our resulting Map has the sum of the two wires' distances at each intersection.</p>
+<p>Now we just get the minimum distance and print it! All done!</p>
+<p>This one wasn't so "opticsy", but hopefully tomorrow's puzzle will fit a bit better! Cheers!</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Advent of Optics: Day 2</title>
       <link href="https://chrispenner.ca/posts/advent-of-optics-02"/>
