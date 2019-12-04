@@ -102,7 +102,7 @@ instance ToJSON Post where
     [ "title"       A..= postTitle
     , "author"      A..= postAuthor
     , "content"     A..= postContent
-    , "postUrl"     A..= postUrl
+    , "url"         A..= postUrl
     , "image"       A..= postImage
     , "tags"        A..= postTags
     , "nextPostURL" A..= postNextPostURL
@@ -117,9 +117,9 @@ instance ToJSON Post where
 -- | Copy all static files from the listed folders to their destination
 copyStaticFiles :: Action ()
 copyStaticFiles = do
-    filepaths <- getDirectoryFiles "" ["site/images//*", "site/css//*", "site/js//*"]
+    filepaths <- getDirectoryFiles "site/" ["images//*", "css//*", "js//*"]
     void $ forP filepaths $ \filepath ->
-        copyFileChanged filepath (outputFolder </> filepath)
+        copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
 
 buildPosts :: Action [Post]
 buildPosts = do
@@ -133,7 +133,7 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
   postContent <- readFile' srcPath
   -- load post content and metadata as JSON blob
   postData <- markdownToHTML . T.pack $ postContent
-  let postUrl = T.pack . dropDirectory1 $ srcPath -<.> "html"
+  let postUrl = T.pack . dropDirectory1 $ srcPath
   let withPostUrl = _Object . at "url" ?~ String postUrl
   let withSlug =
         _Object . at "slug" ?~
@@ -141,7 +141,7 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
   template <- compileTemplate' "site/templates/post.html"
-  writeFile' (outputFolder </> T.unpack postUrl) . T.unpack $ substitute template fullPostData
+  writeFile' (outputFolder </> T.unpack postUrl </> "html") . T.unpack $ substitute template fullPostData
   convert fullPostData
 
 buildIndex :: [Post] -> [Tag] -> Action ()
@@ -156,9 +156,10 @@ buildTags tags = do
     void $ forP tags writeTag
 
 writeTag :: Tag -> Action ()
-writeTag t@Tag{tag, tagPosts} = cacheAction ("tag" :: T.Text, postUrl <$> tagPosts) $ do
+writeTag t@Tag{tag, tagPosts, tagUrl} = cacheAction ("tag" :: T.Text, tag, postUrl <$> tagPosts) $ do
   tagTempl <- compileTemplate' "site/templates/tag.html"
-  writeFile' (outputFolder </> tag) . T.unpack $ substitute tagTempl (toJSON t)
+  liftIO . putStrLn $  "TAG: " <> tagUrl
+  writeFile' (outputFolder <> tagUrl -<.> "html") . T.unpack $ substitute tagTempl (toJSON t)
 
 getTags :: [Post] -> Action [Tag]
 getTags posts = do
