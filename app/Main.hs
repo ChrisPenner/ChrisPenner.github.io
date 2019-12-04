@@ -6,7 +6,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Main where
+module Main (main) where
 
 import Control.Lens
 import Data.Aeson as A
@@ -46,7 +46,10 @@ data IndexInfo = IndexInfo
   } deriving (Generic, Show)
 
 instance ToJSON IndexInfo where
-  toJSON = undefined
+  toJSON IndexInfo{..} = object
+    [ "posts" A..= indexPosts
+    , "tags"  A..= indexTags
+    ]
 
 data Tag = Tag
   { tag :: String
@@ -96,39 +99,27 @@ instance FromJSON Post where
 
 instance ToJSON Post where
   toJSON Post{..} = object
-    [ "title" A..= postTitle
-    , "author" A..= postAuthor
-    , "content" A..= postContent
-    , "postUrl" A..= postUrl
-    , "image" A..= postImage
-    , "tags" A..= postTags
+    [ "title"       A..= postTitle
+    , "author"      A..= postAuthor
+    , "content"     A..= postContent
+    , "postUrl"     A..= postUrl
+    , "image"       A..= postImage
+    , "tags"        A..= postTags
     , "nextPostURL" A..= postNextPostURL
     , "prevPostURL" A..= postPrevPostURL
-    , "isoDate" A..= postIsoDate
-    , "date" A..= postDate
-    , "srcPath" A..= postSrcPath
+    , "isoDate"     A..= postIsoDate
+    , "date"        A..= postDate
+    , "srcPath"     A..= postSrcPath
     , "description" A..= postDescription
-    , "slug" A..= postSlug
+    , "slug"        A..= postSlug
     ]
-
-postNames :: Action [FilePath]
-postNames = getDirectoryFiles "." ["site/posts//*.md"]
-
-destToSrc :: FilePath -> FilePath
-destToSrc p = "site" </> dropDirectory1 p
-
-srcToDest :: FilePath -> FilePath
-srcToDest p = "dist" </> dropDirectory1 p
-
-srcToURL :: FilePath -> String
-srcToURL = ("/" ++) . dropDirectory1 . dropExtension
 
 -- | Copy all static files from the listed folders to their destination
 copyStaticFiles :: Action ()
 copyStaticFiles = do
     filepaths <- getDirectoryFiles "" ["site/images//*", "site/css//*", "site/js//*"]
     void $ forP filepaths $ \filepath ->
-        copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
+        copyFileChanged filepath (outputFolder </> filepath)
 
 buildPosts :: Action [Post]
 buildPosts = do
@@ -139,7 +130,6 @@ buildPosts = do
 -- Detects changes to either post content or template
 buildPost :: FilePath -> Action Post
 buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
-  liftIO . putStrLn $ "Rebuilding post: " <> srcPath
   postContent <- readFile' srcPath
   -- load post content and metadata as JSON blob
   postData <- markdownToHTML . T.pack $ postContent
@@ -150,8 +140,6 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
         String (T.pack . dropExtension . takeBaseName $ srcPath)
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
-  -- (prevPostURL, nextPostURL) <- getNeighbours postUrl <$> sortedPostURLsCache
-  -- let withNeighbours = post {nextPostURL, prevPostURL}
   template <- compileTemplate' "site/templates/post.html"
   writeFile' (outputFolder </> T.unpack postUrl) . T.unpack $ substitute template fullPostData
   convert fullPostData
@@ -163,11 +151,6 @@ buildIndex allPosts allTags = do
       indexHTML = T.unpack $ substitute indexT (toJSON indexInfo)
   writeFile' (outputFolder </> "index.html") indexHTML
 
-findPosts :: Action ()
-findPosts = do
-  pNames <- postNames
-  need ((\p -> srcToDest p -<.> "html") <$> pNames)
-
 buildTags :: [Tag] -> Action ()
 buildTags tags = do
     void $ forP tags writeTag
@@ -176,16 +159,6 @@ writeTag :: Tag -> Action ()
 writeTag t@Tag{tag, tagPosts} = cacheAction ("tag" :: T.Text, postUrl <$> tagPosts) $ do
   tagTempl <- compileTemplate' "site/templates/tag.html"
   writeFile' (outputFolder </> tag) . T.unpack $ substitute tagTempl (toJSON t)
-
-getNeighbours :: String -> [String] -> (Maybe String, Maybe String)
-getNeighbours i xs =
-  let ms = pure <$> xs
-   in go ([Nothing] <> ms <> [Nothing])
-  where
-    go (before:Just current:after:_)
-      | current == i = (before, after)
-    go (_:rest) = go rest
-    go [] = (Nothing, Nothing)
 
 getTags :: [Post] -> Action [Tag]
 getTags posts = do
@@ -243,4 +216,13 @@ data AtomData = AtomData
   , url :: String
   } deriving (Generic, Eq, Ord, Show)
 
-instance ToJSON AtomData
+instance ToJSON AtomData where
+  toJSON AtomData{..} = object
+    [ "title" A..= title
+    , "domain" A..= domain
+    , "author" A..= author
+    , "posts" A..= posts
+    , "currentTime" A..= currentTime
+    , "url" A..= url
+    ]
+
