@@ -9,6 +9,15 @@ html, body, div, span, object, h1, h2, h3, h4, h5, h6, p, a, abbr, acronym, em, 
   margin: 0;
   padding: 0; }
 
+:root {
+  --bg: var(--base00);
+  --fg: var(--base07);
+  --highlight-fg: var(--base0D);
+  --fade-fg: var(--base06);
+  --highlight-bg: var(--base0E);
+  --light-bg: var(--base01);
+}
+
 html {
   box-sizing: border-box; }
 
@@ -18,10 +27,8 @@ html {
 /* Variables */
 html {
   font-family: georgia, serif;
-  color: #333;
-  background: #FFFFFC;
-  background: -webkit-linear-gradient(top, #EEE 0%, #FFF 10%, #FFF 90%, #EEE 100%);
-  background: linear-gradient(to bottom, #EEE 0%, #FFF 10%, #FFF 90%, #EEE 100%);
+  color: var(--fg);
+  background: var(--bg);
   background-attachment: fixed;
   height: 100%;
   width: 100%;
@@ -103,7 +110,7 @@ img {
   margin: auto; }
 
 a, a:visited, a:hover {
-  color: #EB005B;
+  color: var(--highlight-fg);
   text-decoration: none;
   -webkit-transition: color 0.1s;
           transition: color 0.1s; }
@@ -197,14 +204,14 @@ footer {
   text-align: center; }
 
 .date {
-  color: rgba(128, 128, 128, 0.5);
+  color: var(--fade-fg);
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
   font-family: helvetica, sans-serif; }
 
 .categories, .tags {
-  color: rgba(128, 128, 128, 0.5);
+  color: var(--fg);
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
@@ -219,16 +226,17 @@ a.tag, a.category {
   margin: 2px 1px;
   border-radius: 4px;
   display: inline-block;
-  color: #333;
+  color: var(--fg);
   border: 1px solid rgba(76, 76, 76, 0.9);
   -webkit-transition: 0.3s;
           transition: 0.3s; }
   a.tag:hover, a.category:hover {
-    background: #333;
-    color: #FFFFFC;
+    background: var(--highlight-bg);
+    color: var(--fg);
     text-decoration: none; }
   .dark a.tag, .dark a.category {
-    color: #DDD; }
+    color: #DDD; 
+  }
     .dark a.tag:hover, .dark a.category:hover {
       background: #DDD;
       color: #333;
@@ -298,7 +306,7 @@ a.tag, a.category {
   .table-of-contents li {
     width: 100%; }
     .table-of-contents li a {
-      color: #333;
+      color: var(--fg);
       font-weight: normal;
       box-sizing: border-box;
       border-top: 1px solid #444;
@@ -312,9 +320,10 @@ a.tag, a.category {
       .table-of-contents li a .date {
         float: right;
         margin-top: -0.25em;
-        color: rgba(128, 128, 128, 0.8); }
+        /* color: rgba(128, 128, 128, 0.8); */ 
+      }
       .table-of-contents li a:hover {
-        background: #333;
+        background: var(--highlight-bg);
         color: #FFFFFC;
         text-decoration: none;
         padding-left: 2em; }
@@ -358,8 +367,8 @@ a.tag, a.category {
   .arrow:hover {
     box-sizing: border-box;
     width: 2em;
-    color: #EB005B;
-    border: 1px solid #EB005B;
+    color: var(--highlight-fg);
+    border: 1px solid var(--highlight-fg);
     opacity: 0.9;
     background: #FFFFFC;
     -webkit-transition: background 0.5s, opacity 0.5s, width 0.5s;
@@ -505,7 +514,8 @@ a.tag, a.category {
   header {
     color: #FFFFFC;
     height: 3em;
-    background: rgba(76, 76, 76, 0.9); }
+    background: var(--light-bg);
+  }
 
   #beacon {
     color: #FFFFFC;
