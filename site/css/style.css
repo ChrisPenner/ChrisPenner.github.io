@@ -13,6 +13,8 @@ html, body, div, span, object, h1, h2, h3, h4, h5, h6, p, a, abbr, acronym, em, 
   --bg: var(--base00);
   --fg: var(--base07);
   --highlight-fg: var(--base0D);
+  --title-fg: var(--base08);
+  --title-two-fg: var(--base09);
   --fade-fg: var(--base06);
   --highlight-bg: var(--base08);
   --light-bg: var(--base01);
@@ -59,16 +61,30 @@ body {
       -ms-flex-pack: center;
           justify-content: center; }
 
+h1 {
+  color: var(--highlight-fg);
+  font-family: "Quicksand", "helvetica neue", sans-serif;
+  font-weight: bold;
+  font-size: 2.5em;
+  text-align: center;
+  width: 80%;
+  margin: 0 auto 0;
+  padding: 1em 0 0 0; 
+}
+
 h2 {
-  font-family: inherit;
-  font-size: 1.25em;
-  text-decoration: underline;
+  color: var(--title-fg);
+  font-family: "Quicksand", "helvetica neue", sans-serif;
+  font-weight: bold;
+  font-size: 2em;
   text-align: center;
   width: 80%;
   margin: 0 auto 0;
   padding: 1em 0 0 0; }
 
 h3 {
+  font-family: "helvetica neue", sans-serif;
+  color: var(--title-two-fg);
   font-size: 1.4em;
   margin: 0.5em 0;
   text-align: center; }
@@ -148,13 +164,13 @@ footer {
   margin: auto; }
 
 .title {
-  font-family: "Quicksand", helvetica, sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: 400;
   font-size: 3em;
   text-transform: capitalize; }
 
 .byline {
-  font-family: helvetica, sans-serif;
+  font-family: "helvetica neue", sans-serif;
   font-style: italic;
   font-weight: 100;
   font-size: 1em; }
@@ -212,14 +228,15 @@ footer {
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
-  font-family: helvetica, sans-serif; }
+  font-family: "helvetica neue", sans-serif; 
+}
 
 .categories, .tags {
   color: var(--fg);
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
-  font-family: helvetica, sans-serif;
+  font-family: "helvetica neue", sans-serif;
   width: 100%;
   max-width: 500px;
   display: block;
@@ -303,7 +320,8 @@ a.tag, a.category {
   .table-of-contents h1 {
     font-size: 3em;
     text-align: center;
-    font-family: "Quicksand", helvetica, sans-serif; }
+    font-family: "Quicksand", "helvetica neue", sans-serif;
+  }
   .table-of-contents ul {
     margin: 3em 0;
     list-style: none; }
@@ -462,7 +480,7 @@ a.tag, a.category {
 
 #theme-button {
   text-transform: uppercase;
-  font-family: "Quicksand", helvetica, sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-size: 1.5em;
   font-weight: bold;
   text-align: right;
@@ -476,7 +494,7 @@ a.tag, a.category {
     color: #DDD; }
 
 #beacon {
-  font-family: "Oswald", helvetica, sans-serif;
+  font-family: "Oswald",  sans-serif;
   font-size: 4em;
   height: 1.5em;
   width: 1.5em;
