@@ -14,7 +14,7 @@ html, body, div, span, object, h1, h2, h3, h4, h5, h6, p, a, abbr, acronym, em, 
   --fg: var(--base07);
   --highlight-fg: var(--base0D);
   --fade-fg: var(--base06);
-  --highlight-bg: var(--base0E);
+  --highlight-bg: var(--base08);
   --light-bg: var(--base01);
 }
 
