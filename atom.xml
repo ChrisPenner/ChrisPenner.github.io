@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-12-04T17:41:31Z</updated>
+  <updated>2019-12-06T00:02:39Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -4973,8 +4973,9 @@
 <p>The Unix core's structure is very well defined, you know where to look for your programs, hard-drives, configuration files, etc. Your home folder is kept separate for your own personal use where you won't accidentally mess with anything important. Everything is properly modularized for easy organization and security. The 'root' permissions system seems much more secure than the Windows 'always administrator' approach that most people default to. Unfortunately, my laptop wasn't supported 100% in everything, so I had to do a little fiddling to get things like my function keys and headphone jack to work properly, but once configured it worked fine. Flash was an issue, my browsers couldn't load YouTube videos or listen to flash-based music players, but after installing a more recent version of Ubuntu most of those problems went away. Overall it worked great and I really enjoyed the system, but Linux still has fewer options available for software than the other OS's.</p>
 <h2 id="mac">Mac</h2>
 <p>I had never had an apple computer before, in fact prior to purchasing my macbook I had never purchased a single product from apple. I knew their reputation well however, "It just works!" my friends would exclaim. I liked the idea of it, but of course I used Windows with pride, sure it was a little tougher to do some things, but hey, I'm a Computer Science student so of course I can figure it out. Of course, I never stopped to ask myself weather I should actually have to put that work in. The philosophy and design of apple products eluded me, I just wasn't convinced. Then I started comparing bullet points.</p>
-##Pros/Cons
-<p>###Windows <strong>Pros</strong></p>
+<h2 id="proscons">Pros/Cons</h2>
+<h3 id="windows-1">Windows</h3>
+<p><strong>Pros</strong></p>
 <ul>
 <li>Familiarity</li>
 <li>Well-supported</li>
@@ -4986,7 +4987,8 @@
 <li>Difficulty with programming tools</li>
 <li>Bad command-line (bring on the hate-mail)</li>
 </ul>
-<p>###Linux (Ubuntu) <strong>Pros</strong></p>
+<h3 id="linux-ubuntu">Linux (Ubuntu)</h3>
+<p><strong>Pros</strong></p>
 <ul>
 <li>Open Source</li>
 <li>Constantly updated</li>
@@ -4999,7 +5001,8 @@
 <li>Poorly supported on some hardware</li>
 <li>Less choice of software</li>
 </ul>
-<p>###OSX <strong>Pros</strong></p>
+<h3 id="osx">OSX</h3>
+<p><strong>Pros</strong></p>
 <ul>
 <li>Lots of software available</li>
 <li>Powerful and reliable hardware.</li>
