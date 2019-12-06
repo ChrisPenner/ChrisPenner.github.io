@@ -24,8 +24,8 @@ The Unix core's structure is very well defined, you know where to look for your 
 ## Mac
 I had never had an apple computer before, in fact prior to purchasing my macbook I had never purchased a single product from apple. I knew their reputation well however, "It just works!" my friends would exclaim. I liked the idea of it, but of course I used Windows with pride, sure it was a little tougher to do some things, but hey, I'm a Computer Science student so of course I can figure it out. Of course, I never stopped to ask myself weather I should actually have to put that work in. The philosophy and design of apple products eluded me, I just wasn't convinced. Then I started comparing bullet points.
 
-##Pros/Cons
-###Windows
+## Pros/Cons
+### Windows
 **Pros**
 
 * Familiarity
@@ -38,7 +38,7 @@ I had never had an apple computer before, in fact prior to purchasing my macbook
 * Difficulty with programming tools
 * Bad command-line (bring on the hate-mail)
 
-###Linux (Ubuntu)
+### Linux (Ubuntu)
 **Pros**
 
 * Open Source
@@ -52,7 +52,7 @@ I had never had an apple computer before, in fact prior to purchasing my macbook
 * Poorly supported on some hardware
 * Less choice of software
 
-###OSX
+### OSX
 **Pros**
 
 * Lots of software available

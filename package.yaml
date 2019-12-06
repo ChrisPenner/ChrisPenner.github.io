@@ -12,9 +12,10 @@ ghc-options:
 - -threaded
 - -rtsopts
 - -with-rtsopts=-N
+- -Wall
 dependencies:
 - base
-- slick ==0.1.1.0
+- slick >=1.0.0.0
 - shake
 - text
 - mustache >=2.2.3
@@ -26,6 +27,7 @@ dependencies:
 - binary
 - bytestring
 - containers
+
 executables:
   build-site:
     main: Main.hs

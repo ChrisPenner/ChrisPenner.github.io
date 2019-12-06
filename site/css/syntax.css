@@ -1,32 +1,46 @@
+
+:root {
+  --code-bg: var(--base01);
+  --code-fg: var(--base07);
+  --code-comment: var(--base05);
+  --code-keyword: var(--base0D);
+  --code-symbol: var(--base08);
+  --code-data: var(--base0A);
+  --code-number: var(--base0C);
+  --code-char: var(--base0C);
+  --code-alert: var(--base09);
+  --code-function: var(--base09);
+}
+
 pre {
-    background-color: #F5FCFF;
+    background-color: var(--code-bg);
 }
 
 code {
-    background-color: #F5FCFF;
-    color: #268BD2;
+    background-color: var(--code-bg);
+    color: var(--code-fg);
 }
 
 /* KeyWordTok */
-.sourceCode .kw { color: #600095; }
+.sourceCode .kw { color: var(--code-keyword); }
 /* DataTypeTok */
-.sourceCode .dt { color: #268BD2; }
+.sourceCode .dt { color: var(--code-data); }
 
 /* DecValTok (decimal value), BaseNTok, FloatTok */
-.sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: #AE81FF; }
+.sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: var(--code-number); }
 /* CharTok */
-.sourceCode .ch { color: #37ad2d; }
+.sourceCode .ch { color: var(--code-char); }
 /* StringTok */
-.sourceCode .st { color: #37ad2d; }
+.sourceCode .st { color: var(--code-char); }
 /* CommentTok */
-.sourceCode .co { color: #7E8E91; }
+.sourceCode .co { color: var(--code-comment); }
 /* OtherTok */
-.sourceCode .ot { color: #EB005B; }
+.sourceCode .ot { color: var(--code-symbol); }
 /* AlertTok */
-.sourceCode .al { color: #A6E22E; font-weight: bold; }
+.sourceCode .al { color: var(--code-alert); font-weight: bold; }
 /* FunctionTok */
-.sourceCode .fu { color: #333; }
+.sourceCode .fu { color: var(--code-function); }
 /* RegionMarkerTok */
 .sourceCode .re { }
 /* ErrorTok */
-.sourceCode .er { color: #E6DB74; font-weight: bold; }
+.sourceCode .er { color: var(--code-alert); font-weight: bold; }
