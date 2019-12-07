@@ -156,7 +156,7 @@ buildTags tags = do
     void $ forP tags writeTag
 
 writeTag :: Tag -> Action ()
-writeTag t@Tag{tag, tagUrl} = cacheAction ("tag" :: T.Text, tag) $ do
+writeTag t@Tag{tagUrl} = do
   tagTempl <- compileTemplate' "site/templates/tag.html"
   writeFile' (outputFolder <> tagUrl -<.> "html") . T.unpack $ substitute tagTempl (toJSON t)
 
