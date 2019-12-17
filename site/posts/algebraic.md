@@ -376,6 +376,7 @@ We manually pair all the associated elements, then construct a new set of measur
 
 Now we can finally find out what species the average flower is closest to!
 
+
 ```haskell
 >>> flowers & measurements >- avgMeasurement
 Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
@@ -384,6 +385,31 @@ Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
 Looks like it's closest to the Versicolor species!
 
 We can substitute `avgMeasurement` for any sort of aggregation function of type `[Measurements] -> Measurements` and this expression will run it on our data-set and return the species which is closest to those measurements. Pretty cool stuff!
+
+## Custom container types
+
+We've stuck with a list so far since it's easy to think about, but algebraic lenses work over any container type so long as you can implement the aggregation functions you want on them. In this case we only require Foldable for our classifier, so we can hot-swap our list for a Map without any changes!
+
+```haskell
+>>> M.fromList [(1.2, setosa), (0.6, versicolor)] 
+      & measurements >- avgMeasurement
+Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+```
+
+This gives us the same answer of course since the foldable instance simply ignores the keys, but the container type is carried through any composition of algebraic lenses, so that means our aggregation function now has type: `Map Float Measurements -> Measurements`, see how it still projects from `Flower` into `Measurements` even inside the map? Let's say we want to run a scaling factor over each of our measurements as part of aggregating them, we can bake it into the aggregation like this:
+
+```haskell
+applyWeight :: Float -> Measurements -> Measurements
+applyWeight w (Measurements m) = Measurements (fmap (*w) m)
+
+>>> M.fromList [(1.2, setosa), (0.6, versicolor)] 
+      & measurements >- avgMeasurement . fmap (uncurry applyWeight) . M.toList
+Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+```
+
+Running the aggregation with these scaling factors changed our result, as well as showing us what the average flower would be if we scaled each flower by the amount provided in the input map.
+
+This isn't a perfect example of what other containers could be used for, but I'm sure folks will be dreaming up clever ideas in no time!
 
 ## Summarizing Algebraic Lenses
 
