@@ -40,7 +40,7 @@ This is all very fuzzy and vague, so let's start trying to implement this.
 
 ## First guesses at an implementation
 
-Let's start by taking a look at the examples provided in the abstract. Unfortnately we're only given a few very small snippets without any source code or even type-signatures to help us out, so I'll be mostly guessing my way through this. I'll need to take a few creative liberties to get everything to wire together. 
+Let's start by taking a look at the examples provided in the abstract. Unfortunately we're only given a few very small snippets without any source code or even type-signatures to help us out, so I'll be mostly guessing my way through this. I'll need to take a few creative liberties to get everything to wire together. 
 
 The abstract uses Kaleidoscopes and Algebraic lenses for classifying flowers into species by analyzing their measurements.  These are the examples in the abstract:
 
@@ -259,18 +259,6 @@ instance Algebraic (Forget r) where
 
 Well that was pretty painless!
 
-Here are a few more handy instances:
-
-```haskell
-instance Algebraic (->) where
-  algebraic project flatten p = run
-    where
-      run s = flatten ([s], p . project $ s)
-
-instance Algebraic Tagged where
-  algebraic project flatten (Tagged b) = Tagged (flatten ([], b))
-```
-
 Okay, with that, we just need to re-implement our `measurements` optic using `Algebraic`:
 
 ```haskell
@@ -287,3 +275,94 @@ Then we can view through our `measurements` optic, fulfilling the first example:
 >>> (flowers !! 1) ^. measurements
 Measurements {getMeasurements = [5.0,4.0,3.0,2.5]}
 ```
+
+As it turns out, `(->)` is also a Corepresentable profunctor, so we can implement `Algebraic` for that too!
+
+```haskell
+instance Algebraic (->) where
+  algebraic project flatten p = run
+    where
+      run s = flatten ([s], p . project $ s)
+```
+
+And in profunctor-land, `(->)` is used for setters and modifiers, so we can now set/modify measurements through our algebraic lens!
+
+```haskell
+>>> flower1 & measurements .~ Measurements [9, 8, 7, 6]
+Flower Versicolor Measurements [9.0,8.0,7.0,6.0]
+```
+
+Since we can get and set, our algebraic lens is indeed a full-blown lens! This is really interesting actually since we didn't make any use of `Strong` which is how most lenses are implemented.
+
+Here's one last interesting instance:
+
+```haskell
+instance Algebraic Tagged where
+  algebraic project flatten (Tagged b) = Tagged (flatten ([], b))
+```
+
+Tagged is used for `Review`, which means we can try running our algebraic lens as a review:
+
+```haskell
+>>> review measurements (Measurements [1, 2, 3, 4])
+Flower {flowerSpecies = *** Exception: Prelude.foldl1: empty list
+```
+
+Unfortunately this doesn't work because `classify` is partial when the container is empty, we should probably add additional constraints to prevent this from happening in the future, but what it DOES mean is that we can use our algebraic lenses with `review` so long as they don't assume a non-empty container, pretty cool!
+
+## Aggregating with Kaleidoscopes
+
+Now that we've got our classifier lens all figured out, we'd love to be able to use it to run classification over our data-set in interesting ways! The abstract provides an example:
+
+```haskell
+>>> iris >- measurements . aggregateWith mean
+Iris Versicolor (5.8 , 3.0 , 3.7 , 1.1)
+```
+
+This seems to be getting the 'mean' values for each of the four measurements, then classifying that result as a `Versicolor` flower according to the source data.
+
+This suggests a type signature something like:
+
+```haskell
+(>-) :: [s] -> Optic p s t a b -> t
+```
+
+But we know that in order to **run** an optic like this we'll need to provided it with an initial optic for it to transform. The only way I can think to do that in this case is if `aggregateWith` has a signature something like:
+
+```haskell
+aggregateWith :: ([a] -> b) -> Optic p [a] b () ()
+```
+
+Or perhaps:
+
+```haskell
+aggregateWith :: ([a] -> b) -> Optic p [a] [a] a a
+```
+
+Both of these result in some tricky implementations for `(>-)`, and I wasn't able to find one I was happy with. It's possible I'm missing something here.
+
+Instead, I ended up swapping the arguments around a bit and ended up using the continuation as the "aggregation" function, meaning we can write something like this:
+
+```haskell
+>>> flowers & measurements . aggregate >- mean
+```
+
+Which looks pretty lensy, and does the job! Here's what my version looks like:
+
+```haskell
+(>-) :: Optic (Costar f) s t a b -> (f a -> b) -> f s -> t
+(>-) opt aggregator xs = (runCostar $ opt (Costar aggregator)) xs
+```
+
+This will run any optic over Costar using an aggregation function over the focus!
+
+But I'm getting ahead of myself, what's this `aggregate` optic I'm using?
+
+The secret-sauce behind `aggregate` is an optic which allows you "lift" your computation **through** an arbitrary `Applicative`! In our case, we want to lift our measurements of type `[Float]` into an operation which runs over the **pointwise** comparison of each measurement, effectively, we want to run a function `[Float] -> Float` where the list of floats contains ALL of the nth measurements across all the flowers.
+
+The abstract gives us a hint in the form of the characterization of a kaleidoscope, which we translated into: `(f a -> b) -> (f s -> t)`, which, if we substitute in `Costar` instead of `(->)`, gives us: `Costar f a b -> Costar f s t`, which is an optic!
+
+```haskell
+
+```
+
