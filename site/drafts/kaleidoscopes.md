@@ -1,42 +1,150 @@
 ---
-title: "Kaleidoscopes and Algebraic optics"
+title: "Kaleidoscopes: Applicative convolution using lenses"
 author: "Chris Penner"
-date: "Dec 14, 2019"
+date: "Dec 19, 2019"
 tags: [haskell]
-description: "A profunctor implementation of algebraic lenses and kaleidoscopes"
+description: "A profunctor implementation of kaleidoscopes"
 ---
 
-In this article we're going to dig into some exciting new optics, the theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.
+In this article we're going to dig into a brand new type of optic, the Kaleidoscope! The theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.
 
-I'm not really a "Mathy" sort of guy, I did very little formal math in university, and while I've become comfortable in some of the absolute basics of Category Theory through my travels in Haskell, I certainly wouldn't consider myself well-versed. I AM however very well versed in the practical uses of optics, and so of course I need to keep myself up to speed on new developments, so when this abstract became available I set to work trying to understand it!
-
-Most of the symbols and Category Theory went straght over my head, but I managed to pick out a few bits and pieces that we'll look at today. I'll be translating what little I understand into a language which I DO understand: Haskell!
-
-If the aabove wasn't enough of a disclaimer I'll repeat: I don't really understand most of the math behind this stuff, so it's very possible I've made a few errors (though I think the result I've come to is interesting on its own, even if not a perfect representation of the abstract). Please correct me if you know better :)
-
-We'll be looking at two new types of optics from the abstract, namely the "Algebraic lens" and the "Kaleidoscope". We'll build a functioning implementation of these optics using Profunctors and rebuild the example presented in the abstract.
-
-Here we go!
+If you haven't read the previous blog post in this series you should definitely read [that one first](https://chrispenner.ca/posts/algebraic).
 
 ## Translating from Math
 
-We'll start by taking a look at the formal definition of the "characterization" of these two optics. Effectively, what sort of thing allows you to unambiguously define the behaviour of each of these optics. The paper presents them as follows: (my apologies for lack of proper LaTeX on my blog 😬)
+We'll begin like we did last time, by digging into the Math presented in the abstract, translating what we can into Haskell, then filling in the rest with educated guesswork. I talked about characterizations in the previous post, the mathematical characterization of a kaleidoscope presented in the abstract is as follows:
 
-* Algebraic Lens: `(S → A) × (ψS × B → T)`
 * Kaleidoscope: `π n∈N (A^n → B) → (S^n → T)`
 
-That's likely to make even LESS sense than it does when it's rendered properly, so feel free to check it out in the [abstract](http://events.cs.bham.ac.uk/syco/strings3-syco5/slides/roman.pdf) instead.
+Which I *believe* we can translate into something like this:
 
-I'm not hip to all these crazy symbols, but as best as I can tell, we can translate it roughly like this:
+* Kaleidoscope: `(f a -> b) -> (f s -> t)`
 
-* Algebraic Lens: `(s -> a, (f s, b) -> t) -> Optic p s t a b`
-* Kaleidoscope: `(f a -> b) -> (f s -> t) -> Optic p s t a b`
+If you recently read the previous post you might actually recognize this pattern, it's the exact shape of `Costar f a b -> Costar f s t`, but as we also said previously, Costar is effectively just the free Corepresentable, so we can in fact generalize this further into: `Corepresentable p => p a b -> p s t` or: `Corepresentable p => Optic p s t a b`.
 
-Rougly speaking, an Algebraic lens allows us to run some *aggregation* on a focus within *collection* of `s`'s, then use the result of the aggregation to pick a `t` to return. We can compare the `b` with the original collection of `s`'s when building/selecting our `t`.
+Great! So far it looks like we can just piggy-back on `Corepresentable` and see where that leads us. 
 
-The Kaleidoscope effectively allows us to project an optic through an `Applicative`, where the applicative's behaviour affects how we "collect" all the a's together.
+One might wonder, if this is just another expression of Corepresentable profunctors is there anything new here? After asking around a bit and watching [Mario's talk](https://youtu.be/ceCwD7L0t3w?t=1100) I learned that Kaleidoscopes are meant to be optics over Applicative Functors, and that we can express the primary behaviour as the following optic:
 
-This is all very fuzzy and vague, so let's start trying to implement this.
+```haskell
+??? :: (Corepresentable p, Applicative f) => Optic p (f a) (f b) a b
+```
+
+This is an optic which can focus the values inside **any Applicative structure**. It's almost identical to the `traverse'` combinator from the [`Traversing`](https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-) profunctor class:
+
+```haskell
+traverse' :: (Traversing p, Traversable f) => Optic p (f a) (f b) a b
+```
+
+But of course `traverse'` works only on Traversables whereas our new optic works on only Applicatives. Although these have significant overlap, the **behaviour** induced by applicatives is distinct from the behaviour of traversables.
+
+Let's implement a first draft of this new combinator so we can try it out. We need a name for it first, this combinator works by intertwining an applicative with itself through convolution; and also it's pretty complicated to understand, so I'll just make up an appropriate word and we can get on with the rest of the post:
+
+```haskell
+convoluted
+    :: (Traversable (Corep p), Applicative f, Corepresentable p)
+    => p a b
+    -> p (f a) (f b)
+convoluted p = cotabulate (fmap (cosieve p) . sequenceA)
+
+type Kaleidoscope s t a b = forall p. (Traversable (Corep p),  Corepresentable p) => p a b -> p s t
+type Kaleidoscope' s a = Kaleidoscope s s a a
+```
+
+This is the most elegant implementation for this combinator I was able to find, if you can figure out a better one which (preferably) doesn't require `Traversable` on the representation of our Corepresentable then please let me know!
+
+Though it may be a smidge awkward it DOES implement the correct signature and allows us to project an optic through any applicative structure!
+
+## Convoluted flowers
+
+In the previous post we managed to fill out most of the examples from the case study using Algebraic Lenses, but we got stuck when it came to **aggregating** over the individual measurements of the flowers in our data-set. We wanted to somehow aggregate over constituent pieces of our data-set all at once, for instance if we had the following measurements as a silly example:
+
+```haskell
+Measurements [1, 2, 3, 4]
+Measurements [10, 20, 30, 40]
+Measurements [100, 200, 300, 400]
+```
+
+We want to average them across each **column**, so we want to end up with:
+
+```haskell
+Measurements 
+  [ mean [1, 10, 100]
+  , mean [2, 20, 200]
+  , mean [3, 30, 300]
+  , mean [4, 40, 400]
+  ]
+```
+
+However our Algebraic lenses didn't give us any way to talk about **grouping** or **convolution** of the elements in the container. This is where Kaleidoscopes come in! They allow us to specify a way to lift an optic through a method of **combining** elements. We do this generally through the use of an Applicative!
+
+Remember the `Traversable` requirement we had on the **container** type of our Corepresentable profunctor? We can use that to flip-flop our Applicative through that container! Effectively that allows us to group elements in the same way that `sequenceA` would (see the `sequenceA` in our implementation?) but operate on them as though they were grouped within the Corepresentable's container. That's as clear as we can get with just words, let's see how a few different Applicatives react to `sequenceA`!
+
+First let's try using the simple list applicative to see what sort of groups we get if we sequence it. We'll unwrap each set of measurements so we've got a value of type `[[Float]]`
+
+```haskell
+allMeasurements :: [[Float]]
+allMeasurements =
+      [ [1  , 2  , 3  , 4  ]
+      , [10 , 20 , 30 , 40 ]
+      , [100, 200, 300, 400]
+      ]
+
+>>> sequenceA allMeasurements
+[[1.0,10.0,100.0],[1.0,10.0,200.0],[1.0,10.0,300.0],[1.0,10.0,400.0],
+ [1.0,20.0,100.0],[1.0,20.0,200.0],[1.0,20.0,300.0],[1.0,20.0,400.0],
+ [1.0,30.0,100.0],[1.0,30.0,20 0.0],[1.0,30.0,300.0],[1.0,30.0,400.0],
+ ...
+]
+```
+
+You get the idea; it goes through every single possible pairing of each measurement! That's not quite what we want in this case! We want to pair the matching measurements together! Sounds like a ZipList to me:
+
+```haskell
+>>> sequenceA (ZipList <$> allMeasurements)
+ZipList 
+  [ [1.0, 10.0, 100.0]
+  , [2.0, 20.0, 200.0]
+  , [3.0, 30.0, 300.0]
+  , [4.0, 40.0, 400.0]
+  ]
+```
+
+Ahh, much better! Yes I'm aware I could just `traverse` with ZipList 😉. The ZipList applicative pairs elements together pointwise! So if we lift an aggregation through a convolution using `ZipList` we'll get a collection of our original container type (a list) grouped according to the applicative instance we "convoluted" through.  In this case we definitely want the ZipList behaviour, but you can imagine that the cartesian product behaviour of lists might also be useful for other problems.
+
+Now that we know we can use `convoluted` to group up our measurements properly (if we're careful), we can write a version of this kaleidoscope which works specifically over measurements. The zippy applicative seems like it's going to be pretty handy for this sort of thing, so I'll define that as a separate combinator using an `Iso` between ZipList and list alongside the generic `convoluted` optic:
+
+```haskell
+pointWise :: Kaleidoscope [a] [b] a b
+pointWise = iso ZipList getZipList . convolving
+```
+
+We can combine this with another iso for our Measurements newtype wrapper to get what we need:
+
+```haskell
+aggregate :: Kaleidoscope' Measurements Float
+aggregate = iso getMeasurements Measurements . pointWise
+```
+
+Notice that this is a Kaleidoscope over `Float`s on their own, the original list container isn't part of the kaleidoscope, it's determined when we actually run the kaleidoscope with an action. The Kaleidoscope simply requires that it be Traversable, which luckily includes most container types we'd want to use.
+
+To demonstrate what this might end up looking like, here's one mor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## First guesses at an implementation
 
