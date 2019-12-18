@@ -7,7 +7,9 @@ description: "A profunctor implementation of algebraic lenses"
 image: math.jpeg
 ---
 
-In this article we're going to dig into an exciting new type of optics, the theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore. Thanks go out to these awesome folk for researching optics at a high level! The more that we realize the Category Theory representations of optics the more we can convince ourselves that they're a true and beautiful abstraction rather than just a useful tool we stumbled across.
+This is a blog post about optics, if you're at all interested in optics I suggest you go check out my book: [Optics By Example](https://leanpub.com/optics-by-example). It covers everything you need to go from a beginner to master in all things optics! Check it out and tell your friends, now onwards to the post you're here for.
+
+In this post we're going to dig into an exciting new type of optics, the theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore. Thanks go out to these awesome folk for researching optics at a high level! The more that we realize the Category Theory representations of optics the more we can convince ourselves that they're a true and beautiful abstraction rather than just a useful tool we stumbled across.
 
 I'm not really a "Mathy" sort of guy, I did very little formal math in university, and while I've become comfortable in some of the absolute basics of Category Theory through my travels in Haskell, I certainly wouldn't consider myself well-versed. I AM however well versed in the practical uses of optics, and so of course I need to keep myself up to speed on new developments, so when this abstract became available I set to work trying to understand it!
 

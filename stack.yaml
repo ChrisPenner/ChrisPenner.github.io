@@ -41,10 +41,10 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
-# - slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
-- ../slick
-- git: https://github.com/ndmitchell/shake
-  commit: dd6ce0921c169278a45e813e99c31a04fe6c3079
+- slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
+# - ../slick
+# - git: https://github.com/ndmitchell/shake
+  # commit: dd6ce0921c169278a45e813e99c31a04fe6c3079
 
 # Override default flag values for local packages and extra-deps
 flags: {}

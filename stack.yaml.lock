@@ -5,19 +5,12 @@
 
 packages:
 - completed:
-    cabal-file:
-      size: 15340
-      sha256: 7d3cb238440369a9fb73b1094e1182a155e4e0a73c2d91f4b584381650e12a1c
-    name: shake
-    version: 0.18.4
-    git: https://github.com/ndmitchell/shake
+    hackage: slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
     pantry-tree:
-      size: 16879
-      sha256: 9848b7835e6f478e9e145ff35610e4e0eed3355cde497c74820ee0fd92bd66af
-    commit: dd6ce0921c169278a45e813e99c31a04fe6c3079
+      size: 601
+      sha256: df09921a3e414b9ef1873da1ea5b5cadc4a01669f474f64224e5f7a85eb16580
   original:
-    git: https://github.com/ndmitchell/shake
-    commit: dd6ce0921c169278a45e813e99c31a04fe6c3079
+    hackage: slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
 snapshots:
 - completed:
     size: 523448
