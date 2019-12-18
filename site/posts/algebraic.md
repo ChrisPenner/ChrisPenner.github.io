@@ -4,6 +4,7 @@ author: "Chris Penner"
 date: "Dec 18, 2019"
 tags: [haskell]
 description: "A profunctor implementation of algebraic lenses"
+image: math.jpeg
 ---
 
 In this article we're going to dig into an exciting new type of optics, the theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore. Thanks go out to these awesome folk for researching optics at a high level! The more that we realize the Category Theory representations of optics the more we can convince ourselves that they're a true and beautiful abstraction rather than just a useful tool we stumbled across.
