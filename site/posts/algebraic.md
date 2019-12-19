@@ -152,21 +152,23 @@ This will tell us how similar two measurements are, the lower the result, the mo
 Next we'll write a function which when given a reference set of flowers will detect the flower which is most similar to a given set of measurements. It will then build a flower by combining the closest species and the given measurements.
 
 ```haskell
-classify :: Foldable f => f Flower -> Measurements -> Flower
-classify flowers m =
-  let Flower species _ = minimumBy 
-                          (comparing (measurementDistance m . flowerMeasurements)) 
+classify :: [Flower] -> Measurements -> Maybe Flower
+classify flowers m
+  | null flowers = Nothing
+  | otherwise =
+  let Flower species _ = minimumBy
+                          (comparing (measurementDistance m . flowerMeasurements))
                           flowers
-   in Flower species m
+   in Just $ Flower species m
 ```
 
-This function is partial, we should really be using a Non-Empty list, but I hope you can still somehow sleep at night 😅
+This function returns its result in `Maybe`, since we can't classify anything if we're given an empty data-set. 
 
 Now we have our pieces, we can build the `measurements` list-lens!
 
 ```haskell
 measurements :: (Corepresentable p, Corep p ~ f, Foldable f) 
-             => Optic' p Flower Measurements
+             => Optic p Flower (Maybe Flower) Measurements Measurements
 measurements = listLens flowerMeasurements classify
 ```
 
@@ -225,7 +227,7 @@ This lets us write the example like this instead:
 
 ```haskell
 >>> flowers ?. measurements $ Measurements [5, 4, 3, 1]
-Flower Setosa (Measurements [5.0,4.0,3.0,1.0])
+Just (Flower Setosa (Measurements [5.0,4.0,3.0,1.0]))
 ```
 
 Which is *really* close to the original, we just added a `$` to make it work.
@@ -245,7 +247,7 @@ Flower Versicolor (Measurements [2.0,3.0,4.0,2.0])
 -- By choosing measurements close to the `versicolor` in our data-set
 -- we expect the measurements to be classified as Versicolor
 >>> flowers ?. measurements $ Measurements [1.9, 3.2, 3.8, 2]
-Flower Versicolor (Measurements [1.9,3.2,3.8,2.0])
+Just (Flower Versicolor (Measurements [1.9,3.2,3.8,2.0]))
 ```
 
 We can see that indeed it now switches the classification to `Versicolor`! It appears to be working!
@@ -261,7 +263,7 @@ The behaviour is the same, but flipping the arguments allows it to fit the "feel
 
 ```haskell
 >>> flowers & measurements ?- Measurements [5, 4, 3, 1]
-Flower Setosa (Measurements [5.0,4.0,3.0,2.5])
+Just (Flower Setosa (Measurements [5.0,4.0,3.0,2.5]))
 ```
 
 We pass in the data-set, and "assign" our comparison value to be the single Measurement we're considering.
@@ -316,7 +318,8 @@ I've arbitrarily chosen `Proxy` as the carrier type because it's empty and doesn
 With that, we just need to re-implement our `measurements` optic using `Algebraic`:
 
 ```haskell
-measurements :: Foldable f => AlgebraicLens' f Flower Measurements
+measurements :: Foldable f 
+             => AlgebraicLens f Flower (Maybe Flower) Measurements Measurements
 measurements = algebraic flowerMeasurements classify
 ```
 
@@ -359,11 +362,11 @@ instance Algebraic Proxy Tagged where
 `Tagged` is used for the `review` actions, which means we can try running our algebraic lens as a review:
 
 ```haskell
->>> review measurements (Measurements [1, 2,2, 3])
-Flower {flowerSpecies = *** Exception: foldl1: Proxy
+>>> review measurements (Measurements [1, 2, 3, 4])
+Nothing
 ```
 
-Unfortunately this doesn't work because `classify` is partial when the container is empty (and proxy is empty), we should probably add additional constraints to our `classify` function so it's not partial. A Non-Empty constraint on the container would prevent us from using review when we shouldn't. In general though, this means we can use most algebraic lenses with `review` so long as they're not partial, pretty cool! I'm sure we'll find some valid uses for this as more algebraic lenses are discovered.
+I suppose that's what we can expect, we're effectively classifying measurements without any data-set, so our `classify` function 'fails' with it's Nothing value. It's very cool to know that we can (in general) run algebraic lenses in reverse like this!
 
 ## Running custom aggregations
 
@@ -417,7 +420,7 @@ Now we can finally find out what species the *average flower* is closest to!
 
 ```haskell
 >>> flowers & measurements >- avgMeasurement
-Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+Just (Flower Versicolor (Measurements [3.5,3.5,3.5,2.25]))
 ```
 
 Looks like it's closest to the Versicolor species!
@@ -431,7 +434,7 @@ We've stuck with a list so far since it's easy to think about, but algebraic len
 ```haskell
 >>> M.fromList [(1.2, setosa), (0.6, versicolor)] 
       & measurements >- avgMeasurement
-Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+Just (Flower Versicolor (Measurements [3.5,3.5,3.5,2.25]))
 ```
 
 This gives us the same answer of course since the foldable instance simply ignores the keys, but the container type is carried through any composition of algebraic lenses! That means our aggregation function now has type: `Map Float Measurements -> Measurements`, see how it still projects from `Flower` into `Measurements` even inside the map? Let's say we want to run a scaling factor over each of our measurements as part of aggregating them, we can bake it into the aggregation like this:
@@ -442,7 +445,7 @@ scaleBy w (Measurements m) = Measurements (fmap (*w) m)
 
 >>> M.fromList [(1.2, setosa), (0.6, versicolor)] 
       & measurements >- avgMeasurement . fmap (uncurry scaleBy) . M.toList
-Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+Just (Flower Versicolor (Measurements [3.5,3.5,3.5,2.25]))
 ```
 
 Running the aggregation with these scaling factors changed our result and shows us what the average flower would be if we scaled each flower by the amount provided in the input map.
@@ -546,3 +549,92 @@ This means we can embed operations like `minimumBy`, `findBy`, `elemIndex` and f
 Algebraic lenses also tend to compose better with Grate-like optics than traditional `Strong Profunctor` based lenses, they work well with getters and folds, and can be used with setters or traversals for setting or traversing (but not aggregating). They play a role in the ecosystem and are just one puzzle piece in the world of optics we're still discovering.
 
 Thanks for reading! We'll dig into Kaleidoscopes soon, so stay tuned!
+
+## Updates & Edits
+
+After releasing this some authors of the paper pointed out some helpful notes (thanks Bryce and Mario!)
+
+It turns out that we can further generalize the `Algebraic` class further while maintaining its strength.
+
+The suggested model for this is to specify profunctors which are Strong with respect to Monoids. To understand the meaning of this, let's take a look at the original Strong typeclass:
+
+```haskell
+class Profunctor p => Strong p where
+  first' :: p a b -> p (a, c) (b, c)
+  second' :: p a b -> p (c, a) (c, b)
+```
+
+The idea is that a Strong profunctor can allow additional values to be passed through freely. We can restrict this idea slightly by requiring the value which we're passing through to be a Monoid:
+
+```haskell
+class Profunctor p => MStrong p where
+  mfirst' ::  Monoid m => p a b -> p (a, m) (b, m)
+  mfirst' = dimap swap swap . msecond'
+  msecond' ::  Monoid m => p a b -> p (m, a) (m, b)
+  msecond' = dimap swap swap . mfirst'
+
+  {-# MINIMAL mfirst' | msecond' #-}
+```
+
+This gives us more power when writing instances, we can "summon" a `c` from nowhere via `mempty` if needed, but can also combine multiple `c`'s together via `mappend` if needed. Let's write all the needed instances of our new class:
+
+```haskell
+instance MStrong (Forget r) where
+  msecond' = second'
+
+instance MStrong (->) where
+  msecond' = second'
+
+instance MStrong Tagged where
+  msecond' (Tagged b) = Tagged (mempty, b)
+
+instance Traversable f => MStrong (Costar f) where
+  msecond' (Costar f) = Costar (go f)
+    where
+      go f fma = f <$> sequenceA fma
+```
+
+The first two instances simply rely on Strong, all Strong profunctors are trivially `MStrong` in this manner. To put it differently, `MStrong` is superclass of `Strong` (although this isn't reflected in libraries at the moment). I won't bother writing out all the other trivial instances, just know that all Strong profunctors have an instance.
+
+`Tagged` and `Costar` are NOT `Strong` profunctors, but by taking advantage of the Monoid we can come up with suitable instances here! We use `mempty` to pull a value from thin air for `Tagged`, and `Costar` uses the `Applicative` instance of `Monoid m => (m, a)` to sequence its input into the right shape.
+
+Indeed, this appears to be a more general construction, but at first glance it seems to be orthogonal; how can we regain our `algebraic` function using only the `MStrong` constraint?
+
+```haskell
+import Control.Arrow ((&&&))
+
+algebraic :: forall m p s t a b
+           . (Monoid m,  MStrong p) 
+           => (s -> m) 
+           -> (s -> a) 
+           -> (m -> b -> t) 
+           -> Optic p s t a b
+algebraic inject project flatten p
+  = dimap (inject &&& id)  (uncurry flatten) $  strengthened
+  where
+    strengthened :: p (m, s) (m, b)
+    strengthened = msecond' (lmap project p)
+```
+
+This is perhaps not the most elegant definition, but it matches the type without doing anything outright stupid, so I suppose it will do (type-hole driven development FTW)!
+
+We require from the user a function which injects the state into a Monoid, then use `MStrong` to project that monoid through the profunctor's action. On the other side we use the result of the computation alongside the Monoidal summary of the input value(s) to compute the final aggregation.
+
+We can recover our standard list-lens operations by simply choosing `[s]` to be our Monoid.
+
+```haskell
+listLens :: MStrong p => (s -> a) -> ([s] -> b -> t) -> Optic p s t a b
+listLens = algebraic pure
+```
+
+In fact, we can easily generalize over any Alternative container. Alternative's provide a Monoid over their Applicative structure, and we can use the `Alt` newtype wrapper from `Data.Monoid` to use an Alternative structure as a `Monoid`.
+
+```haskell
+altLens :: (Alternative f, MStrong p) 
+        => (s -> a) -> (f s -> b -> t) -> Optic p s t a b
+altLens project flatten = malgebraic (Alt . pure)  project (flatten . getAlt)
+```
+
+So now we've got a fully general algebraic lens which allows aggregating over any monoidal projection of input, including helpers for doing this over Alternative structures, or lists in particular! This gives us a significant amount of flexibility and power.
+
+I won't waste everyone's time by testing these new operations here, take heart that they do indeed work the same as the original definitions provided above.

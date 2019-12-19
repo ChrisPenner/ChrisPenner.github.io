@@ -128,7 +128,74 @@ aggregate = iso getMeasurements Measurements . pointWise
 
 Notice that this is a Kaleidoscope over `Float`s on their own, the original list container isn't part of the kaleidoscope, it's determined when we actually run the kaleidoscope with an action. The Kaleidoscope simply requires that it be Traversable, which luckily includes most container types we'd want to use.
 
-To demonstrate what this might end up looking like, here's one mor
+To demonstrate what this might end up looking like, here's one more example of what the behaviour of `convoluted` would be if we use a Map for the outer container:
+
+```haskell
+measurementMap :: M.Map String (ZipList Float)
+measurementMap = M.fromList 
+      [ ("setosa"    , ZipList [1  , 2  , 3  , 4  ])
+      , ("versicolor", ZipList [10 , 20 , 30 , 40 ])
+      , ("virginica" , ZipList [100, 200, 300, 400])
+      ]
+
+>>> sequenceA measurementMap
+ZipList [ fromList [("setosa", 1.0), ("versicolor", 10.0), ("virginica", 100.0)]
+        , fromList [("setosa", 2.0), ("versicolor", 20.0), ("virginica", 200.0)]
+        , fromList [("setosa", 3.0), ("versicolor", 30.0), ("virginica", 300.0)]
+        , fromList [("setosa", 4.0), ("versicolor", 40.0), ("virginica", 400.0)]
+        ]
+```
+
+We can see that it beautifully creates a map for each of the measurements, where each of the measurements is labeled according to the original map!
+
+This is pretty nifty, it allows us to carry information from the outer traversable container (Map) **through** the Applicative (ZipList). This is what the `convoluted` optic does for us.
+
+Enough talk, time to implement the example!
+
+## Finishing the example
+
+The example in the abstract is:
+
+```haskell
+iris >- measurements . aggregateWith mean
+-- Iris Versicolor (5.8 , 3.0 , 3.7 , 1.1)
+```
+
+We could of course implement some sort of `aggregateWith` combinator, but the version of `>-` we defined in the previous post already allows us to pass a custom aggregation in, so personally I think it makes more sense to pass `mean` in that way. It also means that we can continue composing more optics onto the chain before we decide how we want to handle the information (maybe we want to aggregate over multiple different convolutions of dimensions?).
+
+Using the version of `(>-)` I defined in the previous post (which has the arguments flipped around a bit), and the `aggregate` we defined above, we can do this:
+
+```haskell
+>>> flowers & measurements . aggregate >- mean
+Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+```
+
+It has averaged each measurement across the data-set and has classified the resulting "average flower" as `Versicolor` just as we expected from the simpler version we built in the previous post.
+
+If you're curious about what's actually being passed into our `mean` function we can add a trace statement to find out. With a bit of rearranging and reformatting it looks roughly like this:
+
+```haskell
+>>> flowers
+[ Flower Versicolor (Measurements [2.0,3.0,4.0,2.0])
+, Flower Setosa     (Measurements [5.0,4.0,3.0,2.5])
+]
+
+>>> flowers & measurements . aggregate >- mean . traceShowId
+[2.0,5.0]
+[3.0,4.0]
+[4.0,3.0]
+[2.0,2.5]
+
+Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
+```
+
+It's passing the groups point-wise just as we'd hoped!
+
+## Kaleidoscopes as lenses
+
+Unfortunately, like algebraic lenses, 
+
+You might be wondering what
 
 
 
