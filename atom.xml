@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2019-12-18T18:55:41Z</updated>
+  <updated>2019-12-19T21:02:04Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -111,16 +111,18 @@
 <span id="cb5-5"><a href="#cb5-5"></a>    diff a b <span class="ot">=</span> (a <span class="op">-</span> b) <span class="op">**</span> <span class="dv">2</span></span></code></pre></div>
 <p>This will tell us how similar two measurements are, the lower the result, the more similar they are.</p>
 <p>Next we'll write a function which when given a reference set of flowers will detect the flower which is most similar to a given set of measurements. It will then build a flower by combining the closest species and the given measurements.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">classify ::</span> <span class="dt">Foldable</span> f <span class="ot">=&gt;</span> f <span class="dt">Flower</span> <span class="ot">-&gt;</span> <span class="dt">Measurements</span> <span class="ot">-&gt;</span> <span class="dt">Flower</span></span>
-<span id="cb6-2"><a href="#cb6-2"></a>classify flowers m <span class="ot">=</span></span>
-<span id="cb6-3"><a href="#cb6-3"></a>  <span class="kw">let</span> <span class="dt">Flower</span> species _ <span class="ot">=</span> minimumBy </span>
-<span id="cb6-4"><a href="#cb6-4"></a>                          (comparing (measurementDistance m <span class="op">.</span> flowerMeasurements)) </span>
-<span id="cb6-5"><a href="#cb6-5"></a>                          flowers</span>
-<span id="cb6-6"><a href="#cb6-6"></a>   <span class="kw">in</span> <span class="dt">Flower</span> species m</span></code></pre></div>
-<p>This function is partial, we should really be using a Non-Empty list, but I hope you can still somehow sleep at night 😅</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">classify ::</span> [<span class="dt">Flower</span>] <span class="ot">-&gt;</span> <span class="dt">Measurements</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Flower</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a>classify flowers m</span>
+<span id="cb6-3"><a href="#cb6-3"></a>  <span class="op">|</span> <span class="fu">null</span> flowers <span class="ot">=</span> <span class="dt">Nothing</span></span>
+<span id="cb6-4"><a href="#cb6-4"></a>  <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span></span>
+<span id="cb6-5"><a href="#cb6-5"></a>  <span class="kw">let</span> <span class="dt">Flower</span> species _ <span class="ot">=</span> minimumBy</span>
+<span id="cb6-6"><a href="#cb6-6"></a>                          (comparing (measurementDistance m <span class="op">.</span> flowerMeasurements))</span>
+<span id="cb6-7"><a href="#cb6-7"></a>                          flowers</span>
+<span id="cb6-8"><a href="#cb6-8"></a>   <span class="kw">in</span> <span class="dt">Just</span> <span class="op">$</span> <span class="dt">Flower</span> species m</span></code></pre></div>
+<p>This function returns its result in <code>Maybe</code>, since we can't classify anything if we're given an empty data-set.</p>
 <p>Now we have our pieces, we can build the <code>measurements</code> list-lens!</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">measurements ::</span> (<span class="dt">Corepresentable</span> p, <span class="dt">Corep</span> p <span class="op">~</span> f, <span class="dt">Foldable</span> f) </span>
-<span id="cb7-2"><a href="#cb7-2"></a>             <span class="ot">=&gt;</span> <span class="dt">Optic&#39;</span> p <span class="dt">Flower</span> <span class="dt">Measurements</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a>             <span class="ot">=&gt;</span> <span class="dt">Optic</span> p <span class="dt">Flower</span> (<span class="dt">Maybe</span> <span class="dt">Flower</span>) <span class="dt">Measurements</span> <span class="dt">Measurements</span></span>
 <span id="cb7-3"><a href="#cb7-3"></a>measurements <span class="ot">=</span> listLens flowerMeasurements classify</span></code></pre></div>
 <p>We specify that the container type used in the <code>Corepresentable</code> instance must be foldable so that we can convert it into a list to do our classification.</p>
 <p>Okay! Now we have enough to try some things out! The first example given in the abstract is:</p>
@@ -145,7 +147,7 @@
 <p>The example seems to use a static value for the comparison, so I use <code>const</code> to embed that value into the <code>Costar</code> profunctor, then run that through the provided profunctor morphism (i.e. optic).</p>
 <p>This lets us write the example like this instead:</p>
 <div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">?.</span> measurements <span class="op">$</span> <span class="dt">Measurements</span> [<span class="dv">5</span>, <span class="dv">4</span>, <span class="dv">3</span>, <span class="dv">1</span>]</span>
-<span id="cb14-2"><a href="#cb14-2"></a><span class="dt">Flower</span> <span class="dt">Setosa</span> (<span class="dt">Measurements</span> [<span class="fl">5.0</span>,<span class="fl">4.0</span>,<span class="fl">3.0</span>,<span class="fl">1.0</span>])</span></code></pre></div>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Setosa</span> (<span class="dt">Measurements</span> [<span class="fl">5.0</span>,<span class="fl">4.0</span>,<span class="fl">3.0</span>,<span class="fl">1.0</span>]))</span></code></pre></div>
 <p>Which is <em>really</em> close to the original, we just added a <code>$</code> to make it work.</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="op">&gt;&gt;&gt;</span> iris <span class="op">?.</span> measurements (<span class="dt">Measurements</span> <span class="fl">4.8</span> <span class="fl">3.1</span> <span class="fl">1.5</span> <span class="fl">0.1</span>)</span></code></pre></div>
 <p>Let's see if this is actually working properly. We're passing a "fixed" measurement in as our aggregation function, meaning we're comparing every flower in our list to these specific measurements and will find the flower that's "closest". We then build a flower using the species closest to those measurements alongside the provided measurements. To test that this is actually working properly, let's try again with measurements that match our <code>versicolor</code> flower more closely:</p>
@@ -157,14 +159,14 @@
 <span id="cb16-6"><a href="#cb16-6"></a><span class="co">-- By choosing measurements close to the `versicolor` in our data-set</span></span>
 <span id="cb16-7"><a href="#cb16-7"></a><span class="co">-- we expect the measurements to be classified as Versicolor</span></span>
 <span id="cb16-8"><a href="#cb16-8"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">?.</span> measurements <span class="op">$</span> <span class="dt">Measurements</span> [<span class="fl">1.9</span>, <span class="fl">3.2</span>, <span class="fl">3.8</span>, <span class="dv">2</span>]</span>
-<span id="cb16-9"><a href="#cb16-9"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">1.9</span>,<span class="fl">3.2</span>,<span class="fl">3.8</span>,<span class="fl">2.0</span>])</span></code></pre></div>
+<span id="cb16-9"><a href="#cb16-9"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">1.9</span>,<span class="fl">3.2</span>,<span class="fl">3.8</span>,<span class="fl">2.0</span>]))</span></code></pre></div>
 <p>We can see that indeed it now switches the classification to <code>Versicolor</code>! It appears to be working!</p>
 <p>Even though this version looks a lot like the example in the abstract, it doesn't quite feel in line with style of existing optics libraries so I'll flip the arguments around a bit further: (I'll rename the combinator to <code>?-</code> to avoid confusion with the original)</p>
 <div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="ot">(?-) ::</span> (<span class="dt">Foldable</span> f) <span class="ot">=&gt;</span> f s <span class="ot">-&gt;</span> <span class="dt">Optic</span> (<span class="dt">Costar</span> f) s t a b <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> t</span>
 <span id="cb17-2"><a href="#cb17-2"></a>(<span class="op">?-</span>) xs f a <span class="ot">=</span> (runCostar <span class="op">$</span> f (<span class="dt">Costar</span> (<span class="fu">const</span> a))) xs</span></code></pre></div>
 <p>The behaviour is the same, but flipping the arguments allows it to fit the "feel" of other optics combinators better (IMHO), we use it like this:</p>
 <div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">&amp;</span> measurements <span class="op">?-</span> <span class="dt">Measurements</span> [<span class="dv">5</span>, <span class="dv">4</span>, <span class="dv">3</span>, <span class="dv">1</span>]</span>
-<span id="cb18-2"><a href="#cb18-2"></a><span class="dt">Flower</span> <span class="dt">Setosa</span> (<span class="dt">Measurements</span> [<span class="fl">5.0</span>,<span class="fl">4.0</span>,<span class="fl">3.0</span>,<span class="fl">2.5</span>])</span></code></pre></div>
+<span id="cb18-2"><a href="#cb18-2"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Setosa</span> (<span class="dt">Measurements</span> [<span class="fl">5.0</span>,<span class="fl">4.0</span>,<span class="fl">3.0</span>,<span class="fl">2.5</span>]))</span></code></pre></div>
 <p>We pass in the data-set, and "assign" our comparison value to be the single Measurement we're considering.</p>
 <h2 id="making-measurements-a-proper-lens">Making <code>measurements</code> a proper lens</h2>
 <p>Before moving on any further, let's see if we can fix up <code>measurements</code> so we can use <code>(^.)</code> on a single flower like the first example does. Remember, <code>(^.)</code> uses <code>Forget</code> as the concrete profunctor instead of <code>Costar</code>, so whatever we do, it has to have a valid instance for the <code>Forget</code> profunctor which looks like this:</p>
@@ -192,8 +194,9 @@
 <p>Well that was pretty painless! This allows us to do what our <code>Corepresentable</code> requirement didn't.</p>
 <p>I've arbitrarily chosen <code>Proxy</code> as the carrier type because it's empty and doesn't contain any values. The carrier itself isn't every used, but I needed to pick something and this seemed like a good a choice as any. Perhaps a higher-rank void type would be more appropriate, but we'll cross that bridge when we have to.</p>
 <p>With that, we just need to re-implement our <code>measurements</code> optic using <code>Algebraic</code>:</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="ot">measurements ::</span> <span class="dt">Foldable</span> f <span class="ot">=&gt;</span> <span class="dt">AlgebraicLens&#39;</span> f <span class="dt">Flower</span> <span class="dt">Measurements</span></span>
-<span id="cb23-2"><a href="#cb23-2"></a>measurements <span class="ot">=</span> algebraic flowerMeasurements classify</span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="ot">measurements ::</span> <span class="dt">Foldable</span> f </span>
+<span id="cb23-2"><a href="#cb23-2"></a>             <span class="ot">=&gt;</span> <span class="dt">AlgebraicLens</span> f <span class="dt">Flower</span> (<span class="dt">Maybe</span> <span class="dt">Flower</span>) <span class="dt">Measurements</span> <span class="dt">Measurements</span></span>
+<span id="cb23-3"><a href="#cb23-3"></a>measurements <span class="ot">=</span> algebraic flowerMeasurements classify</span></code></pre></div>
 <p>The name <code>measurements</code> is a bit of a misnomer, it does classification and selection, which is quite a bit more than just selecting the measurements! Perhaps a better name would be <code>measurementsClassifier</code> or something. I'll stick to the name used in the abstract for now.</p>
 <p>Now we can view through our <code>measurements</code> optic directly! This fulfills the first example perfectly!</p>
 <div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1"></a><span class="op">&gt;&gt;&gt;</span> (flowers <span class="op">!!</span> <span class="dv">1</span>) <span class="op">^.</span> measurements</span>
@@ -212,9 +215,9 @@
 <div class="sourceCode" id="cb27"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb27-1"><a href="#cb27-1"></a><span class="kw">instance</span> <span class="dt">Algebraic</span> <span class="dt">Proxy</span> <span class="dt">Tagged</span> <span class="kw">where</span></span>
 <span id="cb27-2"><a href="#cb27-2"></a>  algebraic project flatten (<span class="dt">Tagged</span> b) <span class="ot">=</span> <span class="dt">Tagged</span> (flatten <span class="dt">Proxy</span> b)</span></code></pre></div>
 <p><code>Tagged</code> is used for the <code>review</code> actions, which means we can try running our algebraic lens as a review:</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb28-1"><a href="#cb28-1"></a><span class="op">&gt;&gt;&gt;</span> review measurements (<span class="dt">Measurements</span> [<span class="dv">1</span>, <span class="dv">2</span>,<span class="dv">2</span>, <span class="dv">3</span>])</span>
-<span id="cb28-2"><a href="#cb28-2"></a><span class="dt">Flower</span> {flowerSpecies <span class="ot">=</span> <span class="op">***</span> <span class="dt">Exception</span><span class="op">:</span> <span class="fu">foldl1</span><span class="op">:</span> <span class="dt">Proxy</span></span></code></pre></div>
-<p>Unfortunately this doesn't work because <code>classify</code> is partial when the container is empty (and proxy is empty), we should probably add additional constraints to our <code>classify</code> function so it's not partial. A Non-Empty constraint on the container would prevent us from using review when we shouldn't. In general though, this means we can use most algebraic lenses with <code>review</code> so long as they're not partial, pretty cool! I'm sure we'll find some valid uses for this as more algebraic lenses are discovered.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb28-1"><a href="#cb28-1"></a><span class="op">&gt;&gt;&gt;</span> review measurements (<span class="dt">Measurements</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>])</span>
+<span id="cb28-2"><a href="#cb28-2"></a><span class="dt">Nothing</span></span></code></pre></div>
+<p>I suppose that's what we can expect, we're effectively classifying measurements without any data-set, so our <code>classify</code> function 'fails' with it's Nothing value. It's very cool to know that we can (in general) run algebraic lenses in reverse like this!</p>
 <h2 id="running-custom-aggregations">Running custom aggregations</h2>
 <p>We have one more example left to look at:</p>
 <div class="sourceCode" id="cb29"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb29-1"><a href="#cb29-1"></a><span class="op">&gt;&gt;&gt;</span> iris <span class="op">&gt;-</span> measurements <span class="op">.</span> aggregateWith mean</span>
@@ -242,21 +245,21 @@
 <p>We manually pair all the associated elements, then construct a new set of measurements where each value is the average of that measurement across all the inputs.</p>
 <p>Now we can finally find out what species the <em>average flower</em> is closest to!</p>
 <div class="sourceCode" id="cb33"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb33-1"><a href="#cb33-1"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">&amp;</span> measurements <span class="op">&gt;-</span> avgMeasurement</span>
-<span id="cb33-2"><a href="#cb33-2"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>])</span></code></pre></div>
+<span id="cb33-2"><a href="#cb33-2"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>]))</span></code></pre></div>
 <p>Looks like it's closest to the Versicolor species!</p>
 <p>We can substitute <code>avgMeasurement</code> for any sort of aggregation function of type <code>[Measurements] -&gt; Measurements</code> and this expression will run it on our data-set and return the species which is closest to those measurements. Pretty cool stuff!</p>
 <h2 id="custom-container-types">Custom container types</h2>
 <p>We've stuck with a list so far since it's easy to think about, but algebraic lenses work over any container type so long as you can implement the aggregation functions you want on them. In this case we only require Foldable for our classifier, so we can hot-swap our list for a Map without any changes!</p>
 <div class="sourceCode" id="cb34"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb34-1"><a href="#cb34-1"></a><span class="op">&gt;&gt;&gt;</span> M.fromList [(<span class="fl">1.2</span>, setosa), (<span class="fl">0.6</span>, versicolor)] </span>
 <span id="cb34-2"><a href="#cb34-2"></a>      <span class="op">&amp;</span> measurements <span class="op">&gt;-</span> avgMeasurement</span>
-<span id="cb34-3"><a href="#cb34-3"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>])</span></code></pre></div>
+<span id="cb34-3"><a href="#cb34-3"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>]))</span></code></pre></div>
 <p>This gives us the same answer of course since the foldable instance simply ignores the keys, but the container type is carried through any composition of algebraic lenses! That means our aggregation function now has type: <code>Map Float Measurements -&gt; Measurements</code>, see how it still projects from <code>Flower</code> into <code>Measurements</code> even inside the map? Let's say we want to run a scaling factor over each of our measurements as part of aggregating them, we can bake it into the aggregation like this:</p>
 <div class="sourceCode" id="cb35"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb35-1"><a href="#cb35-1"></a><span class="ot">scaleBy ::</span> <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Measurements</span> <span class="ot">-&gt;</span> <span class="dt">Measurements</span></span>
 <span id="cb35-2"><a href="#cb35-2"></a>scaleBy w (<span class="dt">Measurements</span> m) <span class="ot">=</span> <span class="dt">Measurements</span> (<span class="fu">fmap</span> (<span class="op">*</span>w) m)</span>
 <span id="cb35-3"><a href="#cb35-3"></a></span>
 <span id="cb35-4"><a href="#cb35-4"></a><span class="op">&gt;&gt;&gt;</span> M.fromList [(<span class="fl">1.2</span>, setosa), (<span class="fl">0.6</span>, versicolor)] </span>
 <span id="cb35-5"><a href="#cb35-5"></a>      <span class="op">&amp;</span> measurements <span class="op">&gt;-</span> avgMeasurement <span class="op">.</span> <span class="fu">fmap</span> (<span class="fu">uncurry</span> scaleBy) <span class="op">.</span> M.toList</span>
-<span id="cb35-6"><a href="#cb35-6"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>])</span></code></pre></div>
+<span id="cb35-6"><a href="#cb35-6"></a><span class="dt">Just</span> (<span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>]))</span></code></pre></div>
 <p>Running the aggregation with these scaling factors changed our result and shows us what the average flower would be if we scaled each flower by the amount provided in the input map.</p>
 <p>This isn't a perfect example of what other containers could be used for, but I'm sure folks will be dreaming up clever ideas in no time!</p>
 <h2 id="other-aggregation-types">Other aggregation types</h2>
@@ -329,6 +332,62 @@
 <p>This means we can embed operations like <code>minimumBy</code>, <code>findBy</code>, <code>elemIndex</code> and friends as composable optics! There are many other interesting aggregations to be found in statistics, linear algebra, and normal day-to-day tasks. I'm very excited to see where this ends up going, there are a ton of possibilities which I haven't begun to think about yet.</p>
 <p>Algebraic lenses also tend to compose better with Grate-like optics than traditional <code>Strong Profunctor</code> based lenses, they work well with getters and folds, and can be used with setters or traversals for setting or traversing (but not aggregating). They play a role in the ecosystem and are just one puzzle piece in the world of optics we're still discovering.</p>
 <p>Thanks for reading! We'll dig into Kaleidoscopes soon, so stay tuned!</p>
+<h2 id="updates--edits">Updates &amp; Edits</h2>
+<p>After releasing this some authors of the paper pointed out some helpful notes (thanks Bryce and Mario!)</p>
+<p>It turns out that we can further generalize the <code>Algebraic</code> class further while maintaining its strength.</p>
+<p>The suggested model for this is to specify profunctors which are Strong with respect to Monoids. To understand the meaning of this, let's take a look at the original Strong typeclass:</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb41-1"><a href="#cb41-1"></a><span class="kw">class</span> <span class="dt">Profunctor</span> p <span class="ot">=&gt;</span> <span class="dt">Strong</span> p <span class="kw">where</span></span>
+<span id="cb41-2"><a href="#cb41-2"></a><span class="ot">  first&#39; ::</span> p a b <span class="ot">-&gt;</span> p (a, c) (b, c)</span>
+<span id="cb41-3"><a href="#cb41-3"></a><span class="ot">  second&#39; ::</span> p a b <span class="ot">-&gt;</span> p (c, a) (c, b)</span></code></pre></div>
+<p>The idea is that a Strong profunctor can allow additional values to be passed through freely. We can restrict this idea slightly by requiring the value which we're passing through to be a Monoid:</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb42-1"><a href="#cb42-1"></a><span class="kw">class</span> <span class="dt">Profunctor</span> p <span class="ot">=&gt;</span> <span class="dt">MStrong</span> p <span class="kw">where</span></span>
+<span id="cb42-2"><a href="#cb42-2"></a><span class="ot">  mfirst&#39; ::</span>  <span class="dt">Monoid</span> m <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (a, m) (b, m)</span>
+<span id="cb42-3"><a href="#cb42-3"></a>  mfirst&#39; <span class="ot">=</span> dimap swap swap <span class="op">.</span> msecond&#39;</span>
+<span id="cb42-4"><a href="#cb42-4"></a><span class="ot">  msecond&#39; ::</span>  <span class="dt">Monoid</span> m <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (m, a) (m, b)</span>
+<span id="cb42-5"><a href="#cb42-5"></a>  msecond&#39; <span class="ot">=</span> dimap swap swap <span class="op">.</span> mfirst&#39;</span>
+<span id="cb42-6"><a href="#cb42-6"></a></span>
+<span id="cb42-7"><a href="#cb42-7"></a>  <span class="ot">{-# MINIMAL mfirst&#39; | msecond&#39; #-}</span></span></code></pre></div>
+<p>This gives us more power when writing instances, we can "summon" a <code>c</code> from nowhere via <code>mempty</code> if needed, but can also combine multiple <code>c</code>'s together via <code>mappend</code> if needed. Let's write all the needed instances of our new class:</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb43-1"><a href="#cb43-1"></a><span class="kw">instance</span> <span class="dt">MStrong</span> (<span class="dt">Forget</span> r) <span class="kw">where</span></span>
+<span id="cb43-2"><a href="#cb43-2"></a>  msecond&#39; <span class="ot">=</span> second&#39;</span>
+<span id="cb43-3"><a href="#cb43-3"></a></span>
+<span id="cb43-4"><a href="#cb43-4"></a><span class="kw">instance</span> <span class="dt">MStrong</span> (<span class="ot">-&gt;</span>) <span class="kw">where</span></span>
+<span id="cb43-5"><a href="#cb43-5"></a>  msecond&#39; <span class="ot">=</span> second&#39;</span>
+<span id="cb43-6"><a href="#cb43-6"></a></span>
+<span id="cb43-7"><a href="#cb43-7"></a><span class="kw">instance</span> <span class="dt">MStrong</span> <span class="dt">Tagged</span> <span class="kw">where</span></span>
+<span id="cb43-8"><a href="#cb43-8"></a>  msecond&#39; (<span class="dt">Tagged</span> b) <span class="ot">=</span> <span class="dt">Tagged</span> (<span class="fu">mempty</span>, b)</span>
+<span id="cb43-9"><a href="#cb43-9"></a></span>
+<span id="cb43-10"><a href="#cb43-10"></a><span class="kw">instance</span> <span class="dt">Traversable</span> f <span class="ot">=&gt;</span> <span class="dt">MStrong</span> (<span class="dt">Costar</span> f) <span class="kw">where</span></span>
+<span id="cb43-11"><a href="#cb43-11"></a>  msecond&#39; (<span class="dt">Costar</span> f) <span class="ot">=</span> <span class="dt">Costar</span> (go f)</span>
+<span id="cb43-12"><a href="#cb43-12"></a>    <span class="kw">where</span></span>
+<span id="cb43-13"><a href="#cb43-13"></a>      go f fma <span class="ot">=</span> f <span class="op">&lt;$&gt;</span> <span class="fu">sequenceA</span> fma</span></code></pre></div>
+<p>The first two instances simply rely on Strong, all Strong profunctors are trivially <code>MStrong</code> in this manner. To put it differently, <code>MStrong</code> is superclass of <code>Strong</code> (although this isn't reflected in libraries at the moment). I won't bother writing out all the other trivial instances, just know that all Strong profunctors have an instance.</p>
+<p><code>Tagged</code> and <code>Costar</code> are NOT <code>Strong</code> profunctors, but by taking advantage of the Monoid we can come up with suitable instances here! We use <code>mempty</code> to pull a value from thin air for <code>Tagged</code>, and <code>Costar</code> uses the <code>Applicative</code> instance of <code>Monoid m =&gt; (m, a)</code> to sequence its input into the right shape.</p>
+<p>Indeed, this appears to be a more general construction, but at first glance it seems to be orthogonal; how can we regain our <code>algebraic</code> function using only the <code>MStrong</code> constraint?</p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb44-1"><a href="#cb44-1"></a><span class="kw">import</span> <span class="dt">Control.Arrow</span> ((&amp;&amp;&amp;))</span>
+<span id="cb44-2"><a href="#cb44-2"></a></span>
+<span id="cb44-3"><a href="#cb44-3"></a><span class="ot">algebraic ::</span> <span class="kw">forall</span> m p s t a b</span>
+<span id="cb44-4"><a href="#cb44-4"></a>           <span class="op">.</span> (<span class="dt">Monoid</span> m,  <span class="dt">MStrong</span> p) </span>
+<span id="cb44-5"><a href="#cb44-5"></a>           <span class="ot">=&gt;</span> (s <span class="ot">-&gt;</span> m) </span>
+<span id="cb44-6"><a href="#cb44-6"></a>           <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> a) </span>
+<span id="cb44-7"><a href="#cb44-7"></a>           <span class="ot">-&gt;</span> (m <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> t) </span>
+<span id="cb44-8"><a href="#cb44-8"></a>           <span class="ot">-&gt;</span> <span class="dt">Optic</span> p s t a b</span>
+<span id="cb44-9"><a href="#cb44-9"></a>algebraic inject project flatten p</span>
+<span id="cb44-10"><a href="#cb44-10"></a>  <span class="ot">=</span> dimap (inject <span class="op">&amp;&amp;&amp;</span> <span class="fu">id</span>)  (<span class="fu">uncurry</span> flatten) <span class="op">$</span>  strengthened</span>
+<span id="cb44-11"><a href="#cb44-11"></a>  <span class="kw">where</span></span>
+<span id="cb44-12"><a href="#cb44-12"></a><span class="ot">    strengthened ::</span> p (m, s) (m, b)</span>
+<span id="cb44-13"><a href="#cb44-13"></a>    strengthened <span class="ot">=</span> msecond&#39; (lmap project p)</span></code></pre></div>
+<p>This is perhaps not the most elegant definition, but it matches the type without doing anything outright stupid, so I suppose it will do (type-hole driven development FTW)!</p>
+<p>We require from the user a function which injects the state into a Monoid, then use <code>MStrong</code> to project that monoid through the profunctor's action. On the other side we use the result of the computation alongside the Monoidal summary of the input value(s) to compute the final aggregation.</p>
+<p>We can recover our standard list-lens operations by simply choosing <code>[s]</code> to be our Monoid.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb45-1"><a href="#cb45-1"></a><span class="ot">listLens ::</span> <span class="dt">MStrong</span> p <span class="ot">=&gt;</span> (s <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> ([s] <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> t) <span class="ot">-&gt;</span> <span class="dt">Optic</span> p s t a b</span>
+<span id="cb45-2"><a href="#cb45-2"></a>listLens <span class="ot">=</span> algebraic <span class="fu">pure</span></span></code></pre></div>
+<p>In fact, we can easily generalize over any Alternative container. Alternative's provide a Monoid over their Applicative structure, and we can use the <code>Alt</code> newtype wrapper from <code>Data.Monoid</code> to use an Alternative structure as a <code>Monoid</code>.</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb46-1"><a href="#cb46-1"></a><span class="ot">altLens ::</span> (<span class="dt">Alternative</span> f, <span class="dt">MStrong</span> p) </span>
+<span id="cb46-2"><a href="#cb46-2"></a>        <span class="ot">=&gt;</span> (s <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> (f s <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> t) <span class="ot">-&gt;</span> <span class="dt">Optic</span> p s t a b</span>
+<span id="cb46-3"><a href="#cb46-3"></a>altLens project flatten <span class="ot">=</span> malgebraic (<span class="dt">Alt</span> <span class="op">.</span> <span class="fu">pure</span>)  project (flatten <span class="op">.</span> getAlt)</span></code></pre></div>
+<p>So now we've got a fully general algebraic lens which allows aggregating over any monoidal projection of input, including helpers for doing this over Alternative structures, or lists in particular! This gives us a significant amount of flexibility and power.</p>
+<p>I won't waste everyone's time by testing these new operations here, take heart that they do indeed work the same as the original definitions provided above.</p>
         <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
         these things together, if I managed to teach your something or even just entertain you for a minute or two
