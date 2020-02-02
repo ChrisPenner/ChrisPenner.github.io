@@ -10,27 +10,26 @@ In this article we're going to dig into a brand new type of optic, the Kaleidosc
 
 If you haven't read the previous blog post in this series you should definitely read [that one first](https://chrispenner.ca/posts/algebraic).
 
-## Translating from Math
+## A new profunctor class
 
-We'll begin like we did last time, by digging into the Math presented in the abstract, translating what we can into Haskell, then filling in the rest with educated guesswork. I talked about characterizations in the previous post, the mathematical characterization of a kaleidoscope presented in the abstract is as follows:
+Since the last article was released I had a chance to chat with Mario, the author of the abstract, on twitter which has been very helpful! He explained that the Kaleidoscope characterization in the abstract:
 
 * Kaleidoscope: `π n∈N (A^n → B) → (S^n → T)`
 
-Which I *believe* we can translate into something like this:
-
-* Kaleidoscope: `(f a -> b) -> (f s -> t)`
-
-If you recently read the previous post you might actually recognize this pattern, it's the exact shape of `Costar f a b -> Costar f s t`, but as we also said previously, Costar is effectively just the free Corepresentable, so we can in fact generalize this further into: `Corepresentable p => p a b -> p s t` or: `Corepresentable p => Optic p s t a b`.
-
-Great! So far it looks like we can just piggy-back on `Corepresentable` and see where that leads us. 
-
-One might wonder, if this is just another expression of Corepresentable profunctors is there anything new here? After asking around a bit and watching [Mario's talk](https://youtu.be/ceCwD7L0t3w?t=1100) I learned that Kaleidoscopes are meant to be optics over Applicative Functors, and that we can express the primary behaviour as the following optic:
+Is represented by the following Profunctor class:
 
 ```haskell
-??? :: (Corepresentable p, Applicative f) => Optic p (f a) (f b) a b
+class MStrong p => Reflector p where
+  reflected :: Applicative f => p a b -> p (f a) (f b)
+
+
+type Kaleidoscope s t a b = forall p. Reflector p => p a b -> p s t
+type Kaleidoscope' s a = Kaleidoscope s s a a
 ```
 
-This is an optic which can focus the values inside **any Applicative structure**. It's almost identical to the `traverse'` combinator from the [`Traversing`](https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-) profunctor class:
+It provides an optic which focuses the contents of any Applicative structure! It has a superclass of the `MStrong` profunctor noted in the corrections at the bottom of the previous post. It's trivially witnessed by `msecond' = reflected` since `Monoid m => (m, a)` is an Applicative. 
+
+At first `reflected` seems almost identical to the `traverse'` combinator from the [`Traversing`](https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-) profunctor class:
 
 ```haskell
 traverse' :: (Traversing p, Traversable f) => Optic p (f a) (f b) a b
@@ -38,24 +37,46 @@ traverse' :: (Traversing p, Traversable f) => Optic p (f a) (f b) a b
 
 But of course `traverse'` works only on Traversables whereas our new optic works on only Applicatives. Although these have significant overlap, the **behaviour** induced by applicatives is distinct from the behaviour of traversables.
 
-Let's implement a first draft of this new combinator so we can try it out. We need a name for it first, this combinator works by intertwining an applicative with itself through convolution; and also it's pretty complicated to understand, so I'll just make up an appropriate word and we can get on with the rest of the post:
+Let's implement our new `Reflector` class for a few profunctors so we can actually try it out!
 
 ```haskell
-convoluted
-    :: (Traversable (Corep p), Applicative f, Corepresentable p)
-    => p a b
-    -> p (f a) (f b)
-convoluted p = cotabulate (fmap (cosieve p) . sequenceA)
+-- (->) Allows us to set or update values through a reflector
+instance Reflector (->) where
+  reflected = fmap
 
-type Kaleidoscope s t a b = forall p. (Traversable (Corep p),  Corepresentable p) => p a b -> p s t
+-- Costar allows us to run aggregations over collections like we did in the previous post
+instance Traversable f => Reflector (Costar f) where
+  reflected (Costar f) = Costar (fmap f . sequenceA)
+
+-- Tagged allows us to "review" through a Reflector
+instance Reflector Tagged where
+  reflected (Tagged b) = Tagged (pure b)
+
+-- Star allows us to calculate several 'projections' of focuses 
+instance Distributive f => Reflector (Star f) where
+  reflected (Star f) = Star (collect f)
+```
+
+These are the usual suspects, in optics they correspond to the ability to run the following actions:
+
+* `(->)`: `set`/`modify`
+* `Costar`: `(?.)`/`(>-)` (from the last post)
+* `Tagged`: review
+* `Star`: traverseOf
+
+Unfortunately we can't implement this profunctor for `Forget`, so we won't be able to `view` or `fold` over Kaleidoscopes. C'est la vie!
+
+Now that we have a profunctor class we can write out the type of optic this profunctor entails:
+
+
+```haskell
+type Kaleidoscope s t a b = forall p. Reflector p => p a b -> p s t
 type Kaleidoscope' s a = Kaleidoscope s s a a
 ```
 
-This is the most elegant implementation for this combinator I was able to find, if you can figure out a better one which (preferably) doesn't require `Traversable` on the representation of our Corepresentable then please let me know!
+A Kaleidoscope is an optic which transforms 'Reflector' profunctors.
 
-Though it may be a smidge awkward it DOES implement the correct signature and allows us to project an optic through any applicative structure!
-
-## Convoluted flowers
+## Grouping with kaleidoscopes
 
 In the previous post we managed to fill out most of the examples from the case study using Algebraic Lenses, but we got stuck when it came to **aggregating** over the individual measurements of the flowers in our data-set. We wanted to somehow aggregate over constituent pieces of our data-set all at once, for instance if we had the following measurements as a silly example:
 
@@ -76,11 +97,106 @@ Measurements
   ]
 ```
 
-However our Algebraic lenses didn't give us any way to talk about **grouping** or **convolution** of the elements in the container. This is where Kaleidoscopes come in! They allow us to specify a way to lift an optic through a method of **combining** elements. We do this generally through the use of an Applicative!
+However our Algebraic lenses didn't give us any way to talk about **grouping** or **convolution** of the elements in the container. Depending on the **action** we're running on the resulting optic this has different meanings. When using `set`, `over` for example a kaleidoscope simply updates each value in the collection just like a traversal would; however when running with the `>-` aggregation operator from the previous post a kaleidoscope re-groups elements within the aggregation container! We'll see what this means in a moment. Another interesting case comes from `review`; when `review`ing through a kaleidoscope we use `pure` to embed a value into the Applicative.
 
-Remember the `Traversable` requirement we had on the **container** type of our Corepresentable profunctor? We can use that to flip-flop our Applicative through that container! Effectively that allows us to group elements in the same way that `sequenceA` would (see the `sequenceA` in our implementation?) but operate on them as though they were grouped within the Corepresentable's container. That's as clear as we can get with just words, let's see how a few different Applicatives react to `sequenceA`!
+Before we get too far, let's try out the 'basic' kaleidoscope. `reflected` from the `Reflector` is an optic as it is, the *pretty* signature looks like this:
 
-First let's try using the simple list applicative to see what sort of groups we get if we sequence it. We'll unwrap each set of measurements so we've got a value of type `[[Float]]`
+```haskell
+reflected :: Applicative f => Kaleidoscope (f a) (f b) a b
+```
+
+This is the Bizarro universe version of `traversed`, it allows an optic to focus within an Applicative rather than a Traversable. Let's try it out on a few things and see what happens.
+
+```haskell
+-- When updating/setting it simply focuses each 'element' of the applicative.
+-- It's indistinguishable from `traversed` in this case
+>>> [1, 2, 3] & reflected %~ (*10)
+[10,20,30]
+
+-- We can compose it to nest deeper of course!
+>>> [[1, 2, 3], [4, 5, 6]] & reflected . reflected %~ (*10)
+[[10,20,30],[40,50,60]]
+>>> [[1, 2, 3], [4, 5, 6]] & reflected . reflected %~ (*10)
+[[10,20,30],[40,50,60]]
+
+-- We can review through 'reflected' to embed a value into any Applicative!
+>>> review reflected 1 :: Either () Int
+Right 1
+-- We can compose with prisms
+>>> review (_Just . reflected) 1 :: Maybe [Int]
+Just [1]
+-- It works for any Applicative
+>>> review (reflected . reflected) 1 :: Maybe [Int]
+Just [1]
+
+-- Unfortunately kaleidoscopes don't allow viewing or folding :'(
+>>> [[1, 2, 3], [4, 5, 6]] ^.. reflected . reflected
+error:
+    • No instance for (Reflector
+                         (Data.Profunctor.Types.Forget [Integer]))
+```
+
+Okay, so that covers `review`, `set` and `over`, what about `>-`? This is where things start to get fun!
+
+Remember that `>-` has this type:
+
+```haskell
+(>-) :: Optic (Costar f) s t a b -> (f a -> b) -> f s -> t
+```
+
+So this means it aggregates some **outer** container `f` over the focuses of the provided optic. The hardest part here is keeping track of which container is the collection used by `>-`, and which is the `Applicative` handled by `reflected`. To help keep things separate I'll introduce the simple `Pair` type, defined like so:
+
+```haskell
+data Pair a = Pair a a
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+instance Applicative Pair where
+  pure a = Pair a a
+  Pair f f' <*> Pair a a' = Pair (f a) (f' a')
+```
+
+Now let's run a few simple aggregations to *start* to understand `reflected`.
+
+```haskell
+-- Here 'reflected' uses Applicative of the List 
+-- to group elements from each of the values in the outer Pair.
+-- By using `show` as our aggregation we can see each grouping it produced
+>>> Pair [1, 2] [3, 4] & reflected >- show
+["Pair 1 3","Pair 1 4","Pair 2 3","Pair 2 4"]
+```
+
+A few things to notice here: First, the structure of outer collection gets shifted to the inside where it was aggregated! Secondly we can see that we have a value representing each possible pairing of the two lists in our pair. `reflected` used the Applicative instance of the list to determine the groupings, and the Applicative for lists finds all possible pairings, like this:
+
+```haskell
+>>> liftA2 Pair [1, 2] [3, 4]
+[Pair 1 3,Pair 1 4,Pair 2 3,Pair 2 4]
+```
+
+What happens if we run the same thing with the containers flip-flopped? Then `reflected` will group elements using the `Pair` applicative which matches the first elements of each pair and the second elements of each Pair together.
+
+Note that the reason we can flip-flop them like this is that Lists and Pairs each have both `Applicative` AND `Traversable` instances.
+
+```haskell
+>>> [Pair 1 2, Pair 3 4] & reflected >- show
+Pair "[1,3]" "[2,4]"
+```
+
+This time we can see we've grouped the elements into lists by their positions in the pair!
+
+Let's try one more; we'll use a Map for the outer container.
+
+```haskell
+>>> M.fromList [('a', Pair 1 2), ('b', Pair 3 4)] & reflected >- show
+Pair "fromList [('a',1),('b',3)]" "fromList [('a',2),('b',4)]"
+```
+
+This creates two separate maps, one with the elements from the first portion of the pair, the other with the second portion.
+
+## Back to measurements
+
+So, back to our flower problem, now that we very *roughly* understand how `reflected` groups elements for aggregation we'll see how we can use it to group respective measurements of our flowers.
+
+Here's our simplified representation of our problem:
 
 ```haskell
 allMeasurements :: [[Float]]
@@ -89,455 +205,112 @@ allMeasurements =
       , [10 , 20 , 30 , 40 ]
       , [100, 200, 300, 400]
       ]
+```
 
->>> sequenceA allMeasurements
-[[1.0,10.0,100.0],[1.0,10.0,200.0],[1.0,10.0,300.0],[1.0,10.0,400.0],
- [1.0,20.0,100.0],[1.0,20.0,200.0],[1.0,20.0,300.0],[1.0,20.0,400.0],
- [1.0,30.0,100.0],[1.0,30.0,20 0.0],[1.0,30.0,300.0],[1.0,30.0,400.0],
- ...
+We want to get the average of the first elements, second elements, and third elements respectively (e.g. average of a **column** rather than the **row**). We can use the outer list as our container, but if we try to use `reflected` as is it'll find ALL POSSIBLE GROUPINGS! 
+
+```haskell
+>>> allMeasurements & reflected >- show
+["[1,10,100]","[1,10,200]","[1,10,300]","[1,10,400]","[1,20,100]","[1,20,200]"
+,"[1,20,300]","[1,20,400]","[1,30,100]","[1,30,200]","[1,30,300]","[1,30,400]"
+, ...
 ]
 ```
 
-You get the idea; it goes through every single possible pairing of each measurement! That's not quite what we want in this case! We want to pair the matching measurements together! Sounds like a ZipList to me:
+Not what we want! We need to use a different `Applicative` instance! We want the applicative to *zip* each matching element together... sounds like a ZipList to me!
+
+Let's try this instead:
 
 ```haskell
->>> sequenceA (ZipList <$> allMeasurements)
-ZipList 
-  [ [1.0, 10.0, 100.0]
-  , [2.0, 20.0, 200.0]
-  , [3.0, 30.0, 300.0]
-  , [4.0, 40.0, 400.0]
-  ]
-```
-
-Ahh, much better! Yes I'm aware I could just `traverse` with ZipList 😉. The ZipList applicative pairs elements together pointwise! So if we lift an aggregation through a convolution using `ZipList` we'll get a collection of our original container type (a list) grouped according to the applicative instance we "convoluted" through.  In this case we definitely want the ZipList behaviour, but you can imagine that the cartesian product behaviour of lists might also be useful for other problems.
-
-Now that we know we can use `convoluted` to group up our measurements properly (if we're careful), we can write a version of this kaleidoscope which works specifically over measurements. The zippy applicative seems like it's going to be pretty handy for this sort of thing, so I'll define that as a separate combinator using an `Iso` between ZipList and list alongside the generic `convoluted` optic:
-
-```haskell
-pointWise :: Kaleidoscope [a] [b] a b
-pointWise = iso ZipList getZipList . convolving
-```
-
-We can combine this with another iso for our Measurements newtype wrapper to get what we need:
-
-```haskell
-aggregate :: Kaleidoscope' Measurements Float
-aggregate = iso getMeasurements Measurements . pointWise
-```
-
-Notice that this is a Kaleidoscope over `Float`s on their own, the original list container isn't part of the kaleidoscope, it's determined when we actually run the kaleidoscope with an action. The Kaleidoscope simply requires that it be Traversable, which luckily includes most container types we'd want to use.
-
-To demonstrate what this might end up looking like, here's one more example of what the behaviour of `convoluted` would be if we use a Map for the outer container:
-
-```haskell
-measurementMap :: M.Map String (ZipList Float)
-measurementMap = M.fromList 
-      [ ("setosa"    , ZipList [1  , 2  , 3  , 4  ])
-      , ("versicolor", ZipList [10 , 20 , 30 , 40 ])
-      , ("virginica" , ZipList [100, 200, 300, 400])
+zippyMeasurements :: [ZipList Float]
+zippyMeasurements =
+      [ ZipList [1  , 2  , 3  , 4  ]
+      , ZipList [10 , 20 , 30 , 40 ]
+      , ZipList [100, 200, 300, 400]
       ]
 
->>> sequenceA measurementMap
-ZipList [ fromList [("setosa", 1.0), ("versicolor", 10.0), ("virginica", 100.0)]
-        , fromList [("setosa", 2.0), ("versicolor", 20.0), ("virginica", 200.0)]
-        , fromList [("setosa", 3.0), ("versicolor", 30.0), ("virginica", 300.0)]
-        , fromList [("setosa", 4.0), ("versicolor", 40.0), ("virginica", 400.0)]
+>>> zippyMeasurements & reflected >- show
+ZipList [ "[1,10,100]"
+        , "[2,20,200]"
+        , "[3,30,300]"
+        , "[4,40,400]"
         ]
 ```
 
-We can see that it beautifully creates a map for each of the measurements, where each of the measurements is labeled according to the original map!
+Much better! It's common to want this alternate Applicative behaviour for lists, so I'll define a new kaleidoscope which uses the zippy behaviour for lists:
 
-This is pretty nifty, it allows us to carry information from the outer traversable container (Map) **through** the Applicative (ZipList). This is what the `convoluted` optic does for us.
+```haskell
+-- Use an iso to wrap/unwrap the list in ZipList before reflecting
+zipWise :: Kaleidoscope [a] [b] a b
+zipWise = iso ZipList getZipList . reflected
+```
 
-Enough talk, time to implement the example!
+Great! Now we can use `zipWise` to do our grouping, and we'll run `mean` as our aggregation rather than `show`'ing
+
+```haskell
+>>> let mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
+>>> allMeasurements & zipWise >- mean
+[37.0, 74.0, 111.0, 148.0]
+```
+
+Now we're really close, but we need to tag on another iso to get inside the `Measurements` wrapper our flowers use:
+
+```haskell
+aggregate :: Kaleidoscope' Measurements Float
+aggregate = iso getMeasurements Measurements . zipWise
+```
 
 ## Finishing the example
 
-The example in the abstract is:
-
-```haskell
-iris >- measurements . aggregateWith mean
--- Iris Versicolor (5.8 , 3.0 , 3.7 , 1.1)
-```
-
-We could of course implement some sort of `aggregateWith` combinator, but the version of `>-` we defined in the previous post already allows us to pass a custom aggregation in, so personally I think it makes more sense to pass `mean` in that way. It also means that we can continue composing more optics onto the chain before we decide how we want to handle the information (maybe we want to aggregate over multiple different convolutions of dimensions?).
-
-Using the version of `(>-)` I defined in the previous post (which has the arguments flipped around a bit), and the `aggregate` we defined above, we can do this:
+Kaleidoscopes compose nicely with the algebraic lenses we built in the previous post, meaning we can use the `measurements` algebraic lens we built and compose it with our new `aggregate` kaleidoscope! Using all the same `flowers` from the previous post:
 
 ```haskell
 >>> flowers & measurements . aggregate >- mean
 Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
 ```
 
-It has averaged each measurement across the data-set and has classified the resulting "average flower" as `Versicolor` just as we expected from the simpler version we built in the previous post.
+This is doing a LOT for us; it takes a list of flowers, focuses their measurements, averages them zipwise across their independent measurements, then *classifies* the complete set of average measurements as a species using euclidean difference over measurements with the original data set! As it turns out, the 'average' flower is closest to the `Versicolor` species (in my completely made up data set)!
 
-If you're curious about what's actually being passed into our `mean` function we can add a trace statement to find out. With a bit of rearranging and reformatting it looks roughly like this:
+## Other nifty tricks
 
-```haskell
->>> flowers
-[ Flower Versicolor (Measurements [2.0,3.0,4.0,2.0])
-, Flower Setosa     (Measurements [5.0,4.0,3.0,2.5])
-]
+There's an alternative version of our `Reflector` which depends on `Apply` and `Traversable1` instead of `Applicative` and `Traversable`! It doesn't allow `review`, but opens up `reflected` to work on anything implementing `Apply`; which is particularly handy since that allows us to now `reflect` our way into Maps!
 
->>> flowers & measurements . aggregate >- mean . traceShowId
-[2.0,5.0]
-[3.0,4.0]
-[4.0,3.0]
-[2.0,2.5]
-
-Flower Versicolor (Measurements [3.5,3.5,3.5,2.25])
-```
-
-It's passing the groups point-wise just as we'd hoped!
-
-## Kaleidoscopes as lenses
-
-Unfortunately, like algebraic lenses, 
-
-You might be wondering what
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## First guesses at an implementation
-
-Let's start by taking a look at the examples provided in the abstract. Unfortunately we're only given a few very small snippets without any source code or even type-signatures to help us out, so I'll be mostly guessing my way through this. I'll need to take a few creative liberties to get everything to wire together. 
-
-The abstract uses Kaleidoscopes and Algebraic lenses for classifying flowers into species by analyzing their measurements.  These are the examples in the abstract:
-
-```haskell
->>> (iris !! 1) ^. measurements
-(4.9 , 3.0 , 1.4 , 0.2)
-
->>> iris ?. measurements ( Measurements 4.8 3.1 1.5 0.1)
-Iris Setosa (4.8 , 3.1 , 1.5 , 0.1)
-
->>> iris >- measurements . aggregateWith mean
-Iris Versicolor (5.8 , 3.0 , 3.7 , 1.1)
-```
-
-We're not provided with the implementation of `?.`, `>-`, `measurements`, OR `aggregateWith`. Nor do we have the data-set that builds up `iris`... We don't have a lot to work with here...
-
-I'm going to make some assumptions and we'll build up a dummy data-set of flowers to experiment with:
-
-```haskell
-data Species = Setosa | Versicolor | Virginica
-  deriving Show
-
-data Measurements = Measurements {getMeasurements :: [Float]}
-  deriving Show
-
-data Flower = Flower { flowerSpecies :: Species
-                     , flowerMeasurements :: Measurements}
-  deriving Show
-
-flower1 :: Flower
-flower1 = Flower Versicolor (Measurements [2, 3, 4, 2])
-
-flower2 :: Flower
-flower2 = Flower Setosa (Measurements [5, 4, 3, 2.5])
-
-flowers :: [Flower]
-flowers = [flower1, flower2]
-```
-
-That gives us something to fool around with at least, even if it's not anything like the one used for the paper.
-
-Now for the fun part, we need to start implementing these weird comparison optics. They describe two optics: `measurements` which "encapsulates some learning algorithm which classifies measurements into a species", and "aggregateWith" which somehow runs the provided aggregation function over all the selected values at that stage.
-
-We'll start with `measurements` and see if we can somehow figure out how to embed a classification algorithm into an optic!
-
-I stared at this for the better part of a few weeks before I figured it out, the tough part is to match up the behaviour we need to a profunctor class that encodes that behaviour with as few constraints as possible. My first attempt looked like this:
+Here's the alternative version of our Reflector class:
 
 ```haskell
 import Data.Profunctor
-import Data.Profunctor.Sieve
-import Data.Profunctor.Rep
-import Data.Foldable
+import Data.Profunctor.MStrong
+import Data.Functor.Apply
+import Data.Semigroup.Traversable
 
-type Optic p s t a b = p a b -> p s t
+class MStrong p => Reflector p where
+  reflected :: Apply f => p a b -> p (f a) (f b)
 
-listLens :: forall p f s t a b
-         . (Corepresentable p, Corep p ~ f, Foldable f)
-         => (s -> a)
-         -> (([s], b) -> t)
-         -> Optic p s t a b
-listLens project flatten p = cotabulate run
-  where
-    run :: f s -> t
-    run fs = flatten (toList fs, (cosieve p . fmap project) fs)
+instance Traversable1 f => Reflector (Costar f) where
+  reflected (Costar f) = Costar (fmap f . sequence1)
 ```
 
-This is a LOT to take in, let's address it in pieces. Firstly, the `Corepresentable` constraint.
+This is only a peek at what's possible, but with this version we can use `reflected` to group elements key-wise across all Maps in a non-empty collection.
 
-Corepresentable has `Cosieve` as a superclass, and so provides us with the following methods:
+Let's say we manage several business and have a list of all their profits and expenses. We can group and aggregate over all of their expenses and profits respectively! Again, think of reflected as allowing you to do "column-wise" aggregations, although certain Applicatives provide other intuitions.
+
+Here's the sum of all profits and expenses across all of our businesses
 
 ```haskell
-Cosieve p f       => cosieve    :: p a b -> f a -> b
-Corepresentable p => cotabulate :: (Corep p d -> c) -> p d c
+>>> let xs = M.fromList [("profits", 1), ("expenses", 2)] 
+             :| [ M.fromList [("profits", 10), ("expenses", 20)]
+                , M.fromList [("profits", 100), ("expenses", 200)]
+                ]
+>>> xs & reflected >- sum
+fromList [("expenses",222),("profits",111)]
+
+-- Average expenses, average profit
+>>> xs & reflected >- mean
+fromList [("expenses",74.0),("profits",37.0)]
+
+-- Largest expenses and profit
+>>> xs & reflected >- maximum
+fromList [("expenses",200),("profits",100)]
 ```
 
-These two functions together allow us to round-trip our profunctor from `p a b` into some `f a -> b` and then back! In fact, this is the essence of what `Corepresentable` means, we can "represent" the profunctor as a function from a value in some context `f` to the result.
-
-These two functions allow us to reflect the profunctor into something we can **actually run**! We can fmap `project` over the `s`'s, run them through the continuation: `f a -> b`, then flatten the whole thing using the provided function.
-
-Don't worry if this doesn't make a ton of sense on its own, it took me a while to figure out. This allows us to write our `measurements` classifier, but we'll need a few helper functions first.
-
-First we'll write a helper to compute the Euclidean distance between two flowers' measurements:
-
-```haskell
-measurementDistance :: Measurements -> Measurements -> Float
-measurementDistance (Measurements xs) (Measurements ys) =
-    sqrt . sum $ zipWith diff xs ys
-  where
-    diff a b = (a - b) ** 2
-```
-
-This will tell us how similar two measurements are, the lower the distance, the more similar!
-
-Next we'll write a function which, given a reference set of flowers will detect the flower which is most similar to a given set of measurements. It will then build a flower out of the estimated species and return it:
-
-```haskell
-classify :: ([Flower], Measurements) -> Flower
-classify (flowers, m) =
-    let Flower species _ = 
-          minimumBy (comparing (measurementDistance m . measurements)) flowers
-     in Flower species m
-```
-
-This function is partial, as we should really be using a Non-Empty list, but I hope you can still somehow sleep at night 😅
-
-Now we have our pieces, we can build a list lens!
-
-```haskell
-measurements :: (Corepresentable p, Corep p ~ f, Foldable f) 
-             => Optic' p Flower Measurements
-measurements = listLens flowerMeasurements classify
-```
-
-Okay! Now we have enough to try some things out! The first example is:
-
-```haskell
->>> (iris !! 1) ^. measurements
-```
-
-Which we'll translate into:
-
-```haskell
->>> (flowers !! 1) ^. measurements
-```
-
-But unfortunately we get an error:
-
-```haskell
-• No instance for (Corepresentable
-                      (Data.Profunctor.Types.Forget Measurements))
-    arising from a use of ‘measurements’
-```
-
-Hrmm, looks like `(^.)` uses `Forget` for its profunctor and it doesn't have a `Corepresentable` instance! We'll come back to that soon, let's see if we can get anything else working first. The next example is:
-
-```haskell
-iris ?. measurements (Measurements 4.8 3.1 1.5 0.1)
-```
-
-I'll admit I don't understand how this example could possibly work, optics necessarily have the type `p a b -> p s t`, so how are they passing a `Measurements` object directly into the optic? I'd guess that it has some other signature, but we know that's not true from the previous example which uses it directly as a lens. Hrmm, I suspect either this example is short-hand pseudocode and isn't meant to run as-is, or perhaps I'm missing something sneaky (the latter is more likely).
-
-Well, I can't imagine any way this could work, but let's build an alternative version that gets close!
-
-It appears as though `(?.)` is some sort of **action** which runs the optic, which means we need to take an optic, and some arguments, then specialize the profunctor so we can run them! We know we need something that's `Corepresentable`, and the easiest instance for that is definitely `Costar`! Here's what it looks like:
-
-```haskell
-newtype Costar f a b = Costar (f a -> b)
-```
-
-If we specialize to Costar and swap a few of our arguments around we can end up with:
-
-```haskell
-(?.) :: (Foldable f) => f s -> Optic (Costar f) s t a b -> b -> t
-(?.) xs f a = (runCostar $ f (Costar (const a))) xs
-```
-
-Which lets us write:
-
-```haskell
->>> (flowers ?. measurements) $ Measurements [5, 4, 3, 1]
-Flower Setosa (Measurements [5.0,4.0,3.0,1.0])
-```
-
-Which is *really* close to 
-
-```haskell
->>> iris ?. measurements (Measurements 4.8 3.1 1.5 0.1)
-```
-
-We see that even though we only enter in some measurements, it successfully finds the flower in the data-set which has the closest measurements and assigns the resulting flower to the correct species `Setosa`!
-
-We can change the measurements to try to get closer to our `Versicolor` flower, which has measurements:
-
-```haskell
-flower1 :: Flower
-flower1 = Flower Versicolor (Measurements [2, 3, 4, 2])
-```
-
-```haskell
->>> (flowers ?. measurements) $ Measurements [2.2, 3.5, 4.1, 1.9]
-Flower Versicolor (Measurements [2.2,3.5,4.1,1.9])
-```
-
-It seems to work! Great!
-
-The next example moves on to including a new optic, so before we move onto that, let's see if we can fix our current setup so we can use `(^.)` properly.
-
-We know that `Forget` doesn't have a valid instance of `Corepresentable`, but perhaps there's some other *weaker* abstraction we can invent which works for our purposes.
-
-The "essence" of our algebraic lens is that we can construct an optic out of our helper functions, what if we simply embed that functionality into a profunctor class directly?
-
-```haskell
-class Profunctor p => Algebraic p where
-  algebraic :: (s -> a) -> (([s], b) -> t) -> p a b -> p s t
-```
-
-We could probably be more general over the `[]`, but we won't worry about that now. We've defined a typeclass which represents profunctors which can lift our algebraic operation into a profunctor morphism (a.k.a. an optic)!
-
-Now that we have a typeclass we'll implement our Costar instance again:
-
-```haskell
-instance (Functor f, Foldable f) => Algebraic (Costar f) where
-  algebraic project flatten p = cotabulate run
-    where
-      run s = flatten (toList s, cosieve (lmap project p) s)
-```
-
-Technically this implementation works on any Corepresentable profunctor, but we'll be specific.
-
-Now we need to see if we can implement an instance for `Forget`, if we can manage that, then we can use `view` over our `measurements` optic!
-
-```haskell
-instance Algebraic (Forget r) where
-  algebraic project _flatten (Forget f) = Forget (f . project)
-```
-
-Well that was pretty painless!
-
-Okay, with that, we just need to re-implement our `measurements` optic using `Algebraic`:
-
-```haskell
-type ListLens s t a b = forall p. Algebraic p => p a b -> p s t
-type ListLens' s a = ListLens s s a a
-
-measurements :: ListLens' Flower Measurements
-measurements = algebraic flowerMeasurements classify
-```
-
-Then we can view through our `measurements` optic, fulfilling the first example:
-
-```haskell
->>> (flowers !! 1) ^. measurements
-Measurements {getMeasurements = [5.0,4.0,3.0,2.5]}
-```
-
-As it turns out, `(->)` is also a Corepresentable profunctor, so we can implement `Algebraic` for that too!
-
-```haskell
-instance Algebraic (->) where
-  algebraic project flatten p = run
-    where
-      run s = flatten ([s], p . project $ s)
-```
-
-And in profunctor-land, `(->)` is used for setters and modifiers, so we can now set/modify measurements through our algebraic lens!
-
-```haskell
->>> flower1 & measurements .~ Measurements [9, 8, 7, 6]
-Flower Versicolor Measurements [9.0,8.0,7.0,6.0]
-```
-
-Since we can get and set, our algebraic lens is indeed a full-blown lens! This is really interesting actually since we didn't make any use of `Strong` which is how most lenses are implemented.
-
-Here's one last interesting instance:
-
-```haskell
-instance Algebraic Tagged where
-  algebraic project flatten (Tagged b) = Tagged (flatten ([], b))
-```
-
-Tagged is used for `Review`, which means we can try running our algebraic lens as a review:
-
-```haskell
->>> review measurements (Measurements [1, 2, 3, 4])
-Flower {flowerSpecies = *** Exception: Prelude.foldl1: empty list
-```
-
-Unfortunately this doesn't work because `classify` is partial when the container is empty, we should probably add additional constraints to prevent this from happening in the future, but what it DOES mean is that we can use our algebraic lenses with `review` so long as they don't assume a non-empty container, pretty cool!
-
-## Aggregating with Kaleidoscopes
-
-Now that we've got our classifier lens all figured out, we'd love to be able to use it to run classification over our data-set in interesting ways! The abstract provides an example:
-
-```haskell
->>> iris >- measurements . aggregateWith mean
-Iris Versicolor (5.8 , 3.0 , 3.7 , 1.1)
-```
-
-This seems to be getting the 'mean' values for each of the four measurements, then classifying that result as a `Versicolor` flower according to the source data.
-
-This suggests a type signature something like:
-
-```haskell
-(>-) :: [s] -> Optic p s t a b -> t
-```
-
-But we know that in order to **run** an optic like this we'll need to provided it with an initial optic for it to transform. The only way I can think to do that in this case is if `aggregateWith` has a signature something like:
-
-```haskell
-aggregateWith :: ([a] -> b) -> Optic p [a] b () ()
-```
-
-Or perhaps:
-
-```haskell
-aggregateWith :: ([a] -> b) -> Optic p [a] [a] a a
-```
-
-Both of these result in some tricky implementations for `(>-)`, and I wasn't able to find one I was happy with. It's possible I'm missing something here.
-
-Instead, I ended up swapping the arguments around a bit and ended up using the continuation as the "aggregation" function, meaning we can write something like this:
-
-```haskell
->>> flowers & measurements . aggregate >- mean
-```
-
-Which looks pretty lensy, and does the job! Here's what my version looks like:
-
-```haskell
-(>-) :: Optic (Costar f) s t a b -> (f a -> b) -> f s -> t
-(>-) opt aggregator xs = (runCostar $ opt (Costar aggregator)) xs
-```
-
-This will run any optic over Costar using an aggregation function over the focus!
-
-But I'm getting ahead of myself, what's this `aggregate` optic I'm using?
-
-The secret-sauce behind `aggregate` is an optic which allows you "lift" your computation **through** an arbitrary `Applicative`! In our case, we want to lift our measurements of type `[Float]` into an operation which runs over the **pointwise** comparison of each measurement, effectively, we want to run a function `[Float] -> Float` where the list of floats contains ALL of the nth measurements across all the flowers.
-
-The abstract gives us a hint in the form of the characterization of a kaleidoscope, which we translated into: `(f a -> b) -> (f s -> t)`, which, if we substitute in `Costar` instead of `(->)`, gives us: `Costar f a b -> Costar f s t`, which is an optic!
-
-```haskell
-
-```
-
+This is still a new, exciting, and unexplored area of optics; but I suspect that once libraries begin to adopt it we'll have an even more adaptable model for querying and aggregating across many records. Optics are getting close to the expressive power of dedicated query languages like SQL!
