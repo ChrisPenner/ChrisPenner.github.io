@@ -1,5 +1,5 @@
 ---
-title: "Kaleidoscopes: Optics for Grouping with Applicatives"
+title: "Intro to Kaleidoscopes: Optics for aggregating data through Applicatives"
 author: "Chris Penner"
 date: "Feb 2, 2020"
 tags: [haskell]
