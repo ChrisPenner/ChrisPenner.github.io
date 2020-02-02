@@ -2,20 +2,20 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-02-02T23:20:10Z</updated>
+  <updated>2020-02-02T23:31:56Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
   <entry>
-      <title>Kaleidoscopes: Optics for Grouping with Applicatives</title>
+      <title>Intro to Kaleidoscopes: Optics for aggregating data through Applicatives</title>
       <link href="https://chrispenner.ca/posts/kaleidoscopes"/>
       <id>https://chrispenner.ca/posts/kaleidoscopes</id>
       <updated>2020-02-02T00:00:00Z</updated>
       <summary>An introduction to kaleidoscopes</summary>
       <content type="html"><![CDATA[
-          <img src="https://chrispenner.ca/images/kaleidoscope.jpg" alt="Kaleidoscopes: Optics for Grouping with Applicatives">
+          <img src="https://chrispenner.ca/images/kaleidoscope.jpg" alt="Intro to Kaleidoscopes: Optics for aggregating data through Applicatives">
               <p>This is a blog post about optics, if you're at all interested in optics I suggest you go check out my book: <a href="https://leanpub.com/optics-by-example">Optics By Example</a>. Although this post covers a more advanced topic the book covers everything you need to go from a beginner to master in all things optics! Check it out and tell your friends, now onwards to the post you're here for.</p>
 <p>In this article we're going to dig into a brand new type of optic, the Kaleidoscope! The theory of which is described in <a href="https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf">this abstract</a> by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.</p>
 <p>If you haven't read the <a href="https://chrispenner.ca/posts/algebraic">previous blog post</a> in this series it's not required, but might help to build a stronger understanding.</p>
