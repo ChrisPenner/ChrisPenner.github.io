@@ -4,13 +4,22 @@ author: "Chris Penner"
 date: "Dec 19, 2019"
 tags: [haskell]
 description: "A profunctor implementation of kaleidoscopes"
+image: "kaleidoscope.jpg"
 ---
 
 In this article we're going to dig into a brand new type of optic, the Kaleidoscope! The theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.
 
-If you haven't read the previous blog post in this series you should definitely read [that one first](https://chrispenner.ca/posts/algebraic).
+If you haven't read the [previous blog post](https://chrispenner.ca/posts/algebraic) in this series it's not required, but might help to build a stronger understanding.
+
+## What is a Kaleidoscope?
+
+Like most optics, the behaviour of a kaleidoscope is mostly dictated by the type of profunctor you're passing through it; but from a bird's eye view I'd say that kaleidoscopes allow you to perform aggregations, comparisons, and manipulations over different **groupings** of focuses. They can allow you to calculate summaries of each column of a table, or calculate aggregations over each respective key in a list of JSON objects! They perform this grouping using Applicative instances and can end up with interesting behaviour depending on the type of Applicative you're working with.
+
+I have hopes that as kaleidoscopes are added to more optics libraries and the kinks get worked out that we'll end up with an expressive optics language which let us express complex table queries and mutations like SQL queries do!
 
 ## A new profunctor class
+
+For this post we'll look at kaleidoscopes from a profunctor optics perspective, meaning we'll need a profunctor class which encompasses the behaviour of the optic.
 
 Since the last article was released I had a chance to chat with Mario, the author of the abstract, on twitter which has been very helpful! He explained that the Kaleidoscope characterization in the abstract:
 
@@ -21,13 +30,24 @@ Is represented by the following Profunctor class:
 ```haskell
 class MStrong p => Reflector p where
   reflected :: Applicative f => p a b -> p (f a) (f b)
+```
 
+Reflector has a superclass of the `MStrong` profunctor noted in the corrections at the bottom of the previous post. That every Reflector is MStrong is trivially witnessed by `msecond' = reflected` since `Monoid m => (m, a)` is an Applicative (namely the **Writer** Applicative). 
 
+With this class defined we can say that a Kaleidoscope is any optic which depends on `Reflector`:
+
+```haskell
 type Kaleidoscope s t a b = forall p. Reflector p => p a b -> p s t
 type Kaleidoscope' s a = Kaleidoscope s s a a
 ```
 
-It provides an optic which focuses the contents of any Applicative structure! It has a superclass of the `MStrong` profunctor noted in the corrections at the bottom of the previous post. It's trivially witnessed by `msecond' = reflected` since `Monoid m => (m, a)` is an Applicative. 
+This provides an optic which focuses the contents of any Applicative structure! 
+
+Here's what we get when we write `reflected` with its new signature:
+
+```haskell
+reflected :: Applicative f => Kaleidoscope (f a) (f b) a b
+```
 
 At first `reflected` seems almost identical to the `traverse'` combinator from the [`Traversing`](https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-) profunctor class:
 
@@ -35,9 +55,9 @@ At first `reflected` seems almost identical to the `traverse'` combinator from t
 traverse' :: (Traversing p, Traversable f) => Optic p (f a) (f b) a b
 ```
 
-But of course `traverse'` works only on Traversables whereas our new optic works on only Applicatives. Although these have significant overlap, the **behaviour** induced by applicatives is distinct from the behaviour of traversables.
+But of course `traverse'` works only on Traversables whereas our new optic works only on Applicatives. Although these have significant overlap, the **behaviour** induced by the use of applicative structure is distinct from the behaviour of traversables.
 
-Let's implement our new `Reflector` class for a few profunctors so we can actually try it out!
+Let's implement our new `Reflector` class for a few common profunctors so we can actually try it out!
 
 ```haskell
 -- (->) Allows us to set or update values through a reflector
@@ -64,25 +84,17 @@ These are the usual suspects, in optics they correspond to the ability to run th
 * `Tagged`: review
 * `Star`: traverseOf
 
-Unfortunately we can't implement this profunctor for `Forget`, so we won't be able to `view` or `fold` over Kaleidoscopes. C'est la vie!
+Unfortunately we can't implement an instance of `Reflector` for `Forget`, so we won't be able to `view` or `fold` over Kaleidoscopes. C'est la vie!
 
-Now that we have a profunctor class we can write out the type of optic this profunctor entails:
-
-
-```haskell
-type Kaleidoscope s t a b = forall p. Reflector p => p a b -> p s t
-type Kaleidoscope' s a = Kaleidoscope s s a a
-```
-
-A Kaleidoscope is an optic which transforms 'Reflector' profunctors.
+The class and optic are all set up! Let's see what they can do.
 
 ## Grouping with kaleidoscopes
 
 In the previous post we managed to fill out most of the examples from the case study using Algebraic Lenses, but we got stuck when it came to **aggregating** over the individual measurements of the flowers in our data-set. We wanted to somehow aggregate over constituent pieces of our data-set all at once, for instance if we had the following measurements as a silly example:
 
 ```haskell
-Measurements [1, 2, 3, 4]
-Measurements [10, 20, 30, 40]
+Measurements [1  , 2  , 3  , 4  ]
+Measurements [10 , 20 , 30 , 40 ]
 Measurements [100, 200, 300, 400]
 ```
 
@@ -97,15 +109,9 @@ Measurements
   ]
 ```
 
-However our Algebraic lenses didn't give us any way to talk about **grouping** or **convolution** of the elements in the container. Depending on the **action** we're running on the resulting optic this has different meanings. When using `set`, `over` for example a kaleidoscope simply updates each value in the collection just like a traversal would; however when running with the `>-` aggregation operator from the previous post a kaleidoscope re-groups elements within the aggregation container! We'll see what this means in a moment. Another interesting case comes from `review`; when `review`ing through a kaleidoscope we use `pure` to embed a value into the Applicative.
+However our Algebraic lenses didn't give us any way to talk about **grouping** or **convolution** of the elements in the container, but kaleidoscopes are going to help us get there!
 
-Before we get too far, let's try out the 'basic' kaleidoscope. `reflected` from the `Reflector` is an optic as it is, the *pretty* signature looks like this:
-
-```haskell
-reflected :: Applicative f => Kaleidoscope (f a) (f b) a b
-```
-
-This is the Bizarro universe version of `traversed`, it allows an optic to focus within an Applicative rather than a Traversable. Let's try it out on a few things and see what happens.
+Let's try just running our optic in a few different ways that type-check and see what happens.
 
 ```haskell
 -- When updating/setting it simply focuses each 'element' of the applicative.
@@ -113,38 +119,44 @@ This is the Bizarro universe version of `traversed`, it allows an optic to focus
 >>> [1, 2, 3] & reflected %~ (*10)
 [10,20,30]
 
--- We can compose it to nest deeper of course!
+-- We can compose it to nest deeper into multiple stacked applicatives of course!
 >>> [[1, 2, 3], [4, 5, 6]] & reflected . reflected %~ (*10)
 [[10,20,30],[40,50,60]]
 >>> [[1, 2, 3], [4, 5, 6]] & reflected . reflected %~ (*10)
 [[10,20,30],[40,50,60]]
 
--- We can review through 'reflected' to embed a value into any Applicative!
+-- Since `Tagged` is a `Reflector` we can 'review' through 'reflected' 
+-- This will embed a value into any Applicative as though we'd used 'pure'
 >>> review reflected 1 :: Either () Int
 Right 1
 -- We can compose with prisms
 >>> review (_Just . reflected) 1 :: Maybe [Int]
 Just [1]
--- It works for any Applicative
+
 >>> review (reflected . reflected) 1 :: Maybe [Int]
 Just [1]
 
 -- Unfortunately kaleidoscopes don't allow viewing or folding :'(
+-- They can still be composed with lenses and traversals, but the resulting optic
+-- can only be used as a setter, or as a traversal with Distributive Functors.
 >>> [[1, 2, 3], [4, 5, 6]] ^.. reflected . reflected
 error:
     • No instance for (Reflector
                          (Data.Profunctor.Types.Forget [Integer]))
+
+>>> [[1, 2, 3], [4, 5, 6]] & traversed . reflected %~ (*10)
+[[10,20,30],[40,50,60]]
 ```
 
 Okay, so that covers `review`, `set` and `over`, what about `>-`? This is where things start to get fun!
 
-Remember that `>-` has this type:
+Remember from the last post that `>-` has this type:
 
 ```haskell
 (>-) :: Optic (Costar f) s t a b -> (f a -> b) -> f s -> t
 ```
 
-So this means it aggregates some **outer** container `f` over the focuses of the provided optic. The hardest part here is keeping track of which container is the collection used by `>-`, and which is the `Applicative` handled by `reflected`. To help keep things separate I'll introduce the simple `Pair` type, defined like so:
+So this means it aggregates some **outer** container `f` over the focuses of the provided optic. The hardest part here is keeping track of which container is the collection handled by `>-` and which is the `Applicative` handled by `reflected`. To help keep things separate I'll introduce the simple `Pair` type, defined like so:
 
 ```haskell
 data Pair a = Pair a a
@@ -158,30 +170,31 @@ instance Applicative Pair where
 Now let's run a few simple aggregations to *start* to understand `reflected`.
 
 ```haskell
--- Here 'reflected' uses Applicative of the List 
+-- Here 'reflected' uses the List's Applicative instance 
 -- to group elements from each of the values in the outer Pair.
--- By using `show` as our aggregation we can see each grouping it produced
+-- By using `show` as our `(f a -> b)` aggregation we can see 
+-- each grouping was passed to our aggregation function.
 >>> Pair [1, 2] [3, 4] & reflected >- show
 ["Pair 1 3","Pair 1 4","Pair 2 3","Pair 2 4"]
 ```
 
-A few things to notice here: First, the structure of outer collection gets shifted to the inside where it was aggregated! Secondly we can see that we have a value representing each possible pairing of the two lists in our pair. `reflected` used the Applicative instance of the list to determine the groupings, and the Applicative for lists finds all possible pairings, like this:
+A few things to notice here. First, the structure of outer collection gets shifted to the inside where it was aggregated, the `Pair` was flattened by our aggregation, leaving only the list's structure. Secondly we can see that we have a value representing each possible pairing of the two lists in our pair. `reflected` used the Applicative instance of the list to determine the groupings, and the Applicative for lists finds all possible pairings. Basically it did this:
 
 ```haskell
 >>> liftA2 Pair [1, 2] [3, 4]
-[Pair 1 3,Pair 1 4,Pair 2 3,Pair 2 4]
+[Pair 1 3, Pair 1 4, Pair 2 3, Pair 2 4]
 ```
 
-What happens if we run the same thing with the containers flip-flopped? Then `reflected` will group elements using the `Pair` applicative which matches the first elements of each pair and the second elements of each Pair together.
+What happens if we run the same thing with the containers flip-flopped? Then `reflected` will group elements using the `Pair` applicative which matches the elements of each pair zip-wise.
 
-Note that the reason we can flip-flop them like this is that Lists and Pairs each have both `Applicative` AND `Traversable` instances.
+Note that the reason we can flip-flop them like this is that Lists and Pairs each have `Applicative` AND `Traversable` instances. This time we're using the List's Traversable instance and the Pair's Applicative.
 
 ```haskell
 >>> [Pair 1 2, Pair 3 4] & reflected >- show
 Pair "[1,3]" "[2,4]"
 ```
 
-This time we can see we've grouped the elements into lists by their positions in the pair!
+This time we can see we've grouped the elements into lists by their positions in the pair! Again, the outer structure was flattened by the aggregation after being grouped using the inner applicative instance.
 
 Let's try one more; we'll use a Map for the outer container.
 
@@ -190,13 +203,13 @@ Let's try one more; we'll use a Map for the outer container.
 Pair "fromList [('a',1),('b',3)]" "fromList [('a',2),('b',4)]"
 ```
 
-This creates two separate maps, one with the elements from the first portion of the pair, the other with the second portion.
+This creates two separate maps which have been grouped into Maps using the Applicative instance of the inner Pair! In this case it grouped elements zipwise across maps! Take a moment to see how this behavior is perhaps not very intuitive, but is nonetheless a very useful way of grouping data.
 
 ## Back to measurements
 
-So, back to our flower problem, now that we very *roughly* understand how `reflected` groups elements for aggregation we'll see how we can use it to group respective measurements of our flowers.
+So, back to our flower problem from the previous post, now that we very *roughly* understand how `reflected` groups elements for aggregation we'll see how we can use it to group respective measurements of our flowers.
 
-Here's our simplified representation of our problem:
+Here's our simplified representation of our problem, we've got a collection of flower measurements. Each element of each list represents a unique measurement, for example maybe the first measurement in each list (the first column) represents leaf length, and the last measurement in each (the last column) represents stem length. Here's our silly simplified data set:
 
 ```haskell
 allMeasurements :: [[Float]]
@@ -207,17 +220,31 @@ allMeasurements =
       ]
 ```
 
-We want to get the average of the first elements, second elements, and third elements respectively (e.g. average of a **column** rather than the **row**). We can use the outer list as our container, but if we try to use `reflected` as is it'll find ALL POSSIBLE GROUPINGS! 
+Our task is to get the average of the **each individual measurement**, i.e. the average of each **column** rather than each **row**, averaging different measurement types together doesn't make sense. We've seen how `reflected` can help us group data across an outer container, but if we try to use `reflected` here it will find ALL POSSIBLE GROUPINGS! Let's see how this gong-show unfolds:
 
 ```haskell
 >>> allMeasurements & reflected >- show
 ["[1,10,100]","[1,10,200]","[1,10,300]","[1,10,400]","[1,20,100]","[1,20,200]"
 ,"[1,20,300]","[1,20,400]","[1,30,100]","[1,30,200]","[1,30,300]","[1,30,400]"
-, ...
+, ... ad-nauseum
 ]
 ```
 
-Not what we want! We need to use a different `Applicative` instance! We want the applicative to *zip* each matching element together... sounds like a ZipList to me!
+Hrmmm, this makes sense when we think about it; we're grouping elements using the list applicative which performs a cartesian product yielding all possible combinations! Instead we really want to group elements by their position within the list, we'll need a different `Applicative` instance!  Since we want the applicative to *zip* each matching element together I suspect a `ZipList` might be just what the doctor ordered!
+
+If you're unfamiliar with `ZipList` it's a newtype around lists provided in `Control.Applicative`. Take a look at how its Applicative instance differs from plain old lists:
+
+```haskell
+-- List Applicative is cartesian product; e.g. all combinations.
+>>> liftA2 (,) [1, 2, 3] [4, 5, 6]
+[(1,4),(1,5),(1,6),(2,4),(2,5),(2,6),(3,4),(3,5),(3,6)]
+
+-- ZipList Applicative does zipwise pairing instead!
+>>> liftA2 (,) (ZipList [1, 2, 3]) (ZipList [4, 5, 6])
+ZipList [(1,4),(2,5),(3,6)]
+```
+
+That looks more like what we want, the results end up grouped according to their position in the list.
 
 Let's try this instead:
 
@@ -237,7 +264,7 @@ ZipList [ "[1,10,100]"
         ]
 ```
 
-Much better! It's common to want this alternate Applicative behaviour for lists, so I'll define a new kaleidoscope which uses the zippy behaviour for lists:
+Much better! It's common to want this alternate Applicative behaviour for lists, so I'll define a new kaleidoscope which uses this zippy behaviour for lists:
 
 ```haskell
 -- Use an iso to wrap/unwrap the list in ZipList before reflecting
@@ -248,19 +275,28 @@ zipWise = iso ZipList getZipList . reflected
 Great! Now we can use `zipWise` to do our grouping, and we'll run `mean` as our aggregation rather than `show`'ing
 
 ```haskell
->>> let mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
+-- Here's an averaging function
+mean :: Foldable f => f Float -> Float
+mean xs = sum xs / fromIntegral (length xs)
+
+-- `zipWise` will group measurements by type (e.g. get lists representing columns)
+-- then we can take the average of each column, which will be collected back into a single row.
 >>> allMeasurements & zipWise >- mean
 [37.0, 74.0, 111.0, 148.0]
 ```
 
-Now we're really close, but we need to tag on another iso to get inside the `Measurements` wrapper our flowers use:
+Cool! We use any aggregation function in place of `mean`, so we could get the `sum`, `median`, `maximum`, or `minimum` of each column, whatever you like!
+
+## Finishing the example
+
+Let's finish up the example from the previous post; if you haven't read that recently this part might not make much sense.
+
+Our new `zipWise` kaleidoscope is almost what we need, but we'll need another iso to let it accept the `Measurements` wrapper our flowers use:
 
 ```haskell
 aggregate :: Kaleidoscope' Measurements Float
 aggregate = iso getMeasurements Measurements . zipWise
 ```
-
-## Finishing the example
 
 Kaleidoscopes compose nicely with the algebraic lenses we built in the previous post, meaning we can use the `measurements` algebraic lens we built and compose it with our new `aggregate` kaleidoscope! Using all the same `flowers` from the previous post:
 
