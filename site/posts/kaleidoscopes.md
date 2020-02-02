@@ -1,11 +1,13 @@
 ---
-title: "Kaleidoscopes: Applicative convolution using lenses"
+title: "Kaleidoscopes: Optics for Grouping with Applicatives"
 author: "Chris Penner"
-date: "Dec 19, 2019"
+date: "Feb 2, 2020"
 tags: [haskell]
-description: "A profunctor implementation of kaleidoscopes"
+description: "An introduction to kaleidoscopes"
 image: "kaleidoscope.jpg"
 ---
+
+This is a blog post about optics, if you're at all interested in optics I suggest you go check out my book: [Optics By Example](https://leanpub.com/optics-by-example). Although this post covers a more advanced topic the book covers everything you need to go from a beginner to master in all things optics! Check it out and tell your friends, now onwards to the post you're here for.
 
 In this article we're going to dig into a brand new type of optic, the Kaleidoscope! The theory of which is described in [this abstract](https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf) by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.
 
