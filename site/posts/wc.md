@@ -384,7 +384,7 @@ multiCoreCount fp = do
         fileHandle <- openBinaryFile fp ReadMode
         hSeek fileHandle AbsoluteSeek offset
         countBytes . limiter <$!> BL.hGetContents fileHandle)
-{-# INLINE handleSplitUTF #-}
+{-# INLINE multiCoreCount #-}
 
 countBytes :: BL.ByteString -> Counts
 countBytes = BL.foldl' (\a b -> a <> countChar b) mempty
