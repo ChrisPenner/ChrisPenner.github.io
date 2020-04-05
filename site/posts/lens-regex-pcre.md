@@ -23,7 +23,7 @@ I don't know about you, but I've found almost every regular expression interface
 * Sometimes you want only **one** match, sometimes a few, sometimes you want **all** of them!
 * Sometimes you want **just** the match groups; sometimes you want the **whole** match, sometimes you want **BOTH**!
 * Regular Expression searching is **expensive**; we want to be **lazy** to avoid work!
-* Regular expressions patterns are written as text; what if it's not valid?
+* Regular expressions patterns are usually written as text; what if it's not valid?
 
 Luckily Haskell has a few tricks that help make some of these inherently difficult things a bit easier. Inherently lazy data structures and computations allows us to punt off laziness to the language rather than worrying about how to do the minimal amount of work possible. TemplateHaskell allows us to statically check Regular Expressions to ensure they're valid at compile time, and could even possibly allow us to statically analyze the existence of match groups. But that still leaves a lot of surface area to cover! It's easy to see how come these interfaces are complicated!
 
