@@ -775,7 +775,7 @@
 <li>Sometimes you want only <strong>one</strong> match, sometimes a few, sometimes you want <strong>all</strong> of them!</li>
 <li>Sometimes you want <strong>just</strong> the match groups; sometimes you want the <strong>whole</strong> match, sometimes you want <strong>BOTH</strong>!</li>
 <li>Regular Expression searching is <strong>expensive</strong>; we want to be <strong>lazy</strong> to avoid work!</li>
-<li>Regular expressions patterns are written as text; what if it's not valid?</li>
+<li>Regular expressions patterns are usually written as text; what if it's not valid?</li>
 </ul>
 <p>Luckily Haskell has a few tricks that help make some of these inherently difficult things a bit easier. Inherently lazy data structures and computations allows us to punt off laziness to the language rather than worrying about how to do the minimal amount of work possible. TemplateHaskell allows us to statically check Regular Expressions to ensure they're valid at compile time, and could even possibly allow us to statically analyze the existence of match groups. But that still leaves a lot of surface area to cover! It's easy to see how come these interfaces are complicated!</p>
 <p>Think about designing a single interface which can support ALL of the following operations performantly and elegantly:</p>
