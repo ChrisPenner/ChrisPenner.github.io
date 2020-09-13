@@ -65,7 +65,7 @@ The Reader Monad's primary purpose is to provide access to an implicit context, 
 
 The core operations provided by `Reader` are `ask` and `local`.
 
-```
+```haskell
 ask :: Reader r r
 local :: (r -> r) -> Reader r r
 ```
@@ -201,4 +201,80 @@ Let's expand on our bookstore example, but this time we'll build a summary for *
 Since we'll want *both* implicit scope _and_ *multiplicity*, we'll want to use both `Reader` and `[]`! Luckily, monad transformers are a thing!
 
 `ListT` can get a bit messy, so we'll make sure to put Reader on the outside.
+
+Since we'll often focus on a subset of our environment which may differ in type from the environment itself, we'll need to write a combinator to "lift" actions over the subtype into the larger type. It turns out that if we're using a concrete monad stack this is pretty easy to write:
+
+```haskell
+focusingEach :: (e -> [x]) -> ReaderT x [] a -> ReaderT e [] a
+focusingEach f r = do
+    xs <- asks f
+    x <- lift xs
+    lift $ runReaderT r x
+```
+
+We can now adjust our "summarizer" to get a list of all book summaries:
+
+```haskell
+allSummaries :: ReaderT BookStore [] String
+allSummaries = do
+    focusingEach books $ do
+        theTitle <- asks title
+        theAuthor <- asks author
+        return $ theTitle <> " by " <> theAuthor
+
+>>> runReaderT allSummaries bobsBooks
+["The Great Gatsby by F. Scott Fitzgerald","Moby Dick by Herman Melville"]
+```
+
+Note that the block which generates the summary itself doesn't need to change at all! This demonstrates the beautiful abstraction and re-usability of traversal systems.
+
+## Mutation
+
+### What is mutation?
+
+This should be a relatively easy one to understand; most traversal systems support either *querying* a structure _or_ *mutating* it! It's often useful to drill deep down into an object and mutate many pieces of it at once, where each adjustment is specific to its context.
+
+XPath doesn't have first class support for editing things, so we'll look at an example in `jq`.
+
+Here's our bookstore described as JSON:
+
+```json
+{ "address": "213 Drury Lane"
+, "books": [
+        { "title": "The Great Gatsby"
+        , "author": "F. Scott Fitzgerald"
+        },
+        { "title": "Moby Dick"
+        , "author": "Herman Melville"
+        }
+    ]
+}
+```
+
+Here's how we could truncate our book titles with a mutation using *jq*:
+
+```jq
+.books[].title |= .[0:5] + "..."
+```
+
+Resulting in:
+
+```json
+{
+  "address": "213 Drury Lane",
+  "books": [
+    {
+      "title": "The G...",
+      "author": "F. Scott Fitzgerald"
+    },
+    {
+      "title": "Moby ...",
+      "author": "Herman Melville"
+    }
+  ]
+}
+```
+
+The `|=` operator runs the selected value through the filter on its right-hand-side and assigns the result as the new value. Let's see how we can do something similar!
+
 
