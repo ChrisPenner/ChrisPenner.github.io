@@ -458,3 +458,119 @@ As you can see it's pretty much the same! We just have to specify the type of JS
 For the record I'm not suggesting that you go and replace all of your CLI usages of `jq` with Haskell, but I hope that this exploration can help future programmers avoid "re-inventing" the wheel and give them a more mathematically structured approach when building their traversal systems; or maybe they'll just build those systems in Haskell instead 😉
 
 I'm excited to see what sort of cool tricks, combinators, and interactions with other monads you all find!
+
+
+## Bonus
+
+Just to show that you can do "real" work with this abstraction here are a few more examples using this technique with different data types. These examples will still be a bit tongue in cheek, but hopefully show that you really can accomplish actual tasks with this abstraction across a wide range of data types.
+
+---
+
+First up; here's a transformation over a kubernetes manifest describing the pods available in a given namespace. You can see an example roughly what the data looks like [here](https://gist.github.com/ChrisPenner/53e4b505ff0673b39c60e6c926b2715d).
+
+This transformation takes a map of docker image names to port numbers and goes through the manifest and sets each container to use the correct ports. It also tags each pod with all of the images from its containers, and finally returns a map of container names to docker image types! It's pretty cool how this abstraction lets us mutate data while also returning information.
+
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+module K8s where
+
+import Data.Aeson hiding ((.=))
+import Data.Aeson.Lens
+import Control.Lens
+import Control.Monad.State
+import qualified Data.Map as M
+import qualified Data.Text as T
+import Data.Foldable
+
+-- Load in your k8s JSON here however you like
+k8sJSON :: Value
+k8sJSON = undefined
+
+transformation :: M.Map T.Text Int -> State Value (M.Map T.Text T.Text)
+transformation ports = do
+    zoom (key "items" . values) $ do
+        containerImages <- zoom (key "spec" . key "containers" . values) $ do
+            containerName <- use (key "name" . _String)
+            imageName <- use (key "image" . _String . to (T.takeWhile (/= ':')))
+            zoom (key "ports" . values) $ do
+                let hostPort = M.findWithDefault 8080 imageName ports
+                key "hostPort" . _Integral .= hostPort
+                key "containerPort" . _Integral .= hostPort + 1000
+            return $ M.singleton containerName imageName
+        zoom (key "metadata" . key "labels") $ do
+          for_ containerImages $ \imageName ->
+              _Object . at imageName ?= "true"
+        return containerImages
+
+imagePorts :: M.Map T.Text Int
+imagePorts = M.fromList [ ("redis", 6379)
+                        , ("my-app", 80)
+                        , ("postgres", 5432)
+                        ]
+
+result :: (M.Map T.Text T.Text, Value)
+result = runState (transformation imagePorts) k8sJSON
+```
+
+---
+
+Next up; let's work with some HTML! The following transformation uses `taggy-lens` to interact with HTML (or any XML you happen to have lying around.)
+
+This transformation will find all direct parents of `<img>` tags and will set the `alt` tags on those images to be all the text inside the parent node.
+
+After that, it will find all `<a>` tags and wrap them in a `<strong>` tag while also returning a list of all `href` attributes so we can see all the links we have in the document!
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+module HTML where
+
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
+import qualified Data.Text.Lazy.IO as TL
+import Control.Monad.State
+import Text.Taggy.Lens
+import Control.Lens hiding (elements)
+
+transformation :: State TL.Text [T.Text]
+transformation = do
+    -- Select all tags which have an "img" as a direct child
+    zoom (html . elements . deep (filteredBy (elements . named (only "img")))) $ do
+        -- Get the current node's text contents
+        altText <- use contents
+        -- Set the text contents as the "alt" tag for all img children
+        elements . named (only "img") . attr "alt" ?= altText
+
+    -- Transform all "a" tags recursively
+    (html . elements . transformM . named (only "a")) 
+      -- Wrap them in a <strong> tag while also returning their href value
+      %%= \tag -> (tag ^.. attr "href" . _Just, Element "strong" mempty [NodeElement tag])
+```
+
+---
+
+Lastly let's see a CSV example! I'll be using my [`lens-csv`](https://hackage.haskell.org/package/lens-csv-0.1.1.0/docs/Data-Csv-Lens.html) library for the optics.
+
+This simple example iterates through all the rows in a csv and uses an overly simplistic formula to recompute their ages based on their birth year.
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
+module CSV where
+
+import Control.Lens
+import Data.Csv.Lens
+import qualified Data.ByteString.Lazy as BL
+import Control.Monad.State
+
+recomputeAges :: State BL.ByteString ()
+recomputeAges = do
+    zoom (namedCsv . rows) $ do
+        preuse (column @Int "birthYear") >>= \case
+            Nothing -> return ()
+            Just birthYear -> do
+                column @Int "age" .= 2020 - birthYear
+```
+
+Hopefully these last few examples help convince you that this really is an adaptable solution even though they're still a bit silly.
