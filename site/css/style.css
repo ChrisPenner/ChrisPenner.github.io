@@ -49,10 +49,12 @@ html {
   box-sizing: border-box;
 }
 
+div.sourceCode {
+  max-width: 100%;
+}
 pre.sourceCode {
   overflow-x: auto;
   padding: 1em;
-  max-width: 100%;
 }
 
 *,
@@ -63,7 +65,7 @@ pre.sourceCode {
 
 /* Variables */
 html {
-  font-family: georgia, serif;
+  font-family: Helvetica, sans-serif;
   color: var(--fg);
   background: var(--bg);
   background-attachment: fixed;
@@ -353,7 +355,7 @@ a.category:hover {
   padding: 0px 20px;
   margin: 3em auto;
   transition: color 2s;
-  font-size: 1.1em;
+  font-size: 1.2em;
   align-items: center;
 }
 .post p {
