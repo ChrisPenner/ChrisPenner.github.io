@@ -1,18 +1,26 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="The Interface We Need">
     <meta name="twitter:description" content="Starting with the interface can make things easier for everyone">
         <title>The Interface We Need</title>
-    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -24,8 +32,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -736,33 +744,31 @@
         </div>
     </header>
 
-    
-    
-
-<div id="page">
-    <div class="wrapper">
+ 
+    <div id="page">
+      <div class="wrapper">
         <div class="masthead">
-            <span class="title">
-                The Interface We Need
-            </span>
-            <br>
+          <h1 class="title">
+            The Interface We Need
+          </h1>
+          <br />
 
-            <br>
-            <span class="byline">by Chris Penner</span>
-            <br>
-            <span class="date">Feb 15, 2016</span>
-            <br>
-            <div class="metadata">
-                <br>
-                <span class="tags">
-                    Tags<br>
-                    <a class="tag" href="/tag/programming">programming</a>
-                    <a class="tag" href="/tag/python">python</a>
-                </span>
-            </div>
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Feb 15, 2016</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/programming">programming</a>
+              <a class="tag" href="/tag/python">python</a>
+            </span>
+          </div>
         </div>
-    </div>
-    <article class="post">
+      </div>
+      <article class="post">
         <p>I suffer from a not-so-rare condition where as soon as a problem is presented to me I immediately start trying to solve it with the tools I know well. This may not sound like a bad thing, but what happens is that I end up with a user interface built around supporting the implementation I was planning to write, which is very rarely an interface that anyone would actually like to use. In the worst case I end up changing my implementation plans along the way and now we're stuck with a crappy API designed around an implementation that doesn't even exist! I've been learning that it's usually better to design an interface that's elegant and does what you need, then the implementation will fall into place from there.</p>
 <p>Anyway, I ended up learning this lesson once more the other day, here's the story: I was writing a laughably simple script and I wanted it to be able to accept arguments from the command line. I remembered that Python has an argument parsing module in its standard library (argparse), but upon looking it up I remembered how much of a pain it was to get all your arguments set up. Argparse is great in that it allows you to do complex things with arguments, but I think there should be an alternate path to avoid the complexity when all you need is to grab a few arguments from the command line. Sure I could have just used sys.argv manually, but I wanted to use command line '--options' and parsing those out from argv would be a royal pain.</p>
 <p>In the end I decided to write my own little helper module for this sort of thing, which you can find here. The goal was to design the simplest possible interface that just does the right thing.</p>
@@ -779,44 +785,94 @@
 <p>We ended up with a much simpler interface, one that we probably wouldn't have even thought was possible if we'd started thinking about the implementation too early on. This just goes to show that designing a nice interface first can lead to better design, a much improved user experience, and in this case: cleaner code! Remember to put the interface first the next time you're implementing some new feature for your app.</p>
 <p>You can find the full decorator <a href="https://github.com/chrispenner/dont-argue">here</a>, it's only a few lines long.</p>
 
-        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
 
-        <br>
-        <br>
+        <br />
+        <br />
 
         <!--Share buttons-->
         <div class="social-buttons">
-            <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/dont-argue" data-text="Check out: The Interface We Need - " data-via="chrislpenner">Tweet</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/dont-argue" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/dont-argue"
+            data-text="Check out: The Interface We Need - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/dont-argue"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
         </div>
 
-<!-- Disqus Comments -->
-<!-- <div id="disqus_thread"></div> -->
-<!-- <script type="text/javascript"> -->
-<!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = ''; -->
-<!--     var disqus_url = 'http://chrispenner.ca'; -->
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-<!-- (function() { -->
-    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-<!-- })(); -->
-<!-- </script> -->
-</article>
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
 
-</div>
-
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-
-</body>
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>

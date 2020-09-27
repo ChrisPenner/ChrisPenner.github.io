@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
@@ -12,8 +15,13 @@
     <meta name="twitter:description" content="Building adjunctions from Free and Forgetful Functors">
     <meta name="twitter:image" content="http://chrispenner.ca/images/books.jpg">
     <title>Free and Forgetful Functors</title>
-    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -25,8 +33,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -737,34 +745,32 @@
         </div>
     </header>
 
-    
-    
-
-<div id="page">
-    <div class="wrapper">
+ 
+    <div id="page">
+      <div class="wrapper">
         <div class="masthead">
-            <span class="title">
-                Free and Forgetful Functors
-            </span>
-            <br>
+          <h1 class="title">
+            Free and Forgetful Functors
+          </h1>
+          <br />
 
-            <img class="post-image" src="/images/books.jpg">
-            <br>
-            <span class="byline">by Chris Penner</span>
-            <br>
-            <span class="date">Jul 20, 2017</span>
-            <br>
-            <div class="metadata">
-                <br>
-                <span class="tags">
-                    Tags<br>
-                    <a class="tag" href="/tag/haskell">haskell</a>
-                    <a class="tag" href="/tag/programming">programming</a>
-                </span>
-            </div>
+          <img class="post-image" src="/images/books.jpg" />
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Jul 20, 2017</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/programming">programming</a>
+            </span>
+          </div>
         </div>
-    </div>
-    <article class="post">
+      </div>
+      <article class="post">
         <p>Today I'm going to continue the previous topic of Adjunctions, <a href="/posts/adjunction-battleship">last time</a> we talked about how you can build a sensible adjunction from any Representable functor, this time we're going to talk about a (semantically) different form of adjunction, one formed by a pair of Free and Forgetful Functors. First I'll describe the relationship of Free and Forgetful Functors, then we'll see how an Adjunction can making translating between them slightly easier.</p>
 <p>Let's define our terms, hopefully you already know what a Functor is, it's any type with a <code>map</code> method (called <code>fmap</code> in Haskell). A Free Functor is a functor which can embed any element "for free". So any Functor where we could just 'inject' a value into is considered a Free Functor. If the functor has an Applicative instance then <code>inject</code> is called <code>pure</code>.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">inject ::</span> a <span class="ot">-&gt;</span> f a</span></code></pre></div>
@@ -870,44 +876,94 @@
 <span id="cb13-7"><a href="#cb13-7"></a><span class="st">&quot;ENDER&#39;S GAME&quot;</span></span></code></pre></div>
 <p>Notice that we lose the tag when we do this, that's the price we pay with a lossy Adjunction! The utility of the construct seems pretty limited here since <code>fmap</code> and <code>extract</code> would pretty much give us the same options, but the idea is that Adjunctions represent a structure which we can generalize over in certain cases. This post was more about understanding adjunctions and Free/Forgetful functors than it was about programming anyways :)</p>
 
-        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
 
-        <br>
-        <br>
+        <br />
+        <br />
 
         <!--Share buttons-->
         <div class="social-buttons">
-            <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/free-forgetful-functors" data-text="Check out: Free and Forgetful Functors - " data-via="chrislpenner">Tweet</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/free-forgetful-functors" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/free-forgetful-functors"
+            data-text="Check out: Free and Forgetful Functors - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/free-forgetful-functors"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
         </div>
 
-<!-- Disqus Comments -->
-<!-- <div id="disqus_thread"></div> -->
-<!-- <script type="text/javascript"> -->
-<!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = ''; -->
-<!--     var disqus_url = 'http://chrispenner.ca'; -->
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-<!-- (function() { -->
-    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-<!-- })(); -->
-<!-- </script> -->
-</article>
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
 
-</div>
-
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-
-</body>
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>

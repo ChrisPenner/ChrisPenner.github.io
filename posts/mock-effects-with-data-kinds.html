@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
@@ -12,8 +15,13 @@
     <meta name="twitter:description" content="We learn a method to mock multiple effects when writing tests without an exponential explosion of instances.">
     <meta name="twitter:image" content="http://chrispenner.ca/images/mock-effects-with-data-kinds/phantom.jpg">
     <title>Mocking Effects using Constraints and Phantom Data Kinds</title>
-    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -25,8 +33,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -737,35 +745,33 @@
         </div>
     </header>
 
-    
-    
-
-<div id="page">
-    <div class="wrapper">
+ 
+    <div id="page">
+      <div class="wrapper">
         <div class="masthead">
-            <span class="title">
-                Mocking Effects using Constraints and Phantom Data Kinds
-            </span>
-            <br>
+          <h1 class="title">
+            Mocking Effects using Constraints and Phantom Data Kinds
+          </h1>
+          <br />
 
-            <img class="post-image" src="/images/mock-effects-with-data-kinds/phantom.jpg">
-            <br>
-            <span class="byline">by Chris Penner</span>
-            <br>
-            <span class="date">Sep 29, 2018</span>
-            <br>
-            <div class="metadata">
-                <br>
-                <span class="tags">
-                    Tags<br>
-                    <a class="tag" href="/tag/programming">programming</a>
-                    <a class="tag" href="/tag/haskell">haskell</a>
-                    <a class="tag" href="/tag/testing">testing</a>
-                </span>
-            </div>
+          <img class="post-image" src="/images/mock-effects-with-data-kinds/phantom.jpg" />
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Sep 29, 2018</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/programming">programming</a>
+              <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/testing">testing</a>
+            </span>
+          </div>
         </div>
-    </div>
-    <article class="post">
+      </div>
+      <article class="post">
         <p>This ended up being a pretty long post; if you're pretty comfortable with monad constraints and testing in Haskell you may want to jump down to the Phantom Data Kinds section and get to the interesting stuff!</p>
 <h2 id="refresher-on-granular-classes">Refresher on granular classes</h2>
 <p>I've been seeing a lot of talk on the <a href="https://reddit.com/r/haskell">Haskell subreddit</a> about how to properly test Haskell applications; particular how to test actions which require effects. I've seen a lot of confusion/concern about writing your own monad transformers in tests. This post is my attempt to clear up some confusion and misconceptions and show off my particular ideas for testing using <code>mtl-style</code> constraints. The ideas contained here can also help you with writing multiple 'interpreters' for your monad stacks without needing a <code>newtype</code> for each permutation of possible implementations.</p>
@@ -1033,44 +1039,94 @@
 <p>Special thanks to Sandy Maguire A.K.A. isovector for proofreading and helping me vet my ideas!</p>
 <p>If you have questions or comments hit me up on <a href="https://twitter.com/chrislpenner">Twitter</a> or <a href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
 
-        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
 
-        <br>
-        <br>
+        <br />
+        <br />
 
         <!--Share buttons-->
         <div class="social-buttons">
-            <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/mock-effects-with-data-kinds" data-text="Check out: Mocking Effects using Constraints and Phantom Data Kinds - " data-via="chrislpenner">Tweet</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/mock-effects-with-data-kinds" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/mock-effects-with-data-kinds"
+            data-text="Check out: Mocking Effects using Constraints and Phantom Data Kinds - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/mock-effects-with-data-kinds"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
         </div>
 
-<!-- Disqus Comments -->
-<!-- <div id="disqus_thread"></div> -->
-<!-- <script type="text/javascript"> -->
-<!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = ''; -->
-<!--     var disqus_url = 'http://chrispenner.ca'; -->
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-<!-- (function() { -->
-    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-<!-- })(); -->
-<!-- </script> -->
-</article>
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
 
-</div>
-
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-
-</body>
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>

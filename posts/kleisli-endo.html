@@ -1,18 +1,26 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Kleisli Endomorphisms">
     <meta name="twitter:description" content="Discovering an isomorphism between the Kleisli version of Endomorphisms to the mtl StateT transformer.">
         <title>Kleisli Endomorphisms</title>
-    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -24,8 +32,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -736,33 +744,31 @@
         </div>
     </header>
 
-    
-    
-
-<div id="page">
-    <div class="wrapper">
+ 
+    <div id="page">
+      <div class="wrapper">
         <div class="masthead">
-            <span class="title">
-                Kleisli Endomorphisms
-            </span>
-            <br>
+          <h1 class="title">
+            Kleisli Endomorphisms
+          </h1>
+          <br />
 
-            <br>
-            <span class="byline">by Chris Penner</span>
-            <br>
-            <span class="date">Apr 8, 2017</span>
-            <br>
-            <div class="metadata">
-                <br>
-                <span class="tags">
-                    Tags<br>
-                    <a class="tag" href="/tag/haskell">haskell</a>
-                    <a class="tag" href="/tag/programming">programming</a>
-                </span>
-            </div>
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Apr 8, 2017</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/programming">programming</a>
+            </span>
+          </div>
         </div>
-    </div>
-    <article class="post">
+      </div>
+      <article class="post">
         <p>After listening to the latest <a href="https://twitter.com/MagicReadAlong">Magic Read-along</a> episode <a href="http://www.magicreadalong.com/episode/45">"You should watch this"</a> (which you should go listen to now) I got caught up thinking about Brian's idea of an Endomorphism version of Kleisli composition for use with <a href="https://github.com/reactjs/react-redux">Redux</a>, it's actually a very similar model to what I'm using in my <a href="github.com/chrispenner/eve">event framework</a> for event listeners so I figured I'd try to formalize the pattern and recognize some of the concepts involved. They talk about the idea of a Redux-reducer, which is usually of type <code>s -&gt; Action -&gt; s</code>, it takes a state and an action and returns a new state. He then re-arranged the arguments to <code>Action -&gt; s -&gt; s</code>. He then recognized this as <code>Action -&gt; Endo s</code> (an Endo-morphism is just any function from one type to itself: <code>a -&gt; a</code>). He would take his list of reducers and partially apply them with the <code>Action</code>, yielding a list of type <code>Endo s</code> where <code>s</code> is the state object the reducer operates over. At this point we can use the Monoid instance <code>Endo</code> has defined, so we foldmap with Endo to combine the list of reducers into a sort of pipeline where each function feeds into the next; the Endo instance of Monoid is just function composition over functions which return the same type as their input.</p>
 <p>This cleans up the interface of the reducers a fair amount, but what about an alternate kind of <code>Endo</code> which uses Kleisli composition instead of normal function composition? <a href="http://hackage.haskell.org/package/base-4.9.1.0/docs/Control-Monad.html#v:-62--61--62-">Kleisli composition</a> often referenced as (&gt;=&gt;); takes two functions which return monads and composes them together using the underlying bind/flatmap of the Monad. The type of Kleisli composition is: <code>(&gt;=&gt;) :: Monad m =&gt; (a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c</code>. If we could define a nice Endo-style monoid over this type then we could compose reducers like we did above, but also allow the functions to perform monadic effects (which is a bad idea in Redux, but there are other times this would be useful, imagine running a user through a pipeline of transformations which interact with a database or do some error handling). We can easily define this instance like so:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">import</span> <span class="dt">Control.Monad</span></span>
@@ -789,44 +795,94 @@
 <p>So that means we can use this instance for StateT (which is a monad). Since <code>()</code> is a trivial monoid (where every mappend just returns <code>()</code>) the simple case is <code>State s ()</code> which was our <code>KEndo</code> of <code>s -&gt; ((), s)</code> but now we have the Monoid instance, which behaves the same as the <code>KEndo</code> instance, so we don't need <code>KEndo</code> anymore. If we want to allow arbitrary effects we use the Transformer version: <code>StateT s m ()</code> where <code>m</code> is a monad containing any additional effects we want. In addition to being able to add additional effects we also gain the ability to aggregate information as a monoid! If you decided you wanted your reducers to also aggregate some form of information, then they'd be: <code>Monoid a =&gt; Action -&gt; s -&gt; (a, s)</code>, which is <code>Action -&gt; State s a</code>, and if <code>a</code> is a monoid, then the monoid instance of <code>State</code> acts like Endo, but also aggregates the 'a's along the way!</p>
 <p>Lastly we recognize that in the case of the Redux Reducers, if we have a whole list of reducers: <code>Action -&gt; State s ()</code> then we can rephrase it as the ReaderT Monad: <code>ReaderT Action (State s) ()</code>, which maintains all of the nice monoids we've set up so far, and becomes even more composable!</p>
 
-        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
 
-        <br>
-        <br>
+        <br />
+        <br />
 
         <!--Share buttons-->
         <div class="social-buttons">
-            <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/kleisli-endo" data-text="Check out: Kleisli Endomorphisms - " data-via="chrislpenner">Tweet</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/kleisli-endo" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/kleisli-endo"
+            data-text="Check out: Kleisli Endomorphisms - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/kleisli-endo"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
         </div>
 
-<!-- Disqus Comments -->
-<!-- <div id="disqus_thread"></div> -->
-<!-- <script type="text/javascript"> -->
-<!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = ''; -->
-<!--     var disqus_url = 'http://chrispenner.ca'; -->
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-<!-- (function() { -->
-    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-<!-- })(); -->
-<!-- </script> -->
-</article>
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
 
-</div>
-
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-
-</body>
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>

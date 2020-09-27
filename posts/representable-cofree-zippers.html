@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
@@ -12,8 +15,13 @@
     <meta name="twitter:description" content="Using Representable and Cofree to build a zipper datatype">
     <meta name="twitter:image" content="http://chrispenner.ca/images/math.jpeg">
     <title>Zippers using Representable and Cofree</title>
-    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -25,8 +33,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -737,34 +745,32 @@
         </div>
     </header>
 
-    
-    
-
-<div id="page">
-    <div class="wrapper">
+ 
+    <div id="page">
+      <div class="wrapper">
         <div class="masthead">
-            <span class="title">
-                Zippers using Representable and Cofree
-            </span>
-            <br>
+          <h1 class="title">
+            Zippers using Representable and Cofree
+          </h1>
+          <br />
 
-            <img class="post-image" src="/images/math.jpeg">
-            <br>
-            <span class="byline">by Chris Penner</span>
-            <br>
-            <span class="date">Jul 5, 2017</span>
-            <br>
-            <div class="metadata">
-                <br>
-                <span class="tags">
-                    Tags<br>
-                    <a class="tag" href="/tag/haskell">haskell</a>
-                    <a class="tag" href="/tag/programming">programming</a>
-                </span>
-            </div>
+          <img class="post-image" src="/images/math.jpeg" />
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Jul 5, 2017</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/programming">programming</a>
+            </span>
+          </div>
         </div>
-    </div>
-    <article class="post">
+      </div>
+      <article class="post">
         <p>We're going to take a look at an alternative way to define a Zipper Comonad over a data type. Typically one would define a Zipper Comonad by defining a new datatype which represents the Zipper; then implementing <code>duplicate</code> and <code>extract</code> for it. <code>extract</code> is typically straightforward to write, but I've had some serious trouble writing <code>duplicate</code> for some more complex data-types like trees.</p>
 <p>We're looking at a different way of building a zipper, The advantages of this method are that we can build it up out of smaller instances piece by piece. Each piece is a easier to write, and we also gain several utility functions from the Typeclasses we'll be implementing along the way! It's not terribly practical, but it's a fun experiment.</p>
 <p>You can find this post as a literate haskell file <a href="https://gist.github.com/ChrisPenner/4527dd0d9c60983562e03c28731bb3bd">here</a> so that means you can load it up directly in GHC and play around with it if you want to follow along! Let's get started.</p>
@@ -868,44 +874,94 @@
 <p>Cool stuff! I hope you've learned a little about Distributive, Representable, Comonads, Cofree, and zippers! If you have any questions find me on twitter @chrislpenner</p>
 <p>Cheers!</p>
 
-        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
 
-        <br>
-        <br>
+        <br />
+        <br />
 
         <!--Share buttons-->
         <div class="social-buttons">
-            <a href="https://twitter.com/share" class="twitter-share-button"
-                data-url="https://chrispenner.ca/posts/representable-cofree-zippers" data-text="Check out: Zippers using Representable and Cofree - " data-via="chrislpenner">Tweet</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
-            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
-            <div class="fb-like" data-href="https://chrispenner.ca/representable-cofree-zippers" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/representable-cofree-zippers"
+            data-text="Check out: Zippers using Representable and Cofree - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/representable-cofree-zippers"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
         </div>
 
-<!-- Disqus Comments -->
-<!-- <div id="disqus_thread"></div> -->
-<!-- <script type="text/javascript"> -->
-<!--     var disqus_shortname = 'chrispenner'; -->
-<!--     var disqus_identifier = ''; -->
-<!--     var disqus_url = 'http://chrispenner.ca'; -->
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-<!-- (function() { -->
-    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-<!-- })(); -->
-<!-- </script> -->
-</article>
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
 
-</div>
-
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
-
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-
-</body>
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>

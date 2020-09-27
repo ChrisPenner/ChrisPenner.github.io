@@ -1,26 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8" />
-    <meta
-      name="description"
-      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
-    />
-    <meta name="author" content="Chris Penner" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang="en"> 
+<head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8">
+    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
+    <meta name="author" content="Chris Penner">
+    <meta name=viewport content="width=device-width, initial-scale=1">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads">
     <meta name="twitter:description" content="We rebuild the core behaviour of &#39;jq&#39; using standard Haskell combinators and optics">
         <title>Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads</title>
-    <link
-      rel="alternate"
-      type="application/atom+xml"
-      title="Chris Penner FP"
-      href="/atom.xml"
-    />
-    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <link rel="alternate" type="application/atom+xml" title="Chris Penner FP" href="/atom.xml" />
+    <link rel="icon" type="image/png" href="/images/favicon.png">
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -32,8 +24,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-  </head>
-  <body>
+</head>
+<body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -744,31 +736,33 @@
         </div>
     </header>
 
- 
-    <div id="page">
-      <div class="wrapper">
-        <div class="masthead">
-          <h1 class="title">
-            Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads
-          </h1>
-          <br />
+    
+    
 
-          <br />
-          <span class="byline">by Chris Penner</span>
-          <br />
-          <span class="date">Sep 27, 2020</span>
-          <br />
-          <div class="metadata">
-            <br />
-            <span class="tags">
-              Tags<br />
-              <a class="tag" href="/tag/haskell">haskell</a>
-              <a class="tag" href="/tag/optics">optics</a>
+<div id="page">
+    <div class="wrapper">
+        <div class="masthead">
+            <span class="title">
+                Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads
             </span>
-          </div>
+            <br>
+
+            <br>
+            <span class="byline">by Chris Penner</span>
+            <br>
+            <span class="date">Sep 27, 2020</span>
+            <br>
+            <div class="metadata">
+                <br>
+                <span class="tags">
+                    Tags<br>
+                    <a class="tag" href="/tag/haskell">haskell</a>
+                    <a class="tag" href="/tag/optics">optics</a>
+                </span>
+            </div>
         </div>
-      </div>
-      <article class="post">
+    </div>
+    <article class="post">
         <p>Hi folks! Today I'll be chatting about <strong>Traversal Systems</strong> like <strong>jq</strong> and <strong>XPath</strong>; we're going to discover which properties make them useful, then see how we can replicate their most useful behaviours in Haskell using (almost entirely) pre-ols!existing standard Haskell tools! Let's go!</p>
 <h2 id="whats-a-traversal-system">What's a Traversal System?</h2>
 <p>First off I'll admit that "Traversal System" is a name I just came up with, you probably won't find anything if you search for it (unless this post really catches on 😉).</p>
@@ -1187,94 +1181,44 @@
 <span id="cb19-17"><a href="#cb19-17"></a>                column <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;age&quot;</span> <span class="op">.=</span> <span class="dv">2020</span> <span class="op">-</span> birthYear</span></code></pre></div>
 <p>Hopefully these last few examples help convince you that this really is an adaptable solution even though they're still a bit silly.</p>
 
-        <p>
-          Hopefully you learned something 🤞! If you did, please consider
-          checking out my book: It teaches the principles of using optics in
-          Haskell and other functional programming languages and takes you all
-          the way from an beginner to wizard in all types of optics! You can get
-          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
-          sale helps me justify more time writing blog posts like this one and
-          helps me to continue writing educational functional programming
-          content. Cheers!
-        </p>
+        <p>Hopefully you learned something 🤞! If you did, please consider checking out my book: It teaches the principles of using optics in Haskell and other functional programming languages and takes you all the way from an beginner to wizard in all types of optics! You can get it <a href="https://leanpub.com/optics-by-example/">here</a>. Every sale helps me justify more time writing blog posts like this one and helps me to continue writing educational functional programming content. Cheers!</p>
 
-        <br />
-        <br />
+        <br>
+        <br>
 
         <!--Share buttons-->
         <div class="social-buttons">
-          <a
-            href="https://twitter.com/share"
-            class="twitter-share-button"
-            data-url="https://chrispenner.ca/posts/traversal-systems"
-            data-text="Check out: Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads - "
-            data-via="chrislpenner"
-            >Tweet</a
-          >
-          <script>
-            !(function (d, s, id) {
-              var js,
-                fjs = d.getElementsByTagName(s)[0],
-                p = /^http:/.test(d.location) ? 'http' : 'https';
-              if (!d.getElementById(id)) {
-                js = d.createElement(s);
-                js.id = id;
-                js.src = p + '://platform.twitter.com/widgets.js';
-                fjs.parentNode.insertBefore(js, fjs);
-              }
-            })(document, 'script', 'twitter-wjs');
-          </script>
-          <a
-            href="https://twitter.com/chrislpenner"
-            class="twitter-follow-button"
-            data-show-count="false"
-            data-dnt="true"
-            >Follow @chrislpenner</a
-          >
-          <script>
-            !(function (d, s, id) {
-              var js,
-                fjs = d.getElementsByTagName(s)[0],
-                p = /^http:/.test(d.location) ? 'http' : 'https';
-              if (!d.getElementById(id)) {
-                js = d.createElement(s);
-                js.id = id;
-                js.src = p + '://platform.twitter.com/widgets.js';
-                fjs.parentNode.insertBefore(js, fjs);
-              }
-            })(document, 'script', 'twitter-wjs');
-          </script>
-          <div
-            class="fb-like"
-            data-href="https://chrispenner.ca/traversal-systems"
-            data-layout="button"
-            data-action="like"
-            data-show-faces="true"
-            data-share="true"
-          ></div>
+            <a href="https://twitter.com/share" class="twitter-share-button"
+                data-url="https://chrispenner.ca/posts/state-and-zoom" data-text="Check out: Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads - " data-via="chrislpenner">Tweet</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <a href="https://twitter.com/chrislpenner" class="twitter-follow-button" data-show-count="false" data-dnt="true">Follow @chrislpenner</a>
+            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+            <div class="fb-like" data-href="https://chrispenner.ca/state-and-zoom" data-layout="button" data-action="like" data-show-faces="true" data-share="true"></div>
         </div>
 
-        <!-- Disqus Comments -->
-        <!-- <div id="disqus_thread"></div> -->
-        <!-- <script type="text/javascript"> -->
-        <!--     var disqus_shortname = 'chrispenner'; -->
-        <!--     var disqus_identifier = ''; -->
-        <!--     var disqus_url = 'http://chrispenner.ca'; -->
+<!-- Disqus Comments -->
+<!-- <div id="disqus_thread"></div> -->
+<!-- <script type="text/javascript"> -->
+<!--     var disqus_shortname = 'chrispenner'; -->
+<!--     var disqus_identifier = ''; -->
+<!--     var disqus_url = 'http://chrispenner.ca'; -->
 
-        <!-- (function() { -->
-        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
-        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
-        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
-        <!-- })(); -->
-        <!-- </script> -->
-      </article>
-    </div>
+<!-- (function() { -->
+    <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+    <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+    <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+<!-- })(); -->
+<!-- </script> -->
+</article>
 
-    <footer>
-        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-    </footer>
-    
-    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
-  </body>
+</div>
+
+<footer>
+    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+</footer>
+
+<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+
+</body>
 </html>
