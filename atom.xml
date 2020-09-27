@@ -2,12 +2,443 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-04-05T01:25:47Z</updated>
+  <updated>2020-09-27T23:12:24Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads</title>
+      <link href="https://chrispenner.ca/posts/traversal-systems"/>
+      <id>https://chrispenner.ca/posts/traversal-systems</id>
+      <updated>2020-09-27T00:00:00Z</updated>
+      <summary>We rebuild the core behaviour of &#39;jq&#39; using standard Haskell combinators and optics</summary>
+      <content type="html"><![CDATA[
+              <p>Hi folks! Today I'll be chatting about <strong>Traversal Systems</strong> like <strong>jq</strong> and <strong>XPath</strong>; we're going to discover which properties make them useful, then see how we can replicate their most useful behaviours in Haskell using (almost entirely) pre-ols!existing standard Haskell tools! Let's go!</p>
+<h2 id="whats-a-traversal-system">What's a Traversal System?</h2>
+<p>First off I'll admit that "Traversal System" is a name I just came up with, you probably won't find anything if you search for it (unless this post really catches on 😉).</p>
+<p>A <strong>Traversal System</strong> allows you dive deeply into a piece of data and may allow you to fetch, query, and edit the structure as you go while maintaining references to other pieces of the structure to influence your work. The goal of most Traversal Systems is to make this as painless and concise as possible. It turns out that this sort of thing is <strong>incredibly useful</strong> for manipulating JSON, querying HTML and CSS, working with CSVs, or even just handling standard Haskell Records and data-types.</p>
+<p>Some good examples of existing <strong>Traversal Systems</strong> which you may have heard of include the brilliant <a href="https://stedolan.github.io/jq/">jq</a> utility for manipulating and querying JSON, the <strong>XPath</strong> language for querying XML, and the <a href="https://github.com/noprompt/meander">meander</a> data manipulation system in Clojure. Although each of these systems may appear drastically different at a glance, they both <em>accomplish many of the same goals</em> of manipulating and querying data in a concise way.</p>
+<p>The similarities between these systems intrigued me! They seem so similar, but yet still seem to share very little in the way of structure, syntax, and prior art. They re-invent the wheel for each new data type! Ideally we could recognize the useful behaviours in each system and build a generalized system which works for any data type.</p>
+<p>This post is an attempt to do exactly that; we'll take a look at a few things that these systems do well, then we'll re-build them in Haskell using standard tooling, all the while abstracting over the type of data!</p>
+<h2 id="optics-as-a-basis-for-a-traversal-system">Optics as a basis for a traversal system</h2>
+<p>For any of those who know me it should be no surprise that my first thought was to look at optics (i.e. Lenses and Traversals). In general I find that optics solve a lot of my problems, but in this case they are particularly appropriate! Optics inherently deal with the idea of diving deep into data and querying or updating data in a structured and compositional fashion.</p>
+<p>In addition, optics also allow abstracting over the data type they work on. There are pre-existing libraries of optics for working with JSON via <a href="https://hackage.haskell.org/package/lens-aeson"><code>lens-aeson</code></a> and for html via <a href="https://hackage.haskell.org/package/taggy-lens"><code>taggy-lens</code></a>. I've written optics libraries for working with <a href="https://hackage.haskell.org/package/lens-csv">CSVs</a> and even <a href="https://hackage.haskell.org/package/lens-regex-pcre">Regular Expressions</a>, so I can say confidently that they're a brilliantly adaptable tool for data manipulation.</p>
+<p>It also happens that optics are well-principled and mathematically sound, so they're a good tool for studying the properties that a system like this may have.</p>
+<p>However, optics themselves don't provide everything we need! Optics are rather obtuse, in fact I wrote <a href="https://leanpub.com/optics-by-example">a whole book</a> to help teach them, and they lack clarity and easy of use when it comes to building larger expressions. It's also pretty tough to work on one part of a data structure while referencing data in another part of the same structure. My hope is to address some of these short comings in this post.</p>
+<p>In this particular post I'm mostly interested in explaining a framework for traversal systems in Haskell, we'll be using many standard <a href="https://hackage.haskell.org/package/mtl"><strong>mtl</strong></a> Monad Transformers alongside a lot of combinators from the <a href="https://hackage.haskell.org/package/lens"><strong>lens</strong></a> library. You won't need to understand any of these intimately to get the <em>gist</em> of what's going on, but I won't be explaining them in depth here, so you may need to look elsewhere if you're lacking a bit of context.</p>
+<h2 id="establishing-the-problem">Establishing the Problem</h2>
+<p>I'll be demoing a few examples as we go along so let's set up some data. I'll be working in both <strong>jq</strong> and <strong>Haskell</strong> to make comparisons between them, so we'll set up the same data in both <strong>JSON</strong> and Haskell.</p>
+<p>Here's a funny lil' company as a JSON object:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1"></a><span class="fu">{</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a>    <span class="dt">&quot;staff&quot;</span><span class="fu">:</span></span>
+<span id="cb1-3"><a href="#cb1-3"></a>      <span class="ot">[</span></span>
+<span id="cb1-4"><a href="#cb1-4"></a>        <span class="fu">{</span> <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="st">&quot;1&quot;</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a>        <span class="fu">,</span> <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;bob&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a>        <span class="fu">,</span> <span class="dt">&quot;pets&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb1-7"><a href="#cb1-7"></a>              <span class="fu">{</span> <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;Rocky&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8"></a>              <span class="fu">,</span> <span class="dt">&quot;type&quot;</span><span class="fu">:</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb1-9"><a href="#cb1-9"></a>              <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb1-10"><a href="#cb1-10"></a>              <span class="fu">{</span> <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;Bullwinkle&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11"></a>              <span class="fu">,</span> <span class="dt">&quot;type&quot;</span><span class="fu">:</span> <span class="st">&quot;dog&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12"></a>              <span class="fu">}</span></span>
+<span id="cb1-13"><a href="#cb1-13"></a>            <span class="ot">]</span></span>
+<span id="cb1-14"><a href="#cb1-14"></a>        <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb1-15"><a href="#cb1-15"></a>        <span class="fu">{</span> <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="st">&quot;2&quot;</span></span>
+<span id="cb1-16"><a href="#cb1-16"></a>        <span class="fu">,</span> <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;sally&quot;</span></span>
+<span id="cb1-17"><a href="#cb1-17"></a>        <span class="fu">,</span> <span class="dt">&quot;pets&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb1-18"><a href="#cb1-18"></a>              <span class="fu">{</span> <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;Inigo&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19"></a>              <span class="fu">,</span> <span class="dt">&quot;type&quot;</span><span class="fu">:</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb1-20"><a href="#cb1-20"></a>              <span class="fu">}</span></span>
+<span id="cb1-21"><a href="#cb1-21"></a>            <span class="ot">]</span></span>
+<span id="cb1-22"><a href="#cb1-22"></a>        <span class="fu">}</span></span>
+<span id="cb1-23"><a href="#cb1-23"></a>      <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb1-24"><a href="#cb1-24"></a>    <span class="dt">&quot;salaries&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb1-25"><a href="#cb1-25"></a>        <span class="dt">&quot;1&quot;</span><span class="fu">:</span> <span class="dv">12</span><span class="fu">,</span></span>
+<span id="cb1-26"><a href="#cb1-26"></a>        <span class="dt">&quot;2&quot;</span><span class="fu">:</span> <span class="dv">15</span></span>
+<span id="cb1-27"><a href="#cb1-27"></a>    <span class="fu">}</span></span>
+<span id="cb1-28"><a href="#cb1-28"></a><span class="fu">}</span></span></code></pre></div>
+<p>And here's the same data in its Haskell representation, complete with generated optics for each record field.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">data</span> <span class="dt">Company</span> <span class="ot">=</span> <span class="dt">Company</span> {<span class="ot"> _staff ::</span> [<span class="dt">Employee</span>]</span>
+<span id="cb2-2"><a href="#cb2-2"></a>                       ,<span class="ot"> _salaries ::</span> <span class="dt">M.Map</span> <span class="dt">Int</span> <span class="dt">Int</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a>                       } <span class="kw">deriving</span> <span class="dt">Show</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a><span class="kw">data</span> <span class="dt">Pet</span> <span class="ot">=</span> <span class="dt">Pet</span> {<span class="ot"> _petName ::</span> <span class="dt">String</span></span>
+<span id="cb2-5"><a href="#cb2-5"></a>               ,<span class="ot"> _petType ::</span> <span class="dt">String</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>               } <span class="kw">deriving</span> <span class="dt">Show</span></span>
+<span id="cb2-7"><a href="#cb2-7"></a><span class="kw">data</span> <span class="dt">Employee</span> <span class="ot">=</span> <span class="dt">Employee</span> {<span class="ot"> _employeeId ::</span> <span class="dt">Int</span></span>
+<span id="cb2-8"><a href="#cb2-8"></a>                         ,<span class="ot"> _employeeName ::</span> <span class="dt">String</span></span>
+<span id="cb2-9"><a href="#cb2-9"></a>                         ,<span class="ot"> _employeePets ::</span> [<span class="dt">Pet</span>]</span>
+<span id="cb2-10"><a href="#cb2-10"></a>                         } <span class="kw">deriving</span> <span class="dt">Show</span></span>
+<span id="cb2-11"><a href="#cb2-11"></a></span>
+<span id="cb2-12"><a href="#cb2-12"></a>makeLenses &#39;<span class="dt">&#39;Company</span></span>
+<span id="cb2-13"><a href="#cb2-13"></a>makeLenses &#39;<span class="dt">&#39;Pet</span></span>
+<span id="cb2-14"><a href="#cb2-14"></a>makeLenses &#39;<span class="dt">&#39;Employee</span></span>
+<span id="cb2-15"><a href="#cb2-15"></a></span>
+<span id="cb2-16"><a href="#cb2-16"></a><span class="ot">company ::</span> <span class="dt">Company</span></span>
+<span id="cb2-17"><a href="#cb2-17"></a>company <span class="ot">=</span> <span class="dt">Company</span> [ <span class="dt">Employee</span> <span class="dv">1</span> <span class="st">&quot;bob&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Rocky&quot;</span> <span class="st">&quot;cat&quot;</span>, <span class="dt">Pet</span> <span class="st">&quot;Bullwinkle&quot;</span> <span class="st">&quot;cat&quot;</span>] </span>
+<span id="cb2-18"><a href="#cb2-18"></a>                  , <span class="dt">Employee</span> <span class="dv">2</span> <span class="st">&quot;sally&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Inigo&quot;</span> <span class="st">&quot;dog&quot;</span>]</span>
+<span id="cb2-19"><a href="#cb2-19"></a>                  ] (M.fromList [ (<span class="dv">1</span>, <span class="dv">12</span>)</span>
+<span id="cb2-20"><a href="#cb2-20"></a>                                , (<span class="dv">2</span>, <span class="dv">15</span>)</span>
+<span id="cb2-21"><a href="#cb2-21"></a>                                ])</span></code></pre></div>
+<h2 id="querying">Querying</h2>
+<p>Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the cats owned by any of our employees.</p>
+<p>Here's how it looks in <strong>jq</strong>:</p>
+<pre class="jq"><code>$ cat company.json | jq &#39;.staff[].pets[] | select(.type == &quot;cat&quot;)&#39;
+{
+  &quot;name&quot;: &quot;Rocky&quot;,
+  &quot;type&quot;: &quot;cat&quot;
+}
+{
+  &quot;name&quot;: &quot;Inigo&quot;,
+  &quot;type&quot;: &quot;cat&quot;
+}</code></pre>
+<p>We look in the <code>staff</code> key, then <em>enumerate</em> that list, then for each staff member we enumerate their cats! Lastly we filter out anything that's not a cat.</p>
+<p>We can recognize a few hallmarks of a <strong>Traversal System</strong> here. <strong>jq</strong> allows us to "dive" down deeper into our structure by providing a path to where we want to be. It also allows us to <strong>enumerate</strong> many possibilities using the <code>[]</code> operator, which will forward <strong>each</strong> value to the rest of the pipeline one after the other. Lastly it allows us to <strong>filter</strong> our results using <code>select</code>.</p>
+<p>And in Haskell using optics it looks like this:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="op">&gt;&gt;&gt;</span> toListOf (staff <span class="op">.</span> folded <span class="op">.</span> employeePets <span class="op">.</span> folded <span class="op">.</span> filteredBy (petType <span class="op">.</span> only <span class="st">&quot;cat&quot;</span>)) company</span>
+<span id="cb4-2"><a href="#cb4-2"></a>[ <span class="dt">Pet</span> {_petName <span class="ot">=</span> <span class="st">&quot;Rocky&quot;</span>, _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span>}</span>
+<span id="cb4-3"><a href="#cb4-3"></a>, <span class="dt">Pet</span> {_petName <span class="ot">=</span> <span class="st">&quot;Inigo&quot;</span>, _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span>}</span>
+<span id="cb4-4"><a href="#cb4-4"></a>]</span></code></pre></div>
+<p>Here we use "toListOf" along with an optic which "folds" over each staff member, then folds over each of their pets, again filtering for "only" cats.</p>
+<p>At a glance the two are extremely similar!</p>
+<p>They each allow the <em>enumeration</em> of multiple values, in <strong>jq</strong> using <code>[]</code> and in optics using <code>folded</code>.</p>
+<p>Both implement some form of <strong>filtering</strong>, <strong>jq</strong> using <code>select</code> and our optics with <code>filteredBy</code>.</p>
+<p>Great! So far we've had no trouble keeping up! We're already starting to see a lot of similarities between the two, and our solutions using optics are easily generalizable to any data type.</p>
+<p>Let's move on to a more complex example.</p>
+<h2 id="keeping-references">Keeping references</h2>
+<p>Let's say that as part of a tax audit we need to fetch the pets of every employee who makes more than $15/hr.</p>
+<p>First, here's the <strong>jq</strong>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1"></a>$ <span class="fu">cat</span> join.json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a><span class="st">    .staff[] </span></span>
+<span id="cb5-3"><a href="#cb5-3"></a><span class="st">  | .name as $personName </span></span>
+<span id="cb5-4"><a href="#cb5-4"></a><span class="st">  | .pets[] </span></span>
+<span id="cb5-5"><a href="#cb5-5"></a><span class="st">  | &quot;\(.name) belongs to \($personName)&quot;</span></span>
+<span id="cb5-6"><a href="#cb5-6"></a><span class="st">&#39;</span></span>
+<span id="cb5-7"><a href="#cb5-7"></a><span class="st">&quot;Rocky belongs to bob&quot;</span></span>
+<span id="cb5-8"><a href="#cb5-8"></a><span class="st">&quot;Bullwinkle belongs to bob&quot;</span></span>
+<span id="cb5-9"><a href="#cb5-9"></a><span class="st">&quot;Inigo belongs to sally&quot;</span></span></code></pre></div>
+<p>Here we see a new feature in <strong>jq</strong> which is the ability to maintain <strong>references</strong> to a part of the structure for later while we continue to dig deeper into the structure. We're grabbing the name of each employee as we enumerate them and saving it into <code>$personName</code> so we can refer to this later on. Then we enumerate each of the pets and use string interpolation to describe who owns each pet.</p>
+<p>If we try to stick with optics on their own, well, it's possible, but unfortunately this is where it all starts to break down, look at this absolute mess:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">owners ::</span> [<span class="dt">String</span>]</span>
+<span id="cb6-2"><a href="#cb6-2"></a>owners <span class="ot">=</span> </span>
+<span id="cb6-3"><a href="#cb6-3"></a>  company <span class="op">^..</span> </span>
+<span id="cb6-4"><a href="#cb6-4"></a>    (staff <span class="op">.</span> folded <span class="op">.</span> reindexed _employeeName selfIndex <span class="op">&lt;.</span> employeePets <span class="op">.</span> folded <span class="op">.</span> petName) </span>
+<span id="cb6-5"><a href="#cb6-5"></a>    <span class="op">.</span> withIndex </span>
+<span id="cb6-6"><a href="#cb6-6"></a>    <span class="op">.</span> to (\(eName, pName) <span class="ot">-&gt;</span> pName <span class="op">&lt;&gt;</span> <span class="st">&quot; belongs to &quot;</span> <span class="op">&lt;&gt;</span> eName)</span>
+<span id="cb6-7"><a href="#cb6-7"></a></span>
+<span id="cb6-8"><a href="#cb6-8"></a><span class="op">&gt;&gt;&gt;</span> owners</span>
+<span id="cb6-9"><a href="#cb6-9"></a>[ <span class="st">&quot;Rocky belongs to bob&quot;</span></span>
+<span id="cb6-10"><a href="#cb6-10"></a>, <span class="st">&quot;Bullwinkle belongs to bob&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11"></a>, <span class="st">&quot;Inigo belongs to sally&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12"></a>]</span></code></pre></div>
+<p>You can bet that nobody is calling that "easy to read". Heck, I wrote a book on optics and it still took me a few tries to figure out where the brackets needed to go!</p>
+<p>Optics are great for handling a <em>single</em> stream of values, but they're much worse at more complex expressions, especially those which require a reference to values that occur <em>earlier</em> in the chain. Let's see how we can address those shortcomings as we build our <strong>Traversal System</strong> in Haskell.</p>
+<p>Just for the <strong>jq</strong> aficionados in the audience I'll show off this alternate version which uses a little bit of <em>magic</em> that <strong>jq</strong> does for you.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1"></a> $ <span class="fu">cat</span> company.json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;.staff[] | &quot;\(.pets[].name) belongs to \(.name)&quot;&#39;</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="st">&quot;Rocky belongs to bob&quot;</span></span>
+<span id="cb7-3"><a href="#cb7-3"></a><span class="st">&quot;Bullwinkle belongs to bob&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4"></a><span class="st">&quot;Inigo belongs to sally&quot;</span></span></code></pre></div>
+<p>Depending on your experience may be less <strong>magical</strong> and more <strong>confusing</strong> 😬. Since the final expression contains an <strong>enumeration</strong> (i.e. <code>\(.pets[].name)</code>) <strong>jq</strong> will expand the final term once for each value in the enumeration. This is really cool, but unfortunately a bit "less principled" and tough to understand in my opinion.</p>
+<p>Regardless, the behaviour is the same, and we haven't replicated it in Haskell satisfactorily yet, let's see what we can do about that!</p>
+<h2 id="monads-to-the-rescue-again">Monads to the rescue (again...)</h2>
+<p>In Haskell we love our <strong>embedded DSLs</strong>; if you give a Haskeller a problem to solve, you can bet that 9 times out of 10 they'll solve it with a custom monad and an DSL 😂. Well, I'm sorry to tell you that I'm no different!</p>
+<p>We'll be using a monad to address the readability problem of the last optics solution, but the question is... <em>which</em> monad?</p>
+<p>Since all we're doing at the moment is <strong>querying</strong> data, we can make use of the esteemed <strong>Reader Monad</strong> to provide a context for our query.</p>
+<p>Here's what that last query looks like when we use the <a href="https://hackage.haskell.org/package/mtl-2.2.2/docs/Control-Monad-Reader.html"><code>Reader</code></a> monad with the relatively lesser known <a href="https://hackage.haskell.org/package/lens-4.19.2/docs/Control-Lens-Combinators.html#v:magnify"><code>magnify</code></a> combinator:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">owners&#39; ::</span> <span class="dt">Reader</span> <span class="dt">Company</span> [<span class="dt">String</span>]</span>
+<span id="cb8-2"><a href="#cb8-2"></a>owners&#39; <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a>    magnify (staff <span class="op">.</span> folded) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-4"><a href="#cb8-4"></a>        personName <span class="ot">&lt;-</span> view employeeName</span>
+<span id="cb8-5"><a href="#cb8-5"></a>        magnify (employeePets <span class="op">.</span> folded) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-6"><a href="#cb8-6"></a>            animalName <span class="ot">&lt;-</span> view petName</span>
+<span id="cb8-7"><a href="#cb8-7"></a>            <span class="fu">return</span> [animalName <span class="op">&lt;&gt;</span> <span class="st">&quot; belongs to &quot;</span> <span class="op">&lt;&gt;</span> personName]</span>
+<span id="cb8-8"><a href="#cb8-8"></a></span>
+<span id="cb8-9"><a href="#cb8-9"></a><span class="op">&gt;&gt;&gt;</span> runReader owners&#39; company</span>
+<span id="cb8-10"><a href="#cb8-10"></a>[ <span class="st">&quot;Rocky belongs to bob&quot;</span></span>
+<span id="cb8-11"><a href="#cb8-11"></a>, <span class="st">&quot;Bullwinkle belongs to bob&quot;</span></span>
+<span id="cb8-12"><a href="#cb8-12"></a>, <span class="st">&quot;Inigo belongs to sally&quot;</span></span>
+<span id="cb8-13"><a href="#cb8-13"></a>]</span></code></pre></div>
+<p>I won't explain how the <code>Reader</code> monad itself works here, so if you're a bit shaky on that you'll probably want to familiarize yourself with that first.</p>
+<p>As for <code>magnify</code>, it's a combinator from the <code>lens</code> library which takes an <strong>optic</strong> and an <strong>action</strong> as arguments. It uses the optic to focus a <strong>subset</strong> of the <code>Reader</code>'s environment, then runs the action within a Reader with that data subset as its focus. It's just that easy!</p>
+<p>One more thing! <code>magnify</code> can accept a <code>Fold</code> which focuses <strong>multiple</strong> elements, in this case it will run the action once for <strong>each</strong> focus, then combine all the results together using a <strong>semigroup</strong>. In this case, we wrapped our result in a <strong>list</strong> before returning it, so magnify will go ahead and automatically <strong>concatenate</strong> all the results together for us. Pretty nifty that we can get so much functionality out of <code>magnify</code> without writing any code ourselves!</p>
+<p>We can see that rewriting the problem in this style has made it considerably easier to read. It allows us to "pause" as we use optics to descend and poke around a bit at any given spot. Since it's a monad and we're using do-notation, we can easily bind any intermediate results into names to be referenced later on; the names will correctly reference the value from the current iteration! It's also nice that we have a clear indication of the scope of all our bindings by looking at the indentation of each nested do-notation block.</p>
+<p>Depending on your personal style, you could write this expression using the <code>(-&gt;)</code> monad directly, or even omit the indentation entirely; though I don't personally recommend that. In case you're curious, here's the way that I DON'T RECOMMEND writing this:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="ot">owners&#39;&#39; ::</span> <span class="dt">Company</span> <span class="ot">-&gt;</span> [<span class="dt">String</span>]</span>
+<span id="cb9-2"><a href="#cb9-2"></a>owners&#39;&#39; <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb9-3"><a href="#cb9-3"></a>  magnify (staff <span class="op">.</span> folded) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb9-4"><a href="#cb9-4"></a>  eName <span class="ot">&lt;-</span> view employeeName</span>
+<span id="cb9-5"><a href="#cb9-5"></a>  magnify (employeePets <span class="op">.</span> folded) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb9-6"><a href="#cb9-6"></a>  pName <span class="ot">&lt;-</span> view petName</span>
+<span id="cb9-7"><a href="#cb9-7"></a>  <span class="fu">return</span> [pName <span class="op">&lt;&gt;</span> <span class="st">&quot; belongs to &quot;</span> <span class="op">&lt;&gt;</span> eName]</span></code></pre></div>
+<h2 id="updating-deeply-nested-values">Updating deeply nested values</h2>
+<p>Okay! On to the next step! Let's say that according to our company policy we want to give a $5 raise to anyone who owns a dog! Hey, I don't make the rules here 🤷‍♂️. Notice that this time we're running an <strong>update</strong> not just a <strong>query</strong>!</p>
+<p>Here's one of a few different ways we could express this in <strong>jq</strong></p>
+<pre class="jq"><code>cat company.json | jq &#39;
+[.staff[] | select(.pets[].type == &quot;dog&quot;) | .id] as $peopleWithDogs
+| .salaries[$peopleWithDogs[]] += 5
+&#39;
+
+{
+  &quot;staff&quot;: [
+    {
+      &quot;id&quot;: &quot;1&quot;,
+      &quot;name&quot;: &quot;bob&quot;,
+      &quot;pets&quot;: [
+        {
+          &quot;name&quot;: &quot;Rocky&quot;,
+          &quot;type&quot;: &quot;cat&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Bullwinkle&quot;,
+          &quot;type&quot;: &quot;dog&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;2&quot;,
+      &quot;name&quot;: &quot;sally&quot;,
+      &quot;pets&quot;: [
+        {
+          &quot;name&quot;: &quot;Inigo&quot;,
+          &quot;type&quot;: &quot;cat&quot;
+        }
+      ]
+    }
+  ],
+  &quot;salaries&quot;: {
+    &quot;1&quot;: 17,
+    &quot;2&quot;: 15
+  }
+}</code></pre>
+<p>We first scan the staff to see who's worthy of a promotion, then we iterate over each of their ids and bump up their salary, and sure enough it works!</p>
+<p>I'll admit that it took me a few tries to get this right in <strong>jq</strong>; if you're not careful you'll <strong>enumerate</strong> in a way that means <code>jq</code> can't keep track of your references and you'll be unable to edit the correct piece of the original object. For example, here's my first attempt to do this sort of thing:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1"></a>$ <span class="fu">cat</span> company.json <span class="kw">|</span> <span class="ex">jq</span> <span class="st">&#39;</span></span>
+<span id="cb11-2"><a href="#cb11-2"></a><span class="st">. as $company </span></span>
+<span id="cb11-3"><a href="#cb11-3"></a><span class="st">| .staff[] </span></span>
+<span id="cb11-4"><a href="#cb11-4"></a><span class="st">| select(.pets[].type == &quot;dog&quot;).id </span></span>
+<span id="cb11-5"><a href="#cb11-5"></a><span class="st">| $company.salaries[.] += 5</span></span>
+<span id="cb11-6"><a href="#cb11-6"></a><span class="st">&#39;</span></span>
+<span id="cb11-7"><a href="#cb11-7"></a></span>
+<span id="cb11-8"><a href="#cb11-8"></a><span class="ex">jq</span>: error (at <span class="op">&lt;</span>stdin<span class="op">&gt;</span>:28)<span class="bu">:</span> Invalid path expression near attempt to access element <span class="st">&quot;salaries&quot;</span> of {<span class="st">&quot;staff&quot;</span>:[{<span class="st">&quot;id&quot;</span>:<span class="st">&quot;1&quot;</span>,<span class="st">&quot;name&quot;</span>...</span></code></pre></div>
+<p>In this case it looks like <strong>jq</strong> can't edit something we've stored as a variable; a bit surprising, but fair enough I suppose.</p>
+<p>This sort of task is tricky because it involves enumeration over one area, storing those results, then enumerating AND updating in another! It's definitely possible in <code>jq</code>, but some of the magic that <strong>jq</strong> performs makes it a bit tough to know what will work and what won't at a glance.</p>
+<p>Now for the Haskell version:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">salaryBump ::</span> <span class="dt">State</span> <span class="dt">Company</span> ()</span>
+<span id="cb12-2"><a href="#cb12-2"></a>salaryBump <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb12-3"><a href="#cb12-3"></a>    ids <span class="ot">&lt;-</span> gets <span class="op">$</span> toListOf </span>
+<span id="cb12-4"><a href="#cb12-4"></a>            ( staff </span>
+<span id="cb12-5"><a href="#cb12-5"></a>            <span class="op">.</span> traversed </span>
+<span id="cb12-6"><a href="#cb12-6"></a>            <span class="op">.</span> filteredBy (employeePets <span class="op">.</span> traversed <span class="op">.</span> petType <span class="op">.</span> only <span class="st">&quot;dog&quot;</span>) </span>
+<span id="cb12-7"><a href="#cb12-7"></a>            <span class="op">.</span> employeeId</span>
+<span id="cb12-8"><a href="#cb12-8"></a>            )</span>
+<span id="cb12-9"><a href="#cb12-9"></a>    for_ ids <span class="op">$</span> \id&#39; <span class="ot">-&gt;</span></span>
+<span id="cb12-10"><a href="#cb12-10"></a>        salaries <span class="op">.</span> ix id&#39; <span class="op">+=</span> <span class="dv">5</span></span>
+<span id="cb12-11"><a href="#cb12-11"></a></span>
+<span id="cb12-12"><a href="#cb12-12"></a><span class="op">&gt;&gt;&gt;</span> execState salaryBump company</span>
+<span id="cb12-13"><a href="#cb12-13"></a><span class="dt">Company</span> { _staff <span class="ot">=</span> [ <span class="dt">Employee</span> { _employeeId <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb12-14"><a href="#cb12-14"></a>                              , _employeeName <span class="ot">=</span> <span class="st">&quot;bob&quot;</span></span>
+<span id="cb12-15"><a href="#cb12-15"></a>                              , _employeePets <span class="ot">=</span> [ <span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Rocky&quot;</span></span>
+<span id="cb12-16"><a href="#cb12-16"></a>                                              , _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb12-17"><a href="#cb12-17"></a>                                              }</span>
+<span id="cb12-18"><a href="#cb12-18"></a>                                        , <span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Bullwinkle&quot;</span></span>
+<span id="cb12-19"><a href="#cb12-19"></a>                                              , _petType <span class="ot">=</span> <span class="st">&quot;dog&quot;</span></span>
+<span id="cb12-20"><a href="#cb12-20"></a>                                              }</span>
+<span id="cb12-21"><a href="#cb12-21"></a>                                        ]</span>
+<span id="cb12-22"><a href="#cb12-22"></a>                              }</span>
+<span id="cb12-23"><a href="#cb12-23"></a>                   , <span class="dt">Employee</span> { _employeeId <span class="ot">=</span> <span class="dv">2</span></span>
+<span id="cb12-24"><a href="#cb12-24"></a>                              , _employeeName <span class="ot">=</span> <span class="st">&quot;sally&quot;</span></span>
+<span id="cb12-25"><a href="#cb12-25"></a>                              , _employeePets <span class="ot">=</span> [<span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Inigo&quot;</span></span>
+<span id="cb12-26"><a href="#cb12-26"></a>                                             , _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb12-27"><a href="#cb12-27"></a>                                             }</span>
+<span id="cb12-28"><a href="#cb12-28"></a>                                        ]</span>
+<span id="cb12-29"><a href="#cb12-29"></a>                              }</span>
+<span id="cb12-30"><a href="#cb12-30"></a>                   ]</span>
+<span id="cb12-31"><a href="#cb12-31"></a>        , _salaries <span class="ot">=</span> fromList [ (<span class="dv">1</span>, <span class="dv">17</span>)</span>
+<span id="cb12-32"><a href="#cb12-32"></a>                               , (<span class="dv">2</span>, <span class="dv">20</span>)</span>
+<span id="cb12-33"><a href="#cb12-33"></a>                               ]</span>
+<span id="cb12-34"><a href="#cb12-34"></a>      }</span></code></pre></div>
+<p>You'll notice that now that we need to <strong>update</strong> a value rather than just <strong>query</strong> I've switched from the <code>Reader</code> monad to the <code>State</code> monad, which allows us to keep track of our Company in a way that imitates mutable state.</p>
+<p>First we lean on optics to collect all the ids of people who have dogs. Then, once we've got those ids we can iterate over our ids and perform an update action using each of them. The <code>lens</code> library includes a lot of nifty combinators for working with optics inside the <code>State</code> monad; here we're using <code>+=</code> to "statefully" update the salary at a given id. <code>for_</code> from <code>Data.Foldable</code> correctly sequences each of our operations and applies the updates one after the other.</p>
+<p>When we're working inside <code>State</code> instead of <code>Reader</code> we need to use <code>zoom</code> instead of <code>magnify</code>; here's a rewrite of the last example which uses <code>zoom</code> in a trivial way; but <code>zoom</code> allows us to also edit values after we've zoomed in!</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">salaryBump ::</span> <span class="dt">State</span> <span class="dt">Company</span> ()</span>
+<span id="cb13-2"><a href="#cb13-2"></a>salaryBump <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-3"><a href="#cb13-3"></a>    ids <span class="ot">&lt;-</span> zoom ( staff </span>
+<span id="cb13-4"><a href="#cb13-4"></a>                <span class="op">.</span> traversed </span>
+<span id="cb13-5"><a href="#cb13-5"></a>                <span class="op">.</span> filteredBy (employeePets <span class="op">.</span> traversed <span class="op">.</span> petType <span class="op">.</span> only <span class="st">&quot;dog&quot;</span>)</span>
+<span id="cb13-6"><a href="#cb13-6"></a>                ) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb13-7"><a href="#cb13-7"></a>              uses employeeId (<span class="op">:</span>[])</span>
+<span id="cb13-8"><a href="#cb13-8"></a>    for_ ids <span class="op">$</span> \id&#39; <span class="ot">-&gt;</span></span>
+<span id="cb13-9"><a href="#cb13-9"></a>        salaries <span class="op">.</span> ix id&#39; <span class="op">+=</span> <span class="dv">5</span></span></code></pre></div>
+<h2 id="next-steps">Next Steps</h2>
+<p>So hopefully by now I've convinced you that we can faithfully re-create the core behaviours of a language like <code>jq</code> in Haskell in a data-agnostic way! By swapping out your optics you can use this same technique on JSON, CSVs, HTML, or anything you can dream up. It leverages standard Haskell tools, so it composes well with Haskell libraries, and you maintain the full power of the Haskell language so you can easily write your own combinators to expand your vocabulary.</p>
+<p>The question that remains is, where can we go from here? The answer, of course, is that we can add more monads!</p>
+<p>Although we have <code>filtered</code> and <code>filteredBy</code> from <code>lens</code> to do filtering of our enumerations and traversals using optics; it would be nice to have the same power when we're inside a do-notation block! Haskell already has a stock-standard combinator for this called <a href="https://hackage.haskell.org/package/base-4.14.0.0/docs/Control-Monad.html#v:guard"><code>guard</code></a>. It will "fail" in whichever monad you're working with. To work it depends on your type having an instance of the <code>Alternative</code> type; which unfortunately for us <code>State</code> does NOT have; so we'll need to look for an <em>alternative</em> way to get an Alternative instance 😂</p>
+<p>The <code>MaybeT</code> monad transformer exists specifically to add failure to other monad types, so let's integrate that! The tricky bit here is that we want to fail only a <strong>single</strong> branch of our computation, not the whole thing! So we'll need to "catch" any failed branches before they merge back into the main computation.</p>
+<p>Let's write a small wrapper around zoom to get the behaviour we want.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="kw">infixr</span> <span class="dv">0</span> <span class="op">%&gt;</span></span>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="ot">(%&gt;) ::</span> <span class="dt">Traversal&#39;</span> s e <span class="ot">-&gt;</span> <span class="dt">MaybeT</span> (<span class="dt">State</span> e) a <span class="ot">-&gt;</span> <span class="dt">MaybeT</span> (<span class="dt">State</span> s) [a]</span>
+<span id="cb14-3"><a href="#cb14-3"></a>l <span class="op">%&gt;</span> m <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb14-4"><a href="#cb14-4"></a>    zoom l <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb14-5"><a href="#cb14-5"></a>        <span class="co">-- Catch and embed the current branch so we don&#39;t fail the whole program</span></span>
+<span id="cb14-6"><a href="#cb14-6"></a>        a <span class="ot">&lt;-</span> lift <span class="op">$</span> runMaybeT m</span>
+<span id="cb14-7"><a href="#cb14-7"></a>        <span class="fu">return</span> (<span class="fu">maybe</span> [] (<span class="op">:</span>[]) a)</span></code></pre></div>
+<p>This defines a handy new combinator for our traversal DSL which allows us to zoom just like we did before, but the addition of <code>MaybeT</code> allows us to easily use <code>guard</code> to prune branches!</p>
+<p>We make sure to run and re-lift the results of our action rather than embedding them directly otherwise a single failed "guard" would fail the <strong>entire</strong> remaining computation, which we certainly don't want! Since each individual branch may fail, and since we've usually been collecting our results as lists anyways, I just went ahead and embedded our results in a list as part of the combinator, it should make everything a bit easier to use!</p>
+<p>Let's try it out! I'll rewrite the previous example, but we'll use <code>guard</code> instead of <code>filteredBy</code> this time.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="ot">salaryBump&#39;&#39; ::</span> <span class="dt">MaybeT</span> (<span class="dt">State</span> <span class="dt">Company</span>) ()</span>
+<span id="cb15-2"><a href="#cb15-2"></a>salaryBump&#39;&#39; <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb15-3"><a href="#cb15-3"></a>    ids <span class="ot">&lt;-</span> staff <span class="op">.</span> traversed <span class="op">%&gt;</span> <span class="kw">do</span></span>
+<span id="cb15-4"><a href="#cb15-4"></a>            isDog <span class="ot">&lt;-</span> employeePets <span class="op">.</span> traversed <span class="op">%&gt;</span> <span class="kw">do</span></span>
+<span id="cb15-5"><a href="#cb15-5"></a>                       uses petType (<span class="op">==</span> <span class="st">&quot;dog&quot;</span>)</span>
+<span id="cb15-6"><a href="#cb15-6"></a>            guard (<span class="fu">or</span> isDog)</span>
+<span id="cb15-7"><a href="#cb15-7"></a>            use employeeId</span>
+<span id="cb15-8"><a href="#cb15-8"></a>    for_ ids <span class="op">$</span> \id&#39; <span class="ot">-&gt;</span></span>
+<span id="cb15-9"><a href="#cb15-9"></a>        salaries <span class="op">.</span> ix id&#39; <span class="op">+=</span> <span class="dv">5</span></span>
+<span id="cb15-10"><a href="#cb15-10"></a></span>
+<span id="cb15-11"><a href="#cb15-11"></a><span class="op">&gt;&gt;&gt;</span> <span class="fu">flip</span> execState company <span class="op">.</span> runMaybeT <span class="op">$</span> salaryBump&#39;&#39;</span>
+<span id="cb15-12"><a href="#cb15-12"></a><span class="dt">Company</span></span>
+<span id="cb15-13"><a href="#cb15-13"></a>{ _staff    <span class="ot">=</span></span>
+<span id="cb15-14"><a href="#cb15-14"></a>      [ <span class="dt">Employee</span> { _employeeId   <span class="ot">=</span> <span class="dv">1</span></span>
+<span id="cb15-15"><a href="#cb15-15"></a>                 , _employeeName <span class="ot">=</span> <span class="st">&quot;bob&quot;</span></span>
+<span id="cb15-16"><a href="#cb15-16"></a>                 , _employeePets <span class="ot">=</span></span>
+<span id="cb15-17"><a href="#cb15-17"></a>                       [ <span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Rocky&quot;</span></span>
+<span id="cb15-18"><a href="#cb15-18"></a>                             , _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb15-19"><a href="#cb15-19"></a>                             }</span>
+<span id="cb15-20"><a href="#cb15-20"></a>                       , <span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Bullwinkle&quot;</span></span>
+<span id="cb15-21"><a href="#cb15-21"></a>                             , _petType <span class="ot">=</span> <span class="st">&quot;dog&quot;</span></span>
+<span id="cb15-22"><a href="#cb15-22"></a>                             }</span>
+<span id="cb15-23"><a href="#cb15-23"></a>                       ]</span>
+<span id="cb15-24"><a href="#cb15-24"></a>                 }</span>
+<span id="cb15-25"><a href="#cb15-25"></a>      , <span class="dt">Employee</span> { _employeeId   <span class="ot">=</span> <span class="dv">2</span></span>
+<span id="cb15-26"><a href="#cb15-26"></a>                 , _employeeName <span class="ot">=</span> <span class="st">&quot;sally&quot;</span></span>
+<span id="cb15-27"><a href="#cb15-27"></a>                 , _employeePets <span class="ot">=</span> [ <span class="dt">Pet</span> { _petName <span class="ot">=</span> <span class="st">&quot;Inigo&quot;</span></span>
+<span id="cb15-28"><a href="#cb15-28"></a>                                         , _petType <span class="ot">=</span> <span class="st">&quot;cat&quot;</span></span>
+<span id="cb15-29"><a href="#cb15-29"></a>                                         }</span>
+<span id="cb15-30"><a href="#cb15-30"></a>                                   ]</span>
+<span id="cb15-31"><a href="#cb15-31"></a>                 }</span>
+<span id="cb15-32"><a href="#cb15-32"></a>      ]</span>
+<span id="cb15-33"><a href="#cb15-33"></a>, _salaries <span class="ot">=</span> fromList [(<span class="dv">1</span>, <span class="dv">17</span>), (<span class="dv">2</span>, <span class="dv">15</span>)]</span>
+<span id="cb15-34"><a href="#cb15-34"></a>}</span></code></pre></div>
+<p>I wrote it out in "long form"; the expressiveness of our system means there are a few different ways to write the same thing; which probably isn't a good thing, but you can find the way that you like to work and standardize on that!</p>
+<p>It turns out that if you want even <strong>more</strong> power you can replace <code>MaybeT</code> with a "List transformer done right" like <a href="https://hackage.haskell.org/package/logict"><code>LogicT</code></a> or <a href="https://hackage.haskell.org/package/list-t"><code>list-t</code></a>. This will allow you to actually <strong>expand</strong> the number of branches within a zoom, not just filter them! It leads to a lot of power! I'll leave it as an exercise for the reader to experiment with, see if you can rewrite <code>%&gt;</code> to use one of these list transformers instead!</p>
+<p>Hopefully that helps to show how a few optics along with a few monads can allow you to replicate the power of something like <code>jq</code> and even add more capabilities, all by leveraging composable tools that already exist and while maintaining the full power of Haskell!</p>
+<p>There are truly endless types of additional combinators you could add to make your code look how you want, but I'll leave that up to you. You can even use <code>ReaderT</code> or <code>StateT</code> as a base monad to make the whole stack into a transformer so you can add any other Monadic behaviour you want to your DSL (e.g. <code>IO</code>).</p>
+<h2 id="is-it-really-data-agnostic">Is it really data agnostic?</h2>
+<p>Just to show that everything we've built so far works on any data type you like (so long as you can write optics for it); we'll rewrite our Haskell code to accept a JSON <code>Aeson.Value</code> object instead!</p>
+<p>You'll find it's a bit longer than the <code>jq</code> version, but keep in mind that it's fully typesafe!</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="ot">salaryBumpJSON ::</span> <span class="dt">MaybeT</span> (<span class="dt">State</span> <span class="dt">Value</span>) ()</span>
+<span id="cb16-2"><a href="#cb16-2"></a>salaryBumpJSON <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb16-3"><a href="#cb16-3"></a>    ids <span class="ot">&lt;-</span> key <span class="st">&quot;staff&quot;</span> <span class="op">.</span> values <span class="op">%&gt;</span> <span class="kw">do</span></span>
+<span id="cb16-4"><a href="#cb16-4"></a>        isDog <span class="ot">&lt;-</span> key <span class="st">&quot;pets&quot;</span> <span class="op">.</span> values <span class="op">%&gt;</span> <span class="kw">do</span></span>
+<span id="cb16-5"><a href="#cb16-5"></a>                        pType <span class="ot">&lt;-</span> use (key <span class="st">&quot;type&quot;</span> <span class="op">.</span> _String)</span>
+<span id="cb16-6"><a href="#cb16-6"></a>                        <span class="fu">return</span> <span class="op">$</span> pType <span class="op">==</span> <span class="st">&quot;dog&quot;</span></span>
+<span id="cb16-7"><a href="#cb16-7"></a>        guard (<span class="fu">or</span> isDog)</span>
+<span id="cb16-8"><a href="#cb16-8"></a>        use (key <span class="st">&quot;id&quot;</span> <span class="op">.</span> _String)</span>
+<span id="cb16-9"><a href="#cb16-9"></a>    for_ ids <span class="op">$</span> \id&#39; <span class="ot">-&gt;</span></span>
+<span id="cb16-10"><a href="#cb16-10"></a>        key <span class="st">&quot;salaries&quot;</span> <span class="op">.</span> key id&#39; <span class="op">.</span> _Integer <span class="op">+=</span> <span class="dv">5</span></span></code></pre></div>
+<p>As you can see it's pretty much the same! We just have to specify the type of JSON we expect to find in each location (e.g. <code>_String</code>, <code>_Integer</code>), but otherwise it's very similar!</p>
+<p>For the record I'm not suggesting that you go and replace all of your CLI usages of <code>jq</code> with Haskell, but I hope that this exploration can help future programmers avoid "re-inventing" the wheel and give them a more mathematically structured approach when building their traversal systems; or maybe they'll just build those systems in Haskell instead 😉</p>
+<p>I'm excited to see what sort of cool tricks, combinators, and interactions with other monads you all find!</p>
+<h2 id="bonus">Bonus</h2>
+<p>Just to show that you can do "real" work with this abstraction here are a few more examples using this technique with different data types. These examples will still be a bit tongue in cheek, but hopefully show that you really can accomplish actual tasks with this abstraction across a wide range of data types.</p>
+<hr />
+<p>First up; here's a transformation over a kubernetes manifest describing the pods available in a given namespace. You can see an example roughly what the data looks like <a href="https://gist.github.com/ChrisPenner/53e4b505ff0673b39c60e6c926b2715d">here</a>.</p>
+<p>This transformation takes a map of docker image names to port numbers and goes through the manifest and sets each container to use the correct ports. It also tags each pod with all of the images from its containers, and finally returns a map of container names to docker image types! It's pretty cool how this abstraction lets us mutate data while also returning information.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
+<span id="cb17-2"><a href="#cb17-2"></a><span class="kw">module</span> <span class="dt">K8s</span> <span class="kw">where</span></span>
+<span id="cb17-3"><a href="#cb17-3"></a></span>
+<span id="cb17-4"><a href="#cb17-4"></a><span class="kw">import</span> <span class="dt">Data.Aeson</span> <span class="kw">hiding</span> ((.=))</span>
+<span id="cb17-5"><a href="#cb17-5"></a><span class="kw">import</span> <span class="dt">Data.Aeson.Lens</span></span>
+<span id="cb17-6"><a href="#cb17-6"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb17-7"><a href="#cb17-7"></a><span class="kw">import</span> <span class="dt">Control.Monad.State</span></span>
+<span id="cb17-8"><a href="#cb17-8"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></span>
+<span id="cb17-9"><a href="#cb17-9"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span></span>
+<span id="cb17-10"><a href="#cb17-10"></a><span class="kw">import</span> <span class="dt">Data.Foldable</span></span>
+<span id="cb17-11"><a href="#cb17-11"></a></span>
+<span id="cb17-12"><a href="#cb17-12"></a><span class="co">-- Load in your k8s JSON here however you like</span></span>
+<span id="cb17-13"><a href="#cb17-13"></a><span class="ot">k8sJSON ::</span> <span class="dt">Value</span></span>
+<span id="cb17-14"><a href="#cb17-14"></a>k8sJSON <span class="ot">=</span> <span class="fu">undefined</span></span>
+<span id="cb17-15"><a href="#cb17-15"></a></span>
+<span id="cb17-16"><a href="#cb17-16"></a><span class="ot">transformation ::</span> <span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">State</span> <span class="dt">Value</span> (<span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">T.Text</span>)</span>
+<span id="cb17-17"><a href="#cb17-17"></a>transformation ports <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb17-18"><a href="#cb17-18"></a>    zoom (key <span class="st">&quot;items&quot;</span> <span class="op">.</span> values) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb17-19"><a href="#cb17-19"></a>        containerImages <span class="ot">&lt;-</span> zoom (key <span class="st">&quot;spec&quot;</span> <span class="op">.</span> key <span class="st">&quot;containers&quot;</span> <span class="op">.</span> values) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb17-20"><a href="#cb17-20"></a>            containerName <span class="ot">&lt;-</span> use (key <span class="st">&quot;name&quot;</span> <span class="op">.</span> _String)</span>
+<span id="cb17-21"><a href="#cb17-21"></a>            imageName <span class="ot">&lt;-</span> use (key <span class="st">&quot;image&quot;</span> <span class="op">.</span> _String <span class="op">.</span> to (T.takeWhile (<span class="op">/=</span> <span class="ch">&#39;:&#39;</span>)))</span>
+<span id="cb17-22"><a href="#cb17-22"></a>            zoom (key <span class="st">&quot;ports&quot;</span> <span class="op">.</span> values) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb17-23"><a href="#cb17-23"></a>                <span class="kw">let</span> hostPort <span class="ot">=</span> M.findWithDefault <span class="dv">8080</span> imageName ports</span>
+<span id="cb17-24"><a href="#cb17-24"></a>                key <span class="st">&quot;hostPort&quot;</span> <span class="op">.</span> _Integral <span class="op">.=</span> hostPort</span>
+<span id="cb17-25"><a href="#cb17-25"></a>                key <span class="st">&quot;containerPort&quot;</span> <span class="op">.</span> _Integral <span class="op">.=</span> hostPort <span class="op">+</span> <span class="dv">1000</span></span>
+<span id="cb17-26"><a href="#cb17-26"></a>            <span class="fu">return</span> <span class="op">$</span> M.singleton containerName imageName</span>
+<span id="cb17-27"><a href="#cb17-27"></a>        zoom (key <span class="st">&quot;metadata&quot;</span> <span class="op">.</span> key <span class="st">&quot;labels&quot;</span>) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb17-28"><a href="#cb17-28"></a>          for_ containerImages <span class="op">$</span> \imageName <span class="ot">-&gt;</span></span>
+<span id="cb17-29"><a href="#cb17-29"></a>              _Object <span class="op">.</span> at imageName <span class="op">?=</span> <span class="st">&quot;true&quot;</span></span>
+<span id="cb17-30"><a href="#cb17-30"></a>        <span class="fu">return</span> containerImages</span>
+<span id="cb17-31"><a href="#cb17-31"></a></span>
+<span id="cb17-32"><a href="#cb17-32"></a><span class="ot">imagePorts ::</span> <span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">Int</span></span>
+<span id="cb17-33"><a href="#cb17-33"></a>imagePorts <span class="ot">=</span> M.fromList [ (<span class="st">&quot;redis&quot;</span>, <span class="dv">6379</span>)</span>
+<span id="cb17-34"><a href="#cb17-34"></a>                        , (<span class="st">&quot;my-app&quot;</span>, <span class="dv">80</span>)</span>
+<span id="cb17-35"><a href="#cb17-35"></a>                        , (<span class="st">&quot;postgres&quot;</span>, <span class="dv">5432</span>)</span>
+<span id="cb17-36"><a href="#cb17-36"></a>                        ]</span>
+<span id="cb17-37"><a href="#cb17-37"></a></span>
+<span id="cb17-38"><a href="#cb17-38"></a><span class="ot">result ::</span> (<span class="dt">M.Map</span> <span class="dt">T.Text</span> <span class="dt">T.Text</span>, <span class="dt">Value</span>)</span>
+<span id="cb17-39"><a href="#cb17-39"></a>result <span class="ot">=</span> runState (transformation imagePorts) k8sJSON</span></code></pre></div>
+<hr />
+<p>Next up; let's work with some HTML! The following transformation uses <code>taggy-lens</code> to interact with HTML (or any XML you happen to have lying around.)</p>
+<p>This transformation will find all direct parents of <code>&lt;img&gt;</code> tags and will set the <code>alt</code> tags on those images to be all the text inside the parent node.</p>
+<p>After that, it will find all <code>&lt;a&gt;</code> tags and wrap them in a <code>&lt;strong&gt;</code> tag while also returning a list of all <code>href</code> attributes so we can see all the links we have in the document!</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
+<span id="cb18-2"><a href="#cb18-2"></a><span class="kw">module</span> <span class="dt">HTML</span> <span class="kw">where</span></span>
+<span id="cb18-3"><a href="#cb18-3"></a></span>
+<span id="cb18-4"><a href="#cb18-4"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text.Lazy</span> <span class="kw">as</span> <span class="dt">TL</span></span>
+<span id="cb18-5"><a href="#cb18-5"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span></span>
+<span id="cb18-6"><a href="#cb18-6"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Text.Lazy.IO</span> <span class="kw">as</span> <span class="dt">TL</span></span>
+<span id="cb18-7"><a href="#cb18-7"></a><span class="kw">import</span> <span class="dt">Control.Monad.State</span></span>
+<span id="cb18-8"><a href="#cb18-8"></a><span class="kw">import</span> <span class="dt">Text.Taggy.Lens</span></span>
+<span id="cb18-9"><a href="#cb18-9"></a><span class="kw">import</span> <span class="dt">Control.Lens</span> <span class="kw">hiding</span> (elements)</span>
+<span id="cb18-10"><a href="#cb18-10"></a></span>
+<span id="cb18-11"><a href="#cb18-11"></a><span class="ot">transformation ::</span> <span class="dt">State</span> <span class="dt">TL.Text</span> [<span class="dt">T.Text</span>]</span>
+<span id="cb18-12"><a href="#cb18-12"></a>transformation <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb18-13"><a href="#cb18-13"></a>    <span class="co">-- Select all tags which have an &quot;img&quot; as a direct child</span></span>
+<span id="cb18-14"><a href="#cb18-14"></a>    zoom (html <span class="op">.</span> elements <span class="op">.</span> deep (filteredBy (elements <span class="op">.</span> named (only <span class="st">&quot;img&quot;</span>)))) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb18-15"><a href="#cb18-15"></a>        <span class="co">-- Get the current node&#39;s text contents</span></span>
+<span id="cb18-16"><a href="#cb18-16"></a>        altText <span class="ot">&lt;-</span> use contents</span>
+<span id="cb18-17"><a href="#cb18-17"></a>        <span class="co">-- Set the text contents as the &quot;alt&quot; tag for all img children</span></span>
+<span id="cb18-18"><a href="#cb18-18"></a>        elements <span class="op">.</span> named (only <span class="st">&quot;img&quot;</span>) <span class="op">.</span> attr <span class="st">&quot;alt&quot;</span> <span class="op">?=</span> altText</span>
+<span id="cb18-19"><a href="#cb18-19"></a></span>
+<span id="cb18-20"><a href="#cb18-20"></a>    <span class="co">-- Transform all &quot;a&quot; tags recursively</span></span>
+<span id="cb18-21"><a href="#cb18-21"></a>    (html <span class="op">.</span> elements <span class="op">.</span> transformM <span class="op">.</span> named (only <span class="st">&quot;a&quot;</span>)) </span>
+<span id="cb18-22"><a href="#cb18-22"></a>      <span class="co">-- Wrap them in a &lt;strong&gt; tag while also returning their href value</span></span>
+<span id="cb18-23"><a href="#cb18-23"></a>      <span class="op">%%=</span> \tag <span class="ot">-&gt;</span> (tag <span class="op">^..</span> attr <span class="st">&quot;href&quot;</span> <span class="op">.</span> _Just, <span class="dt">Element</span> <span class="st">&quot;strong&quot;</span> <span class="fu">mempty</span> [<span class="dt">NodeElement</span> tag])</span></code></pre></div>
+<hr />
+<p>Lastly let's see a CSV example! I'll be using my <a href="https://hackage.haskell.org/package/lens-csv-0.1.1.0/docs/Data-Csv-Lens.html"><code>lens-csv</code></a> library for the optics.</p>
+<p>This simple example iterates through all the rows in a csv and uses an overly simplistic formula to recompute their ages based on their birth year.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
+<span id="cb19-2"><a href="#cb19-2"></a><span class="ot">{-# LANGUAGE TypeApplications #-}</span></span>
+<span id="cb19-3"><a href="#cb19-3"></a><span class="ot">{-# LANGUAGE LambdaCase #-}</span></span>
+<span id="cb19-4"><a href="#cb19-4"></a><span class="kw">module</span> <span class="dt">CSV</span> <span class="kw">where</span></span>
+<span id="cb19-5"><a href="#cb19-5"></a></span>
+<span id="cb19-6"><a href="#cb19-6"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb19-7"><a href="#cb19-7"></a><span class="kw">import</span> <span class="dt">Data.Csv.Lens</span></span>
+<span id="cb19-8"><a href="#cb19-8"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.ByteString.Lazy</span> <span class="kw">as</span> <span class="dt">BL</span></span>
+<span id="cb19-9"><a href="#cb19-9"></a><span class="kw">import</span> <span class="dt">Control.Monad.State</span></span>
+<span id="cb19-10"><a href="#cb19-10"></a></span>
+<span id="cb19-11"><a href="#cb19-11"></a><span class="ot">recomputeAges ::</span> <span class="dt">State</span> <span class="dt">BL.ByteString</span> ()</span>
+<span id="cb19-12"><a href="#cb19-12"></a>recomputeAges <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb19-13"><a href="#cb19-13"></a>    zoom (namedCsv <span class="op">.</span> rows) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb19-14"><a href="#cb19-14"></a>        preuse (column <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;birthYear&quot;</span>) <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb19-15"><a href="#cb19-15"></a>            <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="fu">return</span> ()</span>
+<span id="cb19-16"><a href="#cb19-16"></a>            <span class="dt">Just</span> birthYear <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb19-17"><a href="#cb19-17"></a>                column <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;age&quot;</span> <span class="op">.=</span> <span class="dv">2020</span> <span class="op">-</span> birthYear</span></code></pre></div>
+<p>Hopefully these last few examples help convince you that this really is an adaptable solution even though they're still a bit silly.</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Intro to Kaleidoscopes: Optics for aggregating data through Applicatives</title>
       <link href="https://chrispenner.ca/posts/kaleidoscopes"/>
