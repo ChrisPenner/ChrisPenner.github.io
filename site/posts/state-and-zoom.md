@@ -1,7 +1,7 @@
 ---
 title: "Generalizing 'jq' and Traversal Systems using optics and standard monads"
 author: "Chris Penner"
-date: "September 27, 2020"
+date: "Sep 27, 2020"
 tags: [haskell, optics]
 description: "We rebuild the core behaviour of 'jq' using standard Haskell combinators and optics"
 ---
