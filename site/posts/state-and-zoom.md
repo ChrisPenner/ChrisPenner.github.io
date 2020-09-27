@@ -1,9 +1,9 @@
 ---
-title: "Transform and query nested data with Optics and State"
+title: "Generalizing 'jq' and Traversal Systems using optics and standard monads"
 author: "Chris Penner"
-date: "May 24, 2020"
+date: "September 27, 2020"
 tags: [haskell, optics]
-description: "Using the Monads and optics to quickly and easily transform and query data."
+description: "We rebuild the core behaviour of 'jq' using standard Haskell combinators and optics"
 ---
 
 Hi folks! Today I'll be chatting about **Traversal Systems** like **jq** and **XPath**; we're going to discover which properties make them useful, then see how we can replicate their most useful behaviours in Haskell using (almost entirely) pre-ols!existing standard Haskell tools! Let's go!
@@ -12,29 +12,30 @@ Hi folks! Today I'll be chatting about **Traversal Systems** like **jq** and **X
 
 First off I'll admit that "Traversal System" is a name I just came up with, you probably won't find anything if you search for it (unless this post really catches on 😉).
 
-A traversal system encompasses the idea of **traversing**  your way through a piece of (typically recursive) data. It may allow you to fetch, query, and edit the structure as you go while maintaining references to other pieces of the structure to influence your work. It turns out that this sort of thing is **incredibly useful** for manipulating JSON, querying HTML and CSS, working with CSVs, or even just handling standard Haskell Records and data-types.
+A **Traversal System** allows you dive deeply into a piece of data and may allow you to fetch, query, and edit the structure as you go while maintaining references to other pieces of the structure to influence your work. The goal of most Traversal Systems is to make this as painless and concise as possible. It turns out that this sort of thing is **incredibly useful** for manipulating JSON, querying HTML and CSS, working with CSVs, or even just handling standard Haskell Records and data-types.
 
-Some good examples of existing **traversal systems** you may have heard of include the brilliant [jq](https://stedolan.github.io/jq/) utility for manipulating and querying JSON, the **XPath** language for querying XML, and the [meander](https://github.com/noprompt/meander) data manipulation system in Clojure.
-
+Some good examples of existing **Traversal Systems** which you may have heard of include the brilliant [jq](https://stedolan.github.io/jq/) utility for manipulating and querying JSON, the **XPath** language for querying XML, and the [meander](https://github.com/noprompt/meander) data manipulation system in Clojure.
 Although each of these systems may appear drastically different at a glance, they both *accomplish many of the same goals* of manipulating and querying data in a concise way.
 
-The similarities between these systems intrigued me! They seem so similar, but we still seem to need to re-invent the wheel every time we want this behaviour for a new data type! Ideally we could recognize the useful behaviours each system shares and build a system which includes the useful operations but generalizes over the exact data type right?
+The similarities between these systems intrigued me! They seem so similar, but yet still seem to share very little in the way of structure, syntax, and prior art. They re-invent the wheel for each new data type! Ideally we could recognize the useful behaviours in each system and build a generalized system which works for any data type.
 
-This blog post is an attempt to do exactly that. We'll take a look at a few things that these systems do well, and we'll re-build them in Haskell using standard tooling, all the while abstracting over the type of data!
+This post is an attempt to do exactly that; we'll take a look at a few things that these systems do well, then we'll re-build them in Haskell using standard tooling, all the while abstracting over the type of data!
+
+## Optics as a basis for a traversal system
 
 For any of those who know me it should be no surprise that my first thought was to look at optics (i.e. Lenses and Traversals). In general I find that optics solve a lot of my problems, but in this case they are particularly appropriate! Optics inherently deal with the idea of diving deep into data and querying or updating data in a structured and compositional fashion. 
 
 In addition, optics also allow abstracting over the data type they work on. There are pre-existing libraries of optics for working with JSON via [`lens-aeson`](https://hackage.haskell.org/package/lens-aeson) and for html via [`taggy-lens`](https://hackage.haskell.org/package/taggy-lens). I've written optics libraries for working with [CSVs](https://hackage.haskell.org/package/lens-csv) and even [Regular Expressions](https://hackage.haskell.org/package/lens-regex-pcre), so I can say confidently that they're a brilliantly adaptable tool for data manipulation.
 
-However! Optics themselves don't provide everything we need! Optics are rather obtuse, in fact I wrote [a whole book](https://leanpub.com/optics-by-example) to help teach them, and they lack clarity and easy of use when it comes to building larger expressions. It's also pretty tough to work on one part of a data structure while referencing data in another part of the same structure. My hope is to address some of these short comings in this post.
+It also happens that optics are well-principled and mathematically sound, so they're a good tool for studying the properties that a system like this may have.
 
-That's a lot of talk with not much code, so let's see how optics compare to something like **jq** so we can build the comparison.
+However, optics themselves don't provide everything we need! Optics are rather obtuse, in fact I wrote [a whole book](https://leanpub.com/optics-by-example) to help teach them, and they lack clarity and easy of use when it comes to building larger expressions. It's also pretty tough to work on one part of a data structure while referencing data in another part of the same structure. My hope is to address some of these short comings in this post.
 
-In this particular post I'm mostly interested in explaining a framework for traversal systems in Haskell, we'll be using many standard [**mtl**](https://hackage.haskell.org/package/mtl) Monad Transformers alongside a lot of combinators from the [**lens**](https://hackage.haskell.org/package/lens) library. You won't need to understand any of these intimately to get the _gist_ of what's going on, but I won't be explaining them in depth here.
+In this particular post I'm mostly interested in explaining a framework for traversal systems in Haskell, we'll be using many standard [**mtl**](https://hackage.haskell.org/package/mtl) Monad Transformers alongside a lot of combinators from the [**lens**](https://hackage.haskell.org/package/lens) library. You won't need to understand any of these intimately to get the _gist_ of what's going on, but I won't be explaining them in depth here, so you may need to look elsewhere if you're lacking a bit of context.
 
 ## Establishing the Problem
 
-I'll be demoing a few examples as we go along, so let's set up some data. I'll be working in both `jq` and Haskell to make comparisons, so we'll set up the same data in both **JSON** and Haskell.
+I'll be demoing a few examples as we go along so let's set up some data. I'll be working in both **jq** and **Haskell** to make comparisons between them, so we'll set up the same data in both **JSON** and Haskell.
 
 Here's a funny lil' company as a JSON object:
 
@@ -69,7 +70,7 @@ Here's a funny lil' company as a JSON object:
 }
 ```
 
-And here's the same data as a Haskell representation, complete with optics generated for each record field.
+And here's the same data in its Haskell representation, complete with generated optics for each record field.
 
 ```haskell
 data Company = Company { _staff :: [Employee]
@@ -97,9 +98,9 @@ company = Company [ Employee 1 "bob" [Pet "Rocky" "cat", Pet "Bullwinkle" "cat"]
 
 ## Querying
 
-Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the cats owned by any of our employees!
+Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the cats owned by any of our employees.
 
-Here's how it looks in `jq`
+Here's how it looks in **jq**:
 
 ```jq
 $ cat company.json | jq '.staff[].pets[] | select(.type == "cat")'
@@ -115,19 +116,18 @@ $ cat company.json | jq '.staff[].pets[] | select(.type == "cat")'
 
 We look in the `staff` key, then *enumerate* that list, then for each staff member we enumerate their cats! Lastly we filter out anything that's not a cat.
 
-We can recognize a few hallmarks of a **Traversal System** here. **jq** allows us to "dive" down deeper into our structure by providing a path to where we want to be. It also allows us to **enumerate** many possibilities using the `[]` operator, which will pass **each** value to the rest of the pipeline one after the other. Lastly it allows us to **filter** our results using `select`.
-
+We can recognize a few hallmarks of a **Traversal System** here. **jq** allows us to "dive" down deeper into our structure by providing a path to where we want to be. It also allows us to **enumerate** many possibilities using the `[]` operator, which will forward **each** value to the rest of the pipeline one after the other. Lastly it allows us to **filter** our results using `select`.
 
 And in Haskell using optics it looks like this:
 
 ```haskell
->>> company ^.. staff . folded . employeePets . folded . filteredBy (petType . only "cat")
+>>> toListOf (staff . folded . employeePets . folded . filteredBy (petType . only "cat")) company
 [ Pet {_petName = "Rocky", _petType = "cat"}
 , Pet {_petName = "Inigo", _petType = "cat"}
 ]
 ```
 
-Here we use the lens operator `^..` which means "to-list-of" along with an optic which "folds" over each staff member, then folds over each of their pets, again filtering for "only" cats.
+Here we use "toListOf" along with an optic which "folds" over each staff member, then folds over each of their pets, again filtering for "only" cats.
 
 At a glance the two are extremely similar!
 
@@ -137,16 +137,21 @@ Both implement some form of **filtering**, **jq** using `select` and our optics 
 
 Great! So far we've had no trouble keeping up! We're already starting to see a lot of similarities between the two, and our solutions using optics are easily generalizable to any data type.
 
-Let's move on to a more complex example!
+Let's move on to a more complex example.
 
 ## Keeping references
 
-Let's say that for an arbitrary reason we need to fetch the pets of every employee who makes more than $15/hr.
+Let's say that as part of a tax audit we need to fetch the pets of every employee who makes more than $15/hr.
 
 First, here's the **jq**:
 
 ```sh
-$ cat join.json | jq '.staff[] | .name as $personName | .pets[] | "\(.name) belongs to \($personName)"'
+$ cat join.json | jq '
+    .staff[] 
+  | .name as $personName 
+  | .pets[] 
+  | "\(.name) belongs to \($personName)"
+'
 "Rocky belongs to bob"
 "Bullwinkle belongs to bob"
 "Inigo belongs to sally"
@@ -174,7 +179,6 @@ owners =
 You can bet that nobody is calling that "easy to read". Heck, I wrote a book on optics and it still took me a few tries to figure out where the brackets needed to go!
 
 Optics are great for handling a *single* stream of values, but they're much worse at more complex expressions, especially those which require a reference to values that occur _earlier_ in the chain. Let's see how we can address those shortcomings as we build our **Traversal System** in Haskell.
-
 
 Just for the **jq** aficionados in the audience I'll show off this alternate version which uses a little bit of _magic_ that **jq** does for you.
 
@@ -221,9 +225,9 @@ As for `magnify`, it's a combinator from the `lens` library which takes an **opt
 
 One more thing! `magnify` can accept a `Fold` which focuses **multiple** elements, in this case it will run the action once for **each** focus, then combine all the results together using a **semigroup**. In this case, we wrapped our result in a **list** before returning it, so magnify will go ahead and automatically **concatenate** all the results together for us. Pretty nifty that we can get so much functionality out of `magnify` without writing any code ourselves!
 
-We can see that rewriting the problem in this style has made it considerably easier to read. It allows us to "pause" as we use optics to descend. Since it's a monad and we're using do-notation, we can easily bind any intermediate results into names to be referenced later on; the names will correctly reference the value from the current iteration! It's also nice that we have a clear indication of the scope of all our bindings by looking at the indentation of each nested do-notation block.
+We can see that rewriting the problem in this style has made it considerably easier to read. It allows us to "pause" as we use optics to descend and poke around a bit at any given spot. Since it's a monad and we're using do-notation, we can easily bind any intermediate results into names to be referenced later on; the names will correctly reference the value from the current iteration! It's also nice that we have a clear indication of the scope of all our bindings by looking at the indentation of each nested do-notation block.
 
-Depending on your personal style, you could write this expression using the `(->)` monad directly, or even omit the indentation entirely; though I don't personally recommend that. In case you're curious, here's the way that I DON'T RECOMMEND writing this query:
+Depending on your personal style, you could write this expression using the `(->)` monad directly, or even omit the indentation entirely; though I don't personally recommend that. In case you're curious, here's the way that I DON'T RECOMMEND writing this:
 
 ```haskell
 owners'' :: Company -> [String]
@@ -237,8 +241,7 @@ owners'' = do
 
 ## Updating deeply nested values
 
-Okay! On to the next step! Let's say that according to our company policy we want to give a $5 raise to anyone who owns a dog! Hey, I don't make the rules here 🤷‍♂️. notice that this time we're running an **update** not just a **query**!
-
+Okay! On to the next step! Let's say that according to our company policy we want to give a $5 raise to anyone who owns a dog! Hey, I don't make the rules here 🤷‍♂️. Notice that this time we're running an **update** not just a **query**!
 
 Here's one of a few different ways we could express this in **jq**
 
@@ -288,19 +291,30 @@ I'll admit that it took me a few tries to get this right in **jq**; if you're no
 
 ```sh
 $ cat company.json | jq '
-. as $company | .staff[] | select(.pets[].type == "dog").id | $company.salaries[.] += 5
+. as $company 
+| .staff[] 
+| select(.pets[].type == "dog").id 
+| $company.salaries[.] += 5
+'
 
 jq: error (at <stdin>:28): Invalid path expression near attempt to access element "salaries" of {"staff":[{"id":"1","name"...
 ```
 
-This sort of problem is tricky because it involves enumeration over one area, storing those results, then enumerating AND updating in another! It's definitely possible in `jq`, but some of the magic that **jq** performs makes it a bit tough to know what will work and what won't at a glance.
+In this case it looks like **jq** can't edit something we've stored as a variable; a bit surprising, but fair enough I suppose.
 
-Now for the haskell version:
+This sort of task is tricky because it involves enumeration over one area, storing those results, then enumerating AND updating in another! It's definitely possible in `jq`, but some of the magic that **jq** performs makes it a bit tough to know what will work and what won't at a glance.
+
+Now for the Haskell version:
 
 ```haskell
 salaryBump :: State Company ()
 salaryBump = do
-    ids <- gets $ toListOf (staff . traversed . filteredBy (employeePets . traversed . petType . only "dog") . employeeId)
+    ids <- gets $ toListOf 
+            ( staff 
+            . traversed 
+            . filteredBy (employeePets . traversed . petType . only "dog") 
+            . employeeId
+            )
     for_ ids $ \id' ->
         salaries . ix id' += 5
 
@@ -333,14 +347,16 @@ You'll notice that now that we need to **update** a value rather than just **que
 
 First we lean on optics to collect all the ids of people who have dogs. Then, once we've got those ids we can iterate over our ids and perform an update action using each of them. The `lens` library includes a lot of nifty combinators for working with optics inside the `State` monad; here we're using `+=` to "statefully" update the salary at a given id. `for_` from `Data.Foldable` correctly sequences each of our operations and applies the updates one after the other.
 
-Note that when we're working inside `State` instead of `Magnify` we need to use `zoom` instead of `magnify`; here's a rewrite of the last example which uses zoom in a trivial way; but zoom allows us to also edit values after we've zoomed in!
+When we're working inside `State` instead of `Reader` we need to use `zoom` instead of `magnify`; here's a rewrite of the last example which uses `zoom` in a trivial way; but `zoom` allows us to also edit values after we've zoomed in!
 
 ```haskell
 salaryBump :: State Company ()
 salaryBump = do
-    ids <- zoom (staff . traversed . filteredBy (employeePets . traversed . petType . only "dog")) $ do
-        uses employeeId (:[])
-    salaries . traversed . indices (`elem` ids) += 5
+    ids <- zoom ( staff 
+                . traversed 
+                . filteredBy (employeePets . traversed . petType . only "dog")
+                ) $ do
+              uses employeeId (:[])
     for_ ids $ \id' ->
         salaries . ix id' += 5
 ```
@@ -362,7 +378,6 @@ infixr 0 %>
 (%>) :: Traversal' s e -> MaybeT (State e) a -> MaybeT (State s) [a]
 l %> m = do
     zoom l $ do
-        e <- get
         -- Catch and embed the current branch so we don't fail the whole program
         a <- lift $ runMaybeT m
         return (maybe [] (:[]) a)
@@ -442,4 +457,4 @@ As you can see it's pretty much the same! We just have to specify the type of JS
 
 For the record I'm not suggesting that you go and replace all of your CLI usages of `jq` with Haskell, but I hope that this exploration can help future programmers avoid "re-inventing" the wheel and give them a more mathematically structured approach when building their traversal systems; or maybe they'll just build those systems in Haskell instead 😉
 
-Let me know if you come up with any cool tricks or find fun interactions with different monad types!
+I'm excited to see what sort of cool tricks, combinators, and interactions with other monads you all find!
