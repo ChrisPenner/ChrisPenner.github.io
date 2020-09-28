@@ -830,13 +830,13 @@
 <span id="cb2-14"><a href="#cb2-14"></a>makeLenses &#39;<span class="dt">&#39;Employee</span></span>
 <span id="cb2-15"><a href="#cb2-15"></a></span>
 <span id="cb2-16"><a href="#cb2-16"></a><span class="ot">company ::</span> <span class="dt">Company</span></span>
-<span id="cb2-17"><a href="#cb2-17"></a>company <span class="ot">=</span> <span class="dt">Company</span> [ <span class="dt">Employee</span> <span class="dv">1</span> <span class="st">&quot;bob&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Rocky&quot;</span> <span class="st">&quot;cat&quot;</span>, <span class="dt">Pet</span> <span class="st">&quot;Bullwinkle&quot;</span> <span class="st">&quot;cat&quot;</span>] </span>
-<span id="cb2-18"><a href="#cb2-18"></a>                  , <span class="dt">Employee</span> <span class="dv">2</span> <span class="st">&quot;sally&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Inigo&quot;</span> <span class="st">&quot;dog&quot;</span>]</span>
+<span id="cb2-17"><a href="#cb2-17"></a>company <span class="ot">=</span> <span class="dt">Company</span> [ <span class="dt">Employee</span> <span class="dv">1</span> <span class="st">&quot;bob&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Rocky&quot;</span> <span class="st">&quot;cat&quot;</span>, <span class="dt">Pet</span> <span class="st">&quot;Bullwinkle&quot;</span> <span class="st">&quot;dog&quot;</span>] </span>
+<span id="cb2-18"><a href="#cb2-18"></a>                  , <span class="dt">Employee</span> <span class="dv">2</span> <span class="st">&quot;sally&quot;</span> [<span class="dt">Pet</span> <span class="st">&quot;Inigo&quot;</span> <span class="st">&quot;cat&quot;</span>]</span>
 <span id="cb2-19"><a href="#cb2-19"></a>                  ] (M.fromList [ (<span class="dv">1</span>, <span class="dv">12</span>)</span>
 <span id="cb2-20"><a href="#cb2-20"></a>                                , (<span class="dv">2</span>, <span class="dv">15</span>)</span>
 <span id="cb2-21"><a href="#cb2-21"></a>                                ])</span></code></pre></div>
 <h2 id="querying">Querying</h2>
-<p>Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the cats owned by any of our employees.</p>
+<p>Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the pets owned by any of our employees.</p>
 <p>Here's how it looks in <strong>jq</strong>:</p>
 <pre class="jq"><code>$ cat company.json | jq &#39;.staff[].pets[] | select(.type == &quot;cat&quot;)&#39;
 {
@@ -1009,7 +1009,7 @@
 <span id="cb12-29"><a href="#cb12-29"></a>                              }</span>
 <span id="cb12-30"><a href="#cb12-30"></a>                   ]</span>
 <span id="cb12-31"><a href="#cb12-31"></a>        , _salaries <span class="ot">=</span> fromList [ (<span class="dv">1</span>, <span class="dv">17</span>)</span>
-<span id="cb12-32"><a href="#cb12-32"></a>                               , (<span class="dv">2</span>, <span class="dv">20</span>)</span>
+<span id="cb12-32"><a href="#cb12-32"></a>                               , (<span class="dv">2</span>, <span class="dv">15</span>)</span>
 <span id="cb12-33"><a href="#cb12-33"></a>                               ]</span>
 <span id="cb12-34"><a href="#cb12-34"></a>      }</span></code></pre></div>
 <p>You'll notice that now that we need to <strong>update</strong> a value rather than just <strong>query</strong> I've switched from the <code>Reader</code> monad to the <code>State</code> monad, which allows us to keep track of our Company in a way that imitates mutable state.</p>
