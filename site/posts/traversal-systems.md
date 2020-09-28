@@ -89,8 +89,8 @@ makeLenses ''Pet
 makeLenses ''Employee
 
 company :: Company
-company = Company [ Employee 1 "bob" [Pet "Rocky" "cat", Pet "Bullwinkle" "cat"] 
-                  , Employee 2 "sally" [Pet "Inigo" "dog"]
+company = Company [ Employee 1 "bob" [Pet "Rocky" "cat", Pet "Bullwinkle" "dog"] 
+                  , Employee 2 "sally" [Pet "Inigo" "cat"]
                   ] (M.fromList [ (1, 12)
                                 , (2, 15)
                                 ])
@@ -98,7 +98,7 @@ company = Company [ Employee 1 "bob" [Pet "Rocky" "cat", Pet "Bullwinkle" "cat"]
 
 ## Querying
 
-Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the cats owned by any of our employees.
+Let's dive into a few example queries to test the waters! First an easy one, let's write a query to find all the pets owned by any of our employees.
 
 Here's how it looks in **jq**:
 
@@ -338,7 +338,7 @@ Company { _staff = [ Employee { _employeeId = 1
                               }
                    ]
         , _salaries = fromList [ (1, 17)
-                               , (2, 20)
+                               , (2, 15)
                                ]
       }
 ```
