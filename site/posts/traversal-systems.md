@@ -141,7 +141,7 @@ Let's move on to a more complex example.
 
 ## Keeping references
 
-Let's say that as part of a tax audit we need to fetch the pets of every employee who makes more than $15/hr.
+This time we're going to print out each pet and their owner!
 
 First, here's the **jq**:
 
