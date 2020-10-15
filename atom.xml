@@ -2,12 +2,220 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-09-28T14:31:44Z</updated>
+  <updated>2020-10-15T02:44:03Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Silly job interview questions in Haskell</title>
+      <link href="https://chrispenner.ca/posts/interview"/>
+      <id>https://chrispenner.ca/posts/interview</id>
+      <updated>2020-10-14T00:00:00Z</updated>
+      <summary>Implementations of various silly job interview questions in Haskell</summary>
+      <content type="html"><![CDATA[
+              <p>Today I thought it'd be fun to take a look at a few common &amp; simple "interview questions" in Haskell. These sorts of questions are often used to establish whether someone has programming and problem solving skills, and I thought it might be useful for folks to see how they play out in Haskell since our beloved language's solutions tend to follow a different paradigm than most other languages do. I'll withhold any judgement on whether these questions are in any way helpful in determining programming skill whatsoever 😅; please don't @ me about it.</p>
+<h2 id="palindromes">Palindromes</h2>
+<p>Let's start off nice and easy with the standard "is it a palindrome" question! The task is to write a function which determines whether a given string is a palindrome (i.e. whether it reads the same in both reverse and forwards)</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">isPalindrome ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a>isPalindrome str <span class="ot">=</span> str <span class="op">==</span> <span class="fu">reverse</span> str</span>
+<span id="cb1-3"><a href="#cb1-3"></a></span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="op">&gt;&gt;&gt;</span> isPalindrome <span class="st">&quot;racecar&quot;</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="dt">True</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a></span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="op">&gt;&gt;&gt;</span> isPalindrome <span class="st">&quot;hello world!&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8"></a><span class="dt">False</span></span></code></pre></div>
+<p>That'll do it! Not much to say about this one, it's nice that our definition roughly matches an English sentence describing the problem "does a given string equal itself in reverse". I'll leave it as an exercise for the reader to expand it to handle differences in capitalization however you like.</p>
+<h2 id="fizz-buzz">Fizz Buzz</h2>
+<p>Next up is the infamous Fizz Buzz! For the 3 of you who are unfamiliar, for each number from 1 to 100 we need to print out "Fizz" if it's divisible by 3, "Buzz" if it's divisible by 5, and "Fizz Buzz" if it's divisible by both 3 AND 5! Otherwise we print the number itself.</p>
+<p>Let's see it!</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">import</span> <span class="dt">Data.Foldable</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a></span>
+<span id="cb2-3"><a href="#cb2-3"></a><span class="ot">fizzle ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">String</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>fizzle n</span>
+<span id="cb2-5"><a href="#cb2-5"></a>  <span class="op">|</span> n <span class="ot">`mod`</span> <span class="dv">3</span> <span class="op">==</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> n <span class="ot">`mod`</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span> <span class="ot">=</span> <span class="st">&quot;Fizz Buzz!&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>  <span class="op">|</span> n <span class="ot">`mod`</span> <span class="dv">3</span> <span class="op">==</span> <span class="dv">0</span> <span class="ot">=</span> <span class="st">&quot;Fizz!&quot;</span></span>
+<span id="cb2-7"><a href="#cb2-7"></a>  <span class="op">|</span> n <span class="ot">`mod`</span> <span class="dv">5</span> <span class="op">==</span> <span class="dv">0</span> <span class="ot">=</span> <span class="st">&quot;Buzz!&quot;</span></span>
+<span id="cb2-8"><a href="#cb2-8"></a>  <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="fu">show</span> n</span>
+<span id="cb2-9"><a href="#cb2-9"></a></span>
+<span id="cb2-10"><a href="#cb2-10"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb2-11"><a href="#cb2-11"></a>main <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb2-12"><a href="#cb2-12"></a>    for_ [<span class="dv">1</span><span class="op">..</span><span class="dv">100</span>] (<span class="fu">putStrLn</span> <span class="op">.</span> fizzle)</span>
+<span id="cb2-13"><a href="#cb2-13"></a></span>
+<span id="cb2-14"><a href="#cb2-14"></a></span>
+<span id="cb2-15"><a href="#cb2-15"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb2-16"><a href="#cb2-16"></a><span class="dv">1</span></span>
+<span id="cb2-17"><a href="#cb2-17"></a><span class="dv">2</span></span>
+<span id="cb2-18"><a href="#cb2-18"></a><span class="dt">Fizz</span><span class="op">!</span></span>
+<span id="cb2-19"><a href="#cb2-19"></a><span class="dv">4</span></span>
+<span id="cb2-20"><a href="#cb2-20"></a><span class="dt">Buzz</span><span class="op">!</span></span>
+<span id="cb2-21"><a href="#cb2-21"></a><span class="dt">Fizz</span><span class="op">!</span></span>
+<span id="cb2-22"><a href="#cb2-22"></a><span class="dv">7</span></span>
+<span id="cb2-23"><a href="#cb2-23"></a><span class="dv">8</span></span>
+<span id="cb2-24"><a href="#cb2-24"></a><span class="dt">Fizz</span><span class="op">!</span></span>
+<span id="cb2-25"><a href="#cb2-25"></a><span class="dt">Buzz</span><span class="op">!</span></span>
+<span id="cb2-26"><a href="#cb2-26"></a><span class="dv">11</span></span>
+<span id="cb2-27"><a href="#cb2-27"></a><span class="dt">Fizz</span><span class="op">!</span></span>
+<span id="cb2-28"><a href="#cb2-28"></a><span class="dv">13</span></span>
+<span id="cb2-29"><a href="#cb2-29"></a><span class="dv">14</span></span>
+<span id="cb2-30"><a href="#cb2-30"></a><span class="dt">Fizz</span> <span class="dt">Buzz</span><span class="op">!</span></span>
+<span id="cb2-31"><a href="#cb2-31"></a><span class="dv">16</span></span>
+<span id="cb2-32"><a href="#cb2-32"></a><span class="co">-- ...you get the idea</span></span></code></pre></div>
+<p>I write a helper function "fizzle" here which converts a number into its appropriate string so I can keep the "printing" logic separate, which is good programming style in Haskell as it makes things easier to both test and reason about.</p>
+<p>We can see that "case analysis" is very helpful for these sorts of problems, I'm using "pattern guards" to do a sort of multi-way if statement. Since "divisible by both 3 &amp; 5" overlaps with the other conditions and also is the most restrictive, we check for that one first, then check the other two cases falling back on returning the string version of the number itself. It all works beautifully!</p>
+<p>I really enjoy looking at this problem as an example of how Haskell is different from other languages. Most things in Haskell are <em>functions</em>, even our loops are just higher-order functions! The nice thing about that is that functions are <em>composable</em> and have very clean boundaries, which means we don't need to intermingle the <strong>syntax</strong> of a <strong>for-loop</strong> with our logic. It's these same principles which allow us to easily separate our <em>effectful</em> printing logic from our function which computes the output string.</p>
+<p>The next difference we can see is that we use pattern-matching, specifically "pattern guards", which allow us to select which definition of a function we want to use. It looks a bit like a glorified if-statement, but I find it's less syntactic noise once you get used to it, and there are many more things pattern guards can do!</p>
+<p>All that's left is to loop over all the numbers and print them out one by one, which is a snap thanks to the <code>for_</code> function!</p>
+<p>Next!</p>
+<h3 id="sum-up-to-n-problem">Sum up to N problem</h3>
+<p>Here's a less-common problem that nonetheless I've still heard a few times! I think it was in one of my algorithms assignments back in the day...</p>
+<p>The task is to take a <strong>list of numbers</strong> and find any <strong>combinations of <em>3</em> numbers</strong> which add up to a specified total. For instance, if we want to determine all combinations of <strong>3</strong> numbers which add up to <strong>15</strong>, we'd expect our result to look something like this:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="op">&gt;&gt;&gt;</span> sumToN <span class="dv">15</span> [<span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">3</span>, <span class="dv">10</span>, <span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">0</span>]</span>
+<span id="cb3-2"><a href="#cb3-2"></a>[[<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">10</span>],[<span class="dv">5</span>,<span class="dv">10</span>,<span class="dv">0</span>],[<span class="dv">10</span>,<span class="dv">4</span>,<span class="dv">1</span>]]</span></code></pre></div>
+<p>Notice how each inner list sums to 15? We only care about <em>combinations</em> here, not <em>permutations</em>, so we have <code>[2, 3, 10]</code>, but don't bother with <code>[3, 2, 10]</code>!</p>
+<p>So how will we set about implementing an algorithm for this? Well, the first thing to come to mind here is that we're finding <em>combinations</em>, then we're filtering them down to match a predicate!</p>
+<p>In Haskell we like to split problems into smaller composable pieces, the filter part should be pretty easy, so let's tackle the combinations problem first.</p>
+<p>After a quick look through hackage it looks like there <em>is</em> a <a href="https://hackage.haskell.org/package/base-4.14.0.0/docs/Data-List.html#v:permutations"><code>permutations</code></a> function, but strangely there's no <code>combinations</code> function! I suppose we could somehow try to de-duplicate the output of <code>permutations</code>, but it'll be fun to write our own version! <code>combinations</code> are quite nice to compute recursively, so let's try it that way!</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">combinations ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [[a]]</span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="co">-- Only one way to get zero things</span></span>
+<span id="cb4-3"><a href="#cb4-3"></a>combinations <span class="dv">0</span> _ <span class="ot">=</span> [[]]</span>
+<span id="cb4-4"><a href="#cb4-4"></a>combinations n (x<span class="op">:</span>xs) <span class="ot">=</span></span>
+<span id="cb4-5"><a href="#cb4-5"></a>    <span class="co">-- Get all combinations containing x by appending x to all (n-1)</span></span>
+<span id="cb4-6"><a href="#cb4-6"></a>    <span class="co">-- combinations of the rest of the list</span></span>
+<span id="cb4-7"><a href="#cb4-7"></a>    <span class="fu">fmap</span> (x<span class="op">:</span>) (combinations (n<span class="op">-</span><span class="dv">1</span>) xs)</span>
+<span id="cb4-8"><a href="#cb4-8"></a>    <span class="co">-- Combine it with all combinations from the rest of the list</span></span>
+<span id="cb4-9"><a href="#cb4-9"></a>      <span class="op">&lt;&gt;</span> combinations n xs</span>
+<span id="cb4-10"><a href="#cb4-10"></a><span class="co">-- No elements means no combinations!</span></span>
+<span id="cb4-11"><a href="#cb4-11"></a>combinations _ [] <span class="ot">=</span> []</span></code></pre></div>
+<p>Here we're using pattern matching and recursion to do our dirty work. First we can confidently say that there's only ONE way to get 0 elements from <strong>any</strong> list of elements, so we can fill that in. Next we'll handle a single step, if we have at least one element left in the list, we can compute all the combinations which contain that element by prepending it to all the combinations of size <code>n-1</code> from the remainder of the list; and we'll concatenate that with all the combinations of the <strong>rest</strong> of the list.</p>
+<p>Lastly we add one more pattern match which handles all invalid inputs (either negative numbers or empty lists) and simply assert that they have no valid combinations.</p>
+<p>Let's try out our implementation before we move on to the next part.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="op">&gt;&gt;&gt;</span> combinations <span class="dv">3</span> [<span class="dv">1</span><span class="op">..</span><span class="dv">5</span>]</span>
+<span id="cb5-2"><a href="#cb5-2"></a>[[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>],[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">4</span>],[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">5</span>],[<span class="dv">1</span>,<span class="dv">3</span>,<span class="dv">4</span>],[<span class="dv">1</span>,<span class="dv">3</span>,<span class="dv">5</span>],[<span class="dv">1</span>,<span class="dv">4</span>,<span class="dv">5</span>],[<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>],[<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">5</span>],[<span class="dv">2</span>,<span class="dv">4</span>,<span class="dv">5</span>],[<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>]]</span>
+<span id="cb5-3"><a href="#cb5-3"></a><span class="op">&gt;&gt;&gt;</span> combinations <span class="dv">2</span> [<span class="dv">1</span><span class="op">..</span><span class="dv">4</span>]</span>
+<span id="cb5-4"><a href="#cb5-4"></a>[[<span class="dv">1</span>,<span class="dv">2</span>],[<span class="dv">1</span>,<span class="dv">3</span>],[<span class="dv">1</span>,<span class="dv">4</span>],[<span class="dv">2</span>,<span class="dv">3</span>],[<span class="dv">2</span>,<span class="dv">4</span>],[<span class="dv">3</span>,<span class="dv">4</span>]]</span></code></pre></div>
+<p>Feel free to take the time to convince yourself that these are correct 😀</p>
+<p>To finish it off we need to find any of these combinations which add up to our target number.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">sumNToTotal ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [<span class="dt">Int</span>] <span class="ot">-&gt;</span> [[<span class="dt">Int</span>]]</span>
+<span id="cb6-2"><a href="#cb6-2"></a>sumNToTotal n totalNeeded xs <span class="ot">=</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a>    <span class="fu">filter</span> matchesSum (combinations n xs)</span>
+<span id="cb6-4"><a href="#cb6-4"></a>  <span class="kw">where</span></span>
+<span id="cb6-5"><a href="#cb6-5"></a>    matchesSum ys <span class="ot">=</span> <span class="fu">sum</span> ys <span class="op">==</span> totalNeeded</span>
+<span id="cb6-6"><a href="#cb6-6"></a></span>
+<span id="cb6-7"><a href="#cb6-7"></a></span>
+<span id="cb6-8"><a href="#cb6-8"></a><span class="op">&gt;&gt;&gt;</span> sumNToTotal <span class="dv">3</span> <span class="dv">15</span> [<span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">3</span>, <span class="dv">10</span>, <span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">0</span>]</span>
+<span id="cb6-9"><a href="#cb6-9"></a>[[<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">10</span>],[<span class="dv">5</span>,<span class="dv">10</span>,<span class="dv">0</span>],[<span class="dv">10</span>,<span class="dv">4</span>,<span class="dv">1</span>]]</span></code></pre></div>
+<p>Great! We can simply get all possible combinations and filter out the results which don't properly sum to the expected number. One other nifty thing here is that, because Haskell is <strong>lazy</strong>, if we only need to find the <strong>first</strong> valid combination, we could just grab the first result of the list and Haskell won't do any more work than absolutely necessary.</p>
+<p>But wait! There's a surprise <strong>part two</strong> of this problem:</p>
+<p>We now have to find all combinations of ANY length which sum to a target number, lucky for us, that's pretty easy for us to adapt for!</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">sumAnyToTarget ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [<span class="dt">Int</span>] <span class="ot">-&gt;</span> [[<span class="dt">Int</span>]]</span>
+<span id="cb7-2"><a href="#cb7-2"></a>sumAnyToTarget totalNeeded xs</span>
+<span id="cb7-3"><a href="#cb7-3"></a>  <span class="ot">=</span> <span class="fu">foldMap</span> (\n <span class="ot">-&gt;</span> sumNToTotal n totalNeeded xs) [<span class="dv">0</span><span class="op">..</span><span class="fu">length</span> xs]</span>
+<span id="cb7-4"><a href="#cb7-4"></a></span>
+<span id="cb7-5"><a href="#cb7-5"></a><span class="op">&gt;&gt;&gt;</span> sumAnyToTarget <span class="dv">15</span> [<span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">3</span>, <span class="dv">10</span>, <span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">0</span>]</span>
+<span id="cb7-6"><a href="#cb7-6"></a>[ [<span class="dv">5</span>,<span class="dv">10</span>]</span>
+<span id="cb7-7"><a href="#cb7-7"></a>, [<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">10</span>]</span>
+<span id="cb7-8"><a href="#cb7-8"></a>, [<span class="dv">5</span>,<span class="dv">10</span>,<span class="dv">0</span>]</span>
+<span id="cb7-9"><a href="#cb7-9"></a>, [<span class="dv">10</span>,<span class="dv">4</span>,<span class="dv">1</span>]</span>
+<span id="cb7-10"><a href="#cb7-10"></a>, [<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">10</span>,<span class="dv">0</span>]</span>
+<span id="cb7-11"><a href="#cb7-11"></a>, [<span class="dv">10</span>,<span class="dv">4</span>,<span class="dv">1</span>,<span class="dv">0</span>]</span>
+<span id="cb7-12"><a href="#cb7-12"></a>, [<span class="dv">2</span>,<span class="dv">5</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">1</span>]</span>
+<span id="cb7-13"><a href="#cb7-13"></a>, [<span class="dv">2</span>,<span class="dv">5</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">1</span>,<span class="dv">0</span>]</span>
+<span id="cb7-14"><a href="#cb7-14"></a>]</span></code></pre></div>
+<p>This new version re-uses the <code>sumNToTotal</code> function we wrote in the previous step! It iterates over each possible length of combination and finds all the winning combinations using <code>sumNToTotal</code>, then concatenates them using <code>foldMap</code>! Works out pretty cleanly if I do say so myself!</p>
+<h2 id="check-if-two-strings-are-anagrams">Check if two strings are anagrams</h2>
+<p>For whatever reason, interviewers LOVE string manipulation questions; so let's try another one!</p>
+<p>Here our task is to determine whether two strings are anagrams of each other. I'd say the difficulty for this one comes from thinking up your <em>strategy</em> rather than the implementation itself. Here's how I'd give this a go in Haskell!</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="kw">import</span> <span class="dt">Data.Function</span> (on)</span>
+<span id="cb8-2"><a href="#cb8-2"></a><span class="ot">isAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a>isAnagram <span class="ot">=</span> (<span class="op">==</span>) <span class="ot">`on`</span> <span class="fu">sort</span></span>
+<span id="cb8-4"><a href="#cb8-4"></a></span>
+<span id="cb8-5"><a href="#cb8-5"></a><span class="op">&gt;&gt;&gt;</span> isAnagram <span class="st">&quot;elbow&quot;</span> <span class="st">&quot;below&quot;</span></span>
+<span id="cb8-6"><a href="#cb8-6"></a><span class="dt">True</span></span>
+<span id="cb8-7"><a href="#cb8-7"></a><span class="op">&gt;&gt;&gt;</span> isAnagram <span class="st">&quot;bored&quot;</span> <span class="st">&quot;road&quot;</span></span>
+<span id="cb8-8"><a href="#cb8-8"></a><span class="dt">False</span></span>
+<span id="cb8-9"><a href="#cb8-9"></a><span class="op">&gt;&gt;&gt;</span> isAnagram <span class="st">&quot;stressed&quot;</span> <span class="st">&quot;desserts&quot;</span></span>
+<span id="cb8-10"><a href="#cb8-10"></a><span class="dt">True</span></span></code></pre></div>
+<p>Here we're using a funky higher-order function called <code>on</code>; <code>on</code> takes two functions, AND THEN takes two arguments! In this case it calls "sort" on both arguments, then checks if the sorted results are equal! It turns out this is sufficient to know if two strings are anagrams!</p>
+<p>But wait! What's that? What if they're in differing cases! Okay fine!</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">import</span> <span class="dt">Data.Char</span> (toLower)</span>
+<span id="cb9-2"><a href="#cb9-2"></a></span>
+<span id="cb9-3"><a href="#cb9-3"></a><span class="ot">isAnagram ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb9-4"><a href="#cb9-4"></a>isAnagram a b <span class="ot">=</span> (<span class="op">==</span>) <span class="ot">`on`</span> (<span class="fu">sort</span> <span class="op">.</span> <span class="fu">map</span> <span class="fu">toLower</span>)</span></code></pre></div>
+<p>Happy now? No? What's that? It seems non-performant? Well yes, but actually no!</p>
+<p>While it's true that sort has an <code>O(nlogn)</code> performance profile, one interesting thing here is that sorting is <strong>lazy</strong> in Haskell! This means that if our two strings are unequal, they will only be sorted far enough to determine inequality! In fact, if the first elements of each sorted string aren't equal to each other, then we won't bother sorting any more.</p>
+<p>Sure, our function isn't perfect, but it's not bad, especially since this is the first approach that came to mind. Compare our 2 line solution with the <a href="https://javarevisited.blogspot.com/2013/03/Anagram-how-to-check-if-two-string-are-anagrams-example-tutorial.html">Java Solution</a> provided in the post which gave me the idea for this problem. It might be more performant (though to be honest I haven't benchmarked them), but if I'm going to be reading this code often in the future, I'd much prefer the clearest version which performs at an adequate level.</p>
+<h2 id="min-and-max">Min and Max</h2>
+<p>Here's a problem! Given a list of elements, find the smallest and largest element of that list!</p>
+<p>I'll show and discuss three different strategies for this one.</p>
+<p>Here's the first:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">simpleMinMax ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> (a, a)</span>
+<span id="cb10-2"><a href="#cb10-2"></a>simpleMinMax xs <span class="ot">=</span> (<span class="fu">minimum</span> xs, <span class="fu">maximum</span> xs)</span>
+<span id="cb10-3"><a href="#cb10-3"></a></span>
+<span id="cb10-4"><a href="#cb10-4"></a><span class="op">&gt;&gt;&gt;</span> simpleMinMax [<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">5</span>]</span>
+<span id="cb10-5"><a href="#cb10-5"></a>(<span class="dv">1</span>,<span class="dv">10</span>)</span></code></pre></div>
+<p>This is the simplest way we could imagine doing this sort of thing; and indeed it does work! Unfortunately, there are few skeletons from "legacy" haskell that are hidden in this closet. Look what happens if we try it on an empty list!</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="op">&gt;&gt;&gt;</span> simpleMinMax []</span>
+<span id="cb11-2"><a href="#cb11-2"></a>(<span class="op">***</span> <span class="dt">Exception</span><span class="op">:</span> Prelude.minimum<span class="op">:</span> empty list</span></code></pre></div>
+<p>Oops... Haskell isn't supposed to throw exceptions! That's okay though, there are some other good ways to accomplish this which won't blow up in our faces!</p>
+<p>Time for the next one!</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">boundedMinMax ::</span> (<span class="dt">Bounded</span> a, <span class="dt">Ord</span> a) <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> (a, a)</span>
+<span id="cb12-2"><a href="#cb12-2"></a>boundedMinMax xs <span class="ot">=</span> coerce <span class="op">$</span> <span class="fu">foldMap</span> (\x <span class="ot">-&gt;</span> (<span class="dt">Min</span> x, <span class="dt">Max</span> x)) xs</span>
+<span id="cb12-3"><a href="#cb12-3"></a></span>
+<span id="cb12-4"><a href="#cb12-4"></a><span class="op">&gt;&gt;&gt;</span> boundedMinMax [<span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">23</span>, <span class="dv">7</span>]<span class="ot"> ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb12-5"><a href="#cb12-5"></a>(<span class="dv">1</span>,<span class="dv">23</span>)</span>
+<span id="cb12-6"><a href="#cb12-6"></a><span class="op">&gt;&gt;&gt;</span> boundedMinMax []<span class="ot"> ::</span> (<span class="dt">Int</span>, <span class="dt">Int</span>)</span>
+<span id="cb12-7"><a href="#cb12-7"></a>(<span class="dv">9223372036854775807</span>,<span class="op">-</span><span class="dv">9223372036854775808</span>)</span></code></pre></div>
+<p>This implementation might be a bit confusing if you haven't learned enough about Semigroups and Monoids, but don't let that scare you! These are both very common abstractions in Haskell and are used very often and to great effect!</p>
+<p>A Semigroup is a type of interface which provides an implementation which lets us combine multiple elements together. Haskell has two semigroup type-wrappers which provide specific behaviour to whichever type we wrap: <code>Min</code> and <code>Max</code>!</p>
+<p>These types define a combining operation which, any time we combine two elements, will keep only the smallest or largest value respectively! I'm using <code>foldMap</code> here to project each list element into a tuple of these two types which, when the list is collapsed by <code>foldMap</code>, will all combine together and will include the lowest and highest elements, all in a single pass!</p>
+<p>So what's up with the second example? Well, it's a bit unexpected, but not necessarily <em>wrong</em>. When we're missing any elements to compare foldMap will use the default value for each of our type wrappers, which it can do if they're monoids. For <code>Min</code> and <code>Max</code> the default value is the "smallest" and "largest" value of the wrapped type, which is defined by the <code>Bounded</code> interface that we require in the type signature. This works okay, and behaves as expected under <em>most</em> circumstances, but maybe we can try one more time:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="kw">import</span> <span class="dt">Data.Semigroup</span></span>
+<span id="cb13-2"><a href="#cb13-2"></a></span>
+<span id="cb13-3"><a href="#cb13-3"></a><span class="ot">minMax ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (a, a)</span>
+<span id="cb13-4"><a href="#cb13-4"></a>minMax xs <span class="ot">=</span> <span class="kw">case</span> <span class="fu">foldMap</span> (\a <span class="ot">-&gt;</span> <span class="dt">Just</span> (<span class="dt">Min</span> a, <span class="dt">Max</span> a)) xs <span class="kw">of</span></span>
+<span id="cb13-5"><a href="#cb13-5"></a>                <span class="dt">Just</span> (<span class="dt">Min</span> x, <span class="dt">Max</span> y) <span class="ot">-&gt;</span> <span class="dt">Just</span> (x, y)</span>
+<span id="cb13-6"><a href="#cb13-6"></a>                _ <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span>
+<span id="cb13-7"><a href="#cb13-7"></a></span>
+<span id="cb13-8"><a href="#cb13-8"></a><span class="op">&gt;&gt;&gt;</span> minMax [<span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">9</span>, <span class="dv">5</span>]</span>
+<span id="cb13-9"><a href="#cb13-9"></a><span class="dt">Just</span> (<span class="dv">1</span>,<span class="dv">9</span>)</span>
+<span id="cb13-10"><a href="#cb13-10"></a><span class="op">&gt;&gt;&gt;</span> minMax []</span>
+<span id="cb13-11"><a href="#cb13-11"></a><span class="dt">Nothing</span></span></code></pre></div>
+<p>Okay! This is pretty much the same, but we needed an <strong>explicit</strong> way to correctly handle an empty list of values. In this case, by wrapping our tuple in <code>Just</code> we invoke the <code>Maybe</code> monoid, and remember that <code>foldMap</code> is smart enough to return the "empty" element of that monoid if our list is empty! That means we get <code>Nothing</code> back if there are no elements.</p>
+<p>This may seem like "magic" at first, but all of these <em>typeclasses</em> have <strong>laws</strong> which dictate their behaviour and make them predictable. I suggest learning more about monoids if you have time, they're fascinating and useful!</p>
+<p>This is a very "safe" implementation, in fact much safer than most languages would offer. We explicitly return <code>Nothing</code> in the case that the list is empty, and the <code>Maybe</code> return type requires the caller to handle that case. I mentioned earlier how functions are composable, and it turns out that data-types are too! If we pair two objects with a semigroup together in a tuple, that tuple has a semigroup instance too, which combines respective element together when we combine tuples!</p>
+<h2 id="word-frequency">Word Frequency</h2>
+<p>This is a pretty popular one too!</p>
+<p>The challenge this time is, given a block of text, find the most common word!</p>
+<p>Ultimately, this comes down to an understanding of data-structures.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="kw">import</span> <span class="dt">Data.List</span> (maximumBy)</span>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="kw">import</span> <span class="dt">Data.Function</span> (on)</span>
+<span id="cb14-3"><a href="#cb14-3"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></span>
+<span id="cb14-4"><a href="#cb14-4"></a></span>
+<span id="cb14-5"><a href="#cb14-5"></a><span class="ot">mostCommonWord ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">String</span></span>
+<span id="cb14-6"><a href="#cb14-6"></a>mostCommonWord str <span class="ot">=</span></span>
+<span id="cb14-7"><a href="#cb14-7"></a>    <span class="kw">if</span> <span class="fu">null</span> wordCounts</span>
+<span id="cb14-8"><a href="#cb14-8"></a>       <span class="kw">then</span> <span class="dt">Nothing</span></span>
+<span id="cb14-9"><a href="#cb14-9"></a>       <span class="kw">else</span> <span class="dt">Just</span> <span class="op">.</span> <span class="fu">fst</span> <span class="op">.</span> maximumBy (<span class="fu">compare</span> <span class="ot">`on`</span> <span class="fu">snd</span>) <span class="op">.</span> M.toList <span class="op">$</span> wordCounts</span>
+<span id="cb14-10"><a href="#cb14-10"></a>  <span class="kw">where</span></span>
+<span id="cb14-11"><a href="#cb14-11"></a>    wordCounts <span class="ot">=</span> M.unionsWith (<span class="op">+</span>) <span class="op">.</span> <span class="fu">fmap</span> (\w <span class="ot">-&gt;</span> M.singleton w <span class="dv">1</span>) <span class="op">.</span> <span class="fu">words</span> <span class="op">$</span> str</span></code></pre></div>
+<p>There's a bit more going on this time, so let's break it down a bit!</p>
+<p>In Haskell, we use "math-style" function composition using <code>.</code>, so we read most expressions from right-to-left.</p>
+<p>Let's look at the <code>wordCounts</code> binding down in the <code>where</code> clause first. Reading from right to left, first we use the <code>words</code> function from the built-in Prelude to split the incoming stream into a list of words, then we create a key-value map out of each one, consisting of the word as the key with a value of <code>1</code> to start.</p>
+<p>Now we have a list of key-value maps, and can add them up all up key-wise using <code>unionsWith</code> from the <code>Data.Map</code> library, this will count up the number of elements of each key and will result in a key-value mapping where the values represent occurrences.</p>
+<p>We've got a mapping now, so let's find the largest count!</p>
+<p>First things first, to be safe we'll check whether the map has any values at all, if it doesn't then we'll return <code>Nothing</code>. Otherwise, we can convert the map into a list of key-value pairs by calling <code>M.toList</code>, then we can use <code>maximumBy</code> to return the biggest element according to a comparison function that we specify! <code>on</code> comes in handy here and we can tell it to compare on the second element, which is the count. That will return us the key-value pair with the largest value, then we just need to grab the key as a result using <code>fst</code>!</p>
+<p>Ultimately this is a bit of a naive implementation which won't work well on huge texts, but it should be enough to get you through the whiteboard portion of the interview 😄.</p>
+<h2 id="summary">Summary</h2>
+<p>That's all I've got for you today, nothing to revolutionary I'm sure, but hopefully you had a bit of fun, or maybe learned a thing or two about what code looks like in Haskell compared to your favourite language 😄</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Generalizing &#39;jq&#39; and Traversal Systems using optics and standard monads</title>
       <link href="https://chrispenner.ca/posts/traversal-systems"/>
