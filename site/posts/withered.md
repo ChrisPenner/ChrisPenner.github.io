@@ -1,9 +1,10 @@
 ---
 title: 'Composable filters using Witherable optics'
 author: "Chris Penner"
-date: "Oct 27, 2020"
+date: "Oct 31, 2020"
 tags: [haskell, optics]
-description: ""
+description: "Discovering applications of filterable optics"
+image: withered.jpg
 ---
 
 One of my favourite things about Haskell is that its structures and abstractions
