@@ -286,20 +286,24 @@ Imagine something like the following:
 
 This allows us to look inside a piece of state ("account"), then filter a list or map of users from within, keeping only Canadian users!
 
+## Bonus: Fun examples
+
+At this point I'm just going to post a bunch of cool examples of things we can do! Enjoy!
+
+---
+
 Prisms already capture the idea of success and failure, but they simply skip the traversal if the prism doesn't match, we can lift prisms into withers such that they'll fail in a way that wither can catch!
 
-I'm confident it's possible to convert a prism into a full "WitherPrism" that can fulfill all the roles of both!
-
 ```haskell
-witherPrism :: Prism s t a b -> Wither s t a b
-witherPrism prsm f s =
+witherPrism :: (Alternative f, Choice p) => Prism s t a b -> Optic p f s t a b
+witherPrism prsm =
     withPrism prsm $ \embed match ->
-        case match s of
-            Left _ -> empty
-            Right a -> embed <$> f a
+        dimap match (either (const empty) (fmap embed))  . right'
 ```
 
-Here's how we can lift the prism into a Wither to filter such that if the value fails to match the prism the branch "fails", and if the prism matches, it will run the predicate on the result!
+Note that unfortunately the result of `witherPrism` will no longer work with most of the prism combinators due to the added Alternative constraint, but that's fine, if you need that behaviour, then simply don't `wither` the prism in those circumstances.
+
+Now we can witherize a prism to turn it into a filter such that if the value fails to match the prism the branch "fails", and if the prism matches, it will run the predicate on the result!
 
 ```haskell
 >>> [('a', Right 1), ('b', Left 2), ('c', Left 3)] & withered . _2 . witherPrism _Left %%~ guarding odd
@@ -313,6 +317,8 @@ If we didn't lift our prism, it would simply "skip" unmatched values, and thus t
 [('a',Right 1),('c',Left 3)]
 ```
 
+---
+
 Have you ever used `filtered`? It's a traversal that skips any elements that don't match a predicate. Here's the `Wither` version which "fails" any elements that don't match:
 
 ```haskell
@@ -323,10 +329,79 @@ guarded p f a
 ```
 
 
+This allows us to do things like this:
 
-TODO: example of guarded
-TODO: example of guardResult
-TODO: example of selectNonEmpty
+```haskell
+>>> [[1, 2, 3, 4], [5, 6]] & filterOf (>2) (withered . guarded ((> 2) . length) . withered)
+Just [[3,4]]
+```
+
+---
+
+Since IO has an alternative instance which "fails" on IO Errors, we can do this:
+
+```haskell
+-- Read in the content of files that exist, filter ones that fail to read!
+>>> ["README.md", "nonexistent.txt"] & withered %%~ readFile
+["# wither\n"]
+```
+
+Note that since the alternative interface will **only** catch IO errors I'm not suggestion you use this in production!
+
+---
+
+STN implements Alternative! A "transaction" is considered to have "failed" if it ever needs to "block", or someone calls "retry".
+
+Check this out:
+
+```haskell
+>>> import qualified Data.Map as M
+>>> import Control.Concurrent.STM
+
+-- Initialize some new channels
+>>> [a, b, c] <- sequenceA $ [newTChanIO, newTChanIO, newTChanIO]
+-- Build a map of the channels keyed by their name
+>>> chans = M.fromList [('a', a), ('b', b), ('c', c)] :: M.Map Char (TChan Int)
+-- Write some data into channels 'a' and 'b'
+>>> atomically $ writeTChan a 1 >> writeTChan b 2
+-- Get a filtered map of only the channels that have data available!
+>>> atomically . withered readTChan $ M.fromList [('a', a), ('b', b), ('c', c)]
+fromList [('a',1),('b',2)]
+-- Now that we've consumed the values, the channels are all empty, so we get an empty map!
+>>> atomically . withered readTChan $ M.fromList [('a', a), ('b', b), ('c', c)]
+fromList []
+```
+
+---
+
+
+If we require `Monad` in addition to `Alternative` we get power equivalent to `MonadPlus` and can actually results of computations as they complete the round-trip!
+
+```haskell
+type Selector' s a = Selector s s a a
+type Selector s t a b = forall f. (Alternative f, Monad f) => LensLike f s t a b
+
+selectResult :: (b -> Bool) -> Selector a b a b
+selectResult p f a = do
+    f a >>= \case
+      b | p b -> pure b
+        | otherwise -> empty
+```
+
+We can use this to build a combinator that filters out any "empty" lists from a map AFTER we've done the initial filtering.
+
+```haskell
+>>> xs = M.fromList [('a', [1, 3, 5]), ('b', [1, 2, 3])]
+-- Original version, even though we "wither" we still end up with empty lists!
+>>> xs & filterOf even (withered . withered)
+Just (fromList [('a',[]),('b',[2])])
+
+-- We can filter the result to clear out the empty lists as well
+>>> xs & filterOf even (withered . selectResult (not . null) . withered)
+Just (fromList [('b',[2])])
+```
+
+
 TODO: example of custom withers
 
 
