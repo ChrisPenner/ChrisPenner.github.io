@@ -12,19 +12,26 @@ are very principled, and they have laws dictating correct behaviour.
 In my experience, this means that when you find a new way to piece together those
 abstractions it _almost always_ ends up doing something reasonable... or at the very least interesting!
 
-It comes as no surprise to some of you that I think about **optics** (lenses) an awful lot! 
-Optics are the most beautiful, composable, expressive, and adaptable abstractions I've
-ever had the pleasure of discovering. Optics provide an elegant abstraction
-for many data-manipulation strategies that have been around for decades.
+As it turns out, optics have a lot of different "slots" where we can experiment with different data types and constraints to get new results. 
 
-In this post we're going to explore a new type of optic which provides composable
-and expressive means for filtering complex data structures.
-To do so is going to require a base-level understanding of optics, and preferably readers would
-understand what a Traversal is. Bonus points if you've implemented one on your own or have some idea of how they work!
+In this post I'll be exploring one such new combination and the results that follow. To get the most out of this post you'll want an understanding of:
+
+* optics
+* Traversable/Traversals
+* Alternative
+
+Here's the agenda
+
+1. Introduce an adaptation of an existing typeclass to make it more amenable for optics
+2. Discover the semantics behind the new optic and how it works
+3. Write some combinators
+4. [Throw science at the wall to see what sticks](https://www.youtube.com/watch?v=UM-wKQqBBnY) (a.k.a. lots of examples)
 
 ## The Background
 
-Let's take a look at the Traversal typeclass, it's where we find Haskell's
+First things first, let's go over the fundamentals we'll be working with.
+
+Let's take a look at the Traversable typeclass, it's where we find Haskell's
 all-powerful secret weapon **traverse**! ([BTW The answer is always traverse.](https://impurepics.com/fp-bot/index.html))
 
 ```haskell
@@ -32,22 +39,21 @@ class (Functor t, Foldable t) => Traversable t where
   traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
 ```
 
-Many beginners rightfully stumble on this function because it's just so dang abstract! It's tough to tell what it does for you, and how you could use it (the answer is almost anywhere).
-
-
-Eventually, folks realized that we could write more "specialized" versions of this type which worked on anything, not just Traversable datatypes, and the Traversal was born!
-
-A traversal is anything that fits this rough shape:
+This class eventually let to the concept of a `Traversal` in Van Laarhoven encoded optics; which looks like this:
 
 ```haskell
 forall f. Applicative f => (a -> f b) -> (s -> f t)
 ```
 
-We can find different optics by specializing the constraints on `f` in interesting ways, for instance lenses require `f` to be a `Functor`, and folds require `f` to have both `Contravariant` and `Applicative` instances (exercise: go see if you can figure out what those two constraints imply!).
+If we clear the constraints we get a `LensLike`, which is just the shape of any combinator that will compose well with optics from the `lens` library:
+
+```haskell
+type LensLike f s t a b = (a -> f b) -> (s -> f t)
+```
 
 Anyways, long story short, if you can make your function fit that shape, it's probably useful as some sort of optic!
 
-This leads us to Witherable!
+This leads us to **Witherable**!
 
 ## Witherable
 
@@ -61,15 +67,29 @@ class (Traversable t, Filterable t) => Witherable t where
   wither :: Applicative f => (a -> f (Maybe b)) -> t a -> f (t b)
 ```
 
-Witherable is a utility class that allows you to update or **remove** items 
-from a structure within an effectful context.
+Types which implement Witherable expand on the functionality of Traversable, they add the ability to **filter** items out from
+a structure within an effectful context. Although this type isn't yet in the `base` library, it turns out it can be pretty handy!
 
-As you can see, this type is based on the type of `traverse`! 
-Unfortunately, it doesn't **quite** match the shape we need, it's got a pesky extra `Maybe` in the way.
+Examples of witherable types include things like lists and maps, each of their keys or values could potentially be "deleted" from the structure in a sensible way.
 
-We could maybe get around this using some sort of `Compose f Maybe` type, but at the end of the day, having a concrete type rather than a constraint will make life difficult for us when composing with other optics. Instead, is there some typeclass constraint that can represent the success or failure idea that's inherent to Maybe?
+My goal is that I'd like to be able to add "filtering" to the list of things optics can do in a nicely composable way! To do that, we need it to look like a `LensLike`.
 
-There certainly is! It's called `Alternative`!
+As you can see, the type of `wither` is pretty similar to the type of a `LensLike`, but 
+unfortunately, it doesn't **quite** match the shape we need, it's got a pesky extra `Maybe` in the way.
+
+```haskell
+-- We need a shape like this:
+(a -> f b) -> t a -> f (t b)
+
+-- But wither looks like this:
+(a -> f (Maybe b)) -> t a -> f (t b)
+```
+
+We could get rid of that extra Maybe is by specializing the `f` into something like `Compose f Maybe` using `Data.Functor.Compose`. This would get us close, but specializing the `f` type to include a concrete type loses a LOT of the generality of optics and will make it much more difficult to use this type with other optics. It's a non-starter.
+
+We need to find some typeclass constraint which allows for the behaviour of `wither`, but without the concrete requirement of using `Maybe`. As it turns out, if we're looking to express "failure" as an Applicative structure, that's exactly what `Alternative` is for.
+
+`Alternative` provides a concrete representation of "failure" which we can use as a substitute for the `Maybe` value that was ruining our day. As it turns out, `f (Maybe b)` is actually isomorphic to `MaybeT f b`, and `MaybeT` provides an Alternative instance, so we can always regain our previous behaviour if we're able to generalize it this way.
 
 Here's what [Alternative](https://hackage.haskell.org/package/base-4.12.0.0/docs/Control-Applicative.html#t:Alternative) looks like:
 
@@ -79,28 +99,40 @@ class Applicative f => Alternative f where
   (<|>) :: f a -> f a -> f a
 ```
 
-Alternative is technically a "Monoid over Functors", meaning it has an "empty" (identity) value and an associative binary operation to combine multiple options together.
+In addition to the `MaybeT f` we already mentioned, 
+some examples of other `Alternative`s include `Maybe`, `[]`, `IO`, `STM`, `Logic` and most of the available `Parser` variants.
+You can of course write your own effects which implement Alternative as well!
 
-In practice, we can use this class in Haskell to handle success, failure, and even provide "backups" for failure.
-
-Cool, so here's the function signature we're shooting for:
+Okay, so here's the combinator I want to build, it's a valid "LensLike" so it'll be composable with other optics:
 
 ```haskell
 withered :: forall f t a b. (Alternative f, Witherable t) => (a -> f b) -> t a -> f (t b)
 ```
 
-That's the right shape! Is there any way we can re-use our `Witherable` class rather than writing this from scratch for every type? That would require us to recognize when our Alternative has failed and introduce a `Maybe` into the mix; luckily `Alternative` provides exactly this function, it's called `optional`!
+To save us time, I'll define an alias for our `Alternative` `LensLike`:
+
+```haskell
+-- NOTE: Wither and Wither' are exported from Data.Witherable, 
+-- BUT have they have the unfortunate, less-composable type we're trying to avoid.
+-- This post uses the following variants instead (sorry about the naming confusion)
+type Wither s t a b = forall f. Alternative f => (a -> f b) -> s -> f t
+type Wither' s a = Wither s s a a
+```
+
+Unfortunately, the `withered` function isn't provided by the `Witherable` typeclass, but luckily we can write a general implementation for all `Witherables`.
+
+In order to do so, we need a way to "recognize" a failure within our Alternative effect and represent it as a concrete "Maybe". Lucky us, a combinator for this exact purpose exists, it's called `optional`!
 
 ```haskell
 optional :: Alternative f => f a -> f (Maybe a)
 ```
 
-The idea here is that it "lifts" the failure out of the Alternative into the Maybe and returns an Alternative structure that will always "succeed", but will return a `Nothing` if the original alternative would have failed.
+When we use `optional` to _lift_ the failure out of the _structure_ into a concrete `Maybe` it also _removes_ that particular failure from the _effect_, yielding an action that will always **succeed** and return either `Just` or `Nothing`.
 
-We can use this for a trivial implementation of `withered` in terms of `wither` like so:
+Let's use it to build a "lensy" combinator in terms of our existing `Witherable` class, this saves us the work of writing a new class and re-implementing all the instances we'd need.
 
 ```haskell
-withered :: forall f t a b. (Alternative f, Witherable t) => (a -> f b) -> t a -> f (t b)
+withered :: (Alternative f, Witherable t) => (a -> f b) -> t a -> f (t b)
 withered f = wither (optional . f)
 ```
 
@@ -108,58 +140,31 @@ Great! In pretty short order we've constructed a new combinator that fits a sign
 
 ## Withers as Optics
 
-First things first let's get some notation quibbles out of the way:
+Any time a new optical structure is discovered we need to find some concrete "actions" which we can run on it.
+This usually involves discovering some interesting applications of different concrete types which implement the constraints required by the optic.
+
+To experiment a bit we'll use the most general action available, which works on any optic.
+The [`%%~`](https://hackage.haskell.org/package/lens-4.19.2/docs/Control-Lens-Lens.html#v:-37--37--126-) combinator from `lens` allows us to run any optic if we provide an effectful function which matches the optic's focus and constraints.
 
 ```haskell
-import Control.Lens
-
-type Wither s t a b = forall f. Alternative f => LensLike f s t a b
-type Wither' s a = Wither s s a a
+(%%~) :: LensLike f s t a b -> (a -> f b) -> s -> f t
+-- Which expands to:
+(%%~) :: ((a -> f b) -> s -> (f t)) -> (a -> f b) -> s -> f t
 ```
-
-To start off, we know that (in a Van Laarhoven encoding) we can use `traverse` as an optic directly, the [`%%~`](https://hackage.haskell.org/package/lens-4.19.2/docs/Control-Lens-Lens.html#v:-37--37--126-) combinator from `lens` allows us to run an optic if we provide an effectful function which matches the optic's focus and constraints.
 
 E.g. for a `Traversal s t a b` we can provide a function `Applicative f => a -> f b` and it will return a `s -> f t` for us.
 
-```haskell
->>> import qualified Data.Map as M
->>> let x = M.fromList [('a', [1, 2, 3]), ('b', [4, 5, 6])]
->>> x & traverse . traverse %%~ (\n -> Identity (n * 10))
-Identity (fromList [('a',[10,20,30]),('b',[40,50,60])])
-```
+Fun fact, this combinator is actually implemented as just `(%%~) = id`, which in practice just "applies" the optic to the effectful function we provide.
+It really does help make things more readable though, so we tend to use it despite the fact that it's really just a glorified `id`.
 
-As you likely know, traversals can dive deep within a structure, make some edits there, then rebuild the structure around the results!
-
-Many of the combinators in `lens` conveniently hide this fact from you by choosing the correct effects and functions to perform higher level actions. For instance, `(*~)` from `lens` behaves very similarly to what we've written above.
-
-What happens if we do the same with `withered`?
-
-```haskell
->>> x
-fromList [('a',[1,2,3]),('b',[4,5,6])]
->>> x & withered . withered %%~ (\n -> Identity (n * 10))
-[[10,20,30], [40,50,60]]
-
-• Could not deduce (Alternative Identity)
-    arising from a use of ‘withered’
-```
-
-Ahh, of course! `withered` **requires** an Alternative instance on whichever effect we choose to use, let's try one like Maybe!
-
-
-```haskell
->>> x & withered . withered %%~ (\n -> Just (n * 10))
-Just (fromList [('a',[10,20,30]),('b',[40,50,60])])
-```
-
-That's better! We've effectively recovered the ability to use our `Wither`s as Setters, except that our result has the possibility of failure!
+So what can we do with `withered`? 
 
 At first, the `Maybe` wrapping our result seems like a disadvantage, it's a pain to have to unwrap it after all, but the possibility of failure was the point all along. We can manipulate `withered` to be smart about failure and how to handle it.
 
 Let's try something more creative and a bit closer to `wither`'s strengths.
 
-First we need some sort of operation that might fail! 
-Parsing is a great example there, it's always possible that a string may not match
+First we need some sort of operation that might fail.
+Parsing is a great use-case, it's always possible that a string may not match
 the format of the result we want. Wither works wonderfully with parser combinators, 
 but we'll start with something a little simpler:
 
@@ -254,8 +259,7 @@ Aha! `traverse` caused the single failure to propagate and kill the branch at th
 
 This can take a bit of getting used to of course, but it ultimately allows **composable** filtering, and allows you to filter complex data structures while using lenses or traversals to base your judgements on their internals.
 
-
-Until now I've been using `%%~` to pass explicit `Alternative f => a -> f b` functions, but we can build some handy combinators around it to make it a bit easier to use!
+Until now I've been using `%%~` to pass explicit `Alternative f => a -> f b` functions, but we can build some handy combinators around it to make it a bit easier to use.
 
 For instance, what if we want to filter one of the traversed structures based on a predicate?
 
@@ -272,17 +276,61 @@ filterOf p w s = s & w %%~ guarding p
 Now we can express computations like this:
 
 ```haskell
+-- Filter all odd numbers out from the nested list
 >>> [[1, 2, 3], [4, 5, 6]] & filterOf even (withered . withered)
 Just [[2],[4,6]]
 ```
 
 Now that we have a combinator for it, here's another example. We can filter a list that's **in the middle of our structure** based on deeply nested values inside by composing our withers with lenses and prisms!
 
-Imagine something like the following:
+We'll be running a few examples, so let's set up some data-types:
 
 ```haskell
->>> filterOf (== "CA") (users . withered . address . country) account
+data Address = Address
+    { _country :: String
+    --  ...
+    } deriving (Show, Eq)
+data Employee = Employee 
+    { _age :: Int
+    , _address :: Address
+    --  ...
+    } deriving (Show, Eq)
+data Company = Company 
+    { _employees :: [Employee]
+    --  ...
+    } deriving (Show, Eq)
+makeLenses ''Address
+makeLenses ''Employee
+makeLenses ''Company
 ```
+
+And here's a company to work with:
+
+```haskell
+company :: Company
+company = Company
+    [ Employee 22 (Address "US")
+    , Employee 43 (Address "CA")
+    , Employee 35 (Address "NO")
+    , Employee 37 (Address "CA")
+    ]
+```
+
+Check this out:
+
+```haskell
+-- Filter our company for all Canadians:
+>>> filterOf (== "CA") (employees . withered . address . country) company
+Just ( Company 
+         [ Employee 43 (Address "CA")
+         , Employee 37 (Address "CA")
+         ]
+     )
+```
+
+This appears deceptively simply, but it's pretty impressive what this is all doing for us. Not only does it allow us to filter our employees easily based on **deeply nested state** within each employee, but it allows us to **filter them from a structure that's ALSO nested inside our larger state**! If we were to do this in any way OTHER than using `withered` we'd have to first focus the employees, THEN run a nested filter over the employees separately, and ALSO find a way to filter them based on their nested "country" values.
+
+
 
 This allows us to look inside a piece of state ("account"), then filter a list or map of users from within, keeping only Canadian users!
 
