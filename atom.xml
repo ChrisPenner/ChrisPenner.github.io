@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-10-31T21:55:45Z</updated>
+  <updated>2020-10-31T21:58:35Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
@@ -322,7 +322,6 @@
 <p>Notice how our custom wither has "caught" the failure when operating over email, and instead of simply removing the user from the list it has instead reconstructed it as a User without an email! Pretty cool!</p>
 <h2 id="conclusion">Conclusion</h2>
 <p>Anyways, I think that's enough from me for now. If there's interest I can look into merging some tools from this post into the <code>witherable</code> package itself, or perhaps spin off a new <code>lens-witherable</code> package to contain it.</p>
-<p>Cheers!</p>
         <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
             href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
         these things together, if I managed to teach your something or even just entertain you for a minute or two
