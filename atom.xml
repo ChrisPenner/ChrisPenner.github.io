@@ -2,12 +2,334 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-10-15T02:44:03Z</updated>
+  <updated>2020-10-31T21:53:51Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Composable filters using Witherable optics</title>
+      <link href="https://chrispenner.ca/posts/withered"/>
+      <id>https://chrispenner.ca/posts/withered</id>
+      <updated>2020-10-31T00:00:00Z</updated>
+      <summary>Discovering applications of filterable optics</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/withered.jpg" alt="Composable filters using Witherable optics">
+              <p>One of my favourite things about Haskell is that its structures and abstractions are very principled, and they have laws dictating correct behaviour.</p>
+<p>In my experience, this means that when you find a new way to piece together those abstractions it <em>almost always</em> ends up doing something reasonable... or at the very least interesting!</p>
+<p>As it turns out, optics have a lot of different "slots" where we can experiment with different data types and constraints to get new results.</p>
+<p>In this post I'll be exploring one such new combination and the results that follow. To get the most out of this post you'll want an understanding of:</p>
+<ul>
+<li>optics</li>
+<li>Traversable/Traversals</li>
+<li>Alternative</li>
+</ul>
+<p>If optics are still new to you, I recommend you first check out my introductory book <a href="https://leanpub.com/optics-by-example">Optics By Example</a> 😎</p>
+<p>Here's the agenda</p>
+<ol>
+<li>Introduce an adaptation of an existing typeclass to make it more amenable for optics</li>
+<li>Discover the semantics behind the new optic and how it works</li>
+<li>Write some combinators</li>
+<li><a href="https://www.youtube.com/watch?v=UM-wKQqBBnY">Throw science at the wall to see what sticks</a> (a.k.a. lots of examples)</li>
+</ol>
+<h2 id="the-background">The Background</h2>
+<p>First things first, let's go over the fundamentals we'll be working with.</p>
+<p>Let's take a look at the Traversable typeclass, it's where we find Haskell's all-powerful secret weapon <strong>traverse</strong>! (<a href="https://impurepics.com/fp-bot/index.html">BTW The answer is always traverse.</a>)</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">class</span> (<span class="dt">Functor</span> t, <span class="dt">Foldable</span> t) <span class="ot">=&gt;</span> <span class="dt">Traversable</span> t <span class="kw">where</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a><span class="ot">  traverse ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span></code></pre></div>
+<p>This class eventually let to the concept of a <code>Traversal</code> in Van Laarhoven encoded optics; which looks like this:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">forall</span> f<span class="op">.</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> f t)</span></code></pre></div>
+<p>If we clear the constraints we get a <code>LensLike</code>, which is just the shape of any combinator that will compose well with optics from the <code>lens</code> library:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="kw">type</span> <span class="dt">LensLike</span> f s t a b <span class="ot">=</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> (s <span class="ot">-&gt;</span> f t)</span></code></pre></div>
+<p>Anyways, long story short, if you can make your function fit that shape, it's probably useful as some sort of optic!</p>
+<p>This leads us to <strong>Witherable</strong>!</p>
+<h2 id="witherable">Witherable</h2>
+<p>Ever heard of <a href="https://hackage.haskell.org/package/witherable-0.3.5/docs/Data-Witherable.html">Witherable</a>? It's a class which extends from Traversable, that is, Traversable is a superclass, all Witherables are Traversable, but not the other way around.</p>
+<p>Here's what it looks like:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">class</span> (<span class="dt">Traversable</span> t, <span class="dt">Filterable</span> t) <span class="ot">=&gt;</span> <span class="dt">Witherable</span> t <span class="kw">where</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="ot">  wither ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f (<span class="dt">Maybe</span> b)) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span></code></pre></div>
+<p>Types which implement Witherable expand on the functionality of Traversable, they add the ability to <strong>filter</strong> items out from a structure within an effectful context. Although this type isn't yet in the <code>base</code> library, it turns out it can be pretty handy!</p>
+<p>Examples of witherable types include things like lists and maps, each of their keys or values could potentially be "deleted" from the structure in a sensible way.</p>
+<p>My goal is that I'd like to be able to add "filtering" to the list of things optics can do in a nicely composable way! To do that, we need it to look like a <code>LensLike</code>.</p>
+<p>As you can see, the type of <code>wither</code> is pretty similar to the type of a <code>LensLike</code>, but unfortunately, it doesn't <strong>quite</strong> match the shape we need, it's got a pesky extra <code>Maybe</code> in the way.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="co">-- We need a shape like this:</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>(a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span>
+<span id="cb5-3"><a href="#cb5-3"></a></span>
+<span id="cb5-4"><a href="#cb5-4"></a><span class="co">-- But wither looks like this:</span></span>
+<span id="cb5-5"><a href="#cb5-5"></a>(a <span class="ot">-&gt;</span> f (<span class="dt">Maybe</span> b)) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span></code></pre></div>
+<p>We could get rid of that extra Maybe is by specializing the <code>f</code> into something like <code>Compose f Maybe</code> using <code>Data.Functor.Compose</code>. This would get us close, but specializing the <code>f</code> type to include a concrete type loses a LOT of the generality of optics and will make it much more difficult to use this type with other optics. It's a non-starter.</p>
+<p>We need to find some typeclass constraint which allows for the behaviour of <code>wither</code>, but without the concrete requirement of using <code>Maybe</code>. As it turns out, if we're looking to express "failure" as an Applicative structure, that's exactly what <code>Alternative</code> is for.</p>
+<p><code>Alternative</code> provides a concrete representation of "failure" which we can use as a substitute for the <code>Maybe</code> value that was ruining our day. As it turns out, <code>f (Maybe b)</code> is actually isomorphic to <code>MaybeT f b</code>, and <code>MaybeT</code> provides an Alternative instance, so we can always regain our previous behaviour if we're able to generalize it this way.</p>
+<p>Here's what <a href="https://hackage.haskell.org/package/base-4.12.0.0/docs/Control-Applicative.html#t:Alternative">Alternative</a> looks like:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">class</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> <span class="dt">Alternative</span> f <span class="kw">where</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a><span class="ot">  empty ::</span> f a</span>
+<span id="cb6-3"><a href="#cb6-3"></a><span class="ot">  (&lt;|&gt;) ::</span> f a <span class="ot">-&gt;</span> f a <span class="ot">-&gt;</span> f a</span></code></pre></div>
+<p>In addition to the <code>MaybeT f</code> we already mentioned, some examples of other <code>Alternative</code>s include <code>Maybe</code>, <code>[]</code>, <code>IO</code>, <code>STM</code>, <code>Logic</code> and most of the available <code>Parser</code> variants. You can of course write your own effects which implement Alternative as well!</p>
+<p>Okay, so here's the combinator I want to build, it's a valid "LensLike" so it'll be composable with other optics:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">withered ::</span> <span class="kw">forall</span> f t a b<span class="op">.</span> (<span class="dt">Alternative</span> f, <span class="dt">Witherable</span> t) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span></code></pre></div>
+<p>To save us time, I'll define an alias for our <code>Alternative</code> <code>LensLike</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="co">-- NOTE: Wither and Wither&#39; are exported from Data.Witherable, </span></span>
+<span id="cb8-2"><a href="#cb8-2"></a><span class="co">-- BUT have they have the unfortunate, less-composable type we&#39;re trying to avoid.</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a><span class="co">-- This post uses the following variants instead (sorry about the naming confusion)</span></span>
+<span id="cb8-4"><a href="#cb8-4"></a><span class="kw">type</span> <span class="dt">Wither</span> s t a b <span class="ot">=</span> <span class="kw">forall</span> f<span class="op">.</span> <span class="dt">Alternative</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> f t</span>
+<span id="cb8-5"><a href="#cb8-5"></a><span class="kw">type</span> <span class="dt">Wither&#39;</span> s a <span class="ot">=</span> <span class="dt">Wither</span> s s a a</span></code></pre></div>
+<p>Unfortunately, the <code>withered</code> function isn't provided by the <code>Witherable</code> typeclass, but luckily we can write a general implementation for all <code>Witherables</code>.</p>
+<p>In order to do so, we need a way to "recognize" a failure within our Alternative effect and represent it as a concrete "Maybe". Lucky us, a combinator for this exact purpose exists, it's called <code>optional</code>!</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="ot">optional ::</span> <span class="dt">Alternative</span> f <span class="ot">=&gt;</span> f a <span class="ot">-&gt;</span> f (<span class="dt">Maybe</span> a)</span></code></pre></div>
+<p>When we use <code>optional</code> to <em>lift</em> the failure out of the <em>structure</em> into a concrete <code>Maybe</code> it also <em>removes</em> that particular failure from the <em>effect</em>, yielding an action that will always <strong>succeed</strong> and return either <code>Just</code> or <code>Nothing</code>.</p>
+<p>Let's use it to build a "lensy" combinator in terms of our existing <code>Witherable</code> class, this saves us the work of writing a new class and re-implementing all the instances we'd need.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">withered ::</span> (<span class="dt">Alternative</span> f, <span class="dt">Witherable</span> t) <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> t a <span class="ot">-&gt;</span> f (t b)</span>
+<span id="cb10-2"><a href="#cb10-2"></a>withered f <span class="ot">=</span> wither (optional <span class="op">.</span> f)</span></code></pre></div>
+<p>Great! In pretty short order we've constructed a new combinator that fits a signature compatible with other optics, based on a typeclass that has a pretty clear semantic meaning. Now for the fun part, let's see how we can use it!</p>
+<h2 id="withers-as-optics">Withers as Optics</h2>
+<p>Any time a new optical structure is discovered we need to find some concrete "actions" which we can run on it. This usually involves discovering some interesting applications of different concrete types which implement the constraints required by the optic.</p>
+<p>To experiment a bit we'll use the most general action available, which works on any optic. The <a href="https://hackage.haskell.org/package/lens-4.19.2/docs/Control-Lens-Lens.html#v:-37--37--126-"><code>%%~</code></a> combinator from <code>lens</code> allows us to run any optic if we provide an effectful function which matches the optic's focus and constraints.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">(%%~) ::</span> <span class="dt">LensLike</span> f s t a b <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> f t</span>
+<span id="cb11-2"><a href="#cb11-2"></a><span class="co">-- Which expands to:</span></span>
+<span id="cb11-3"><a href="#cb11-3"></a><span class="ot">(%%~) ::</span> ((a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> (f t)) <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> f b) <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> f t</span></code></pre></div>
+<p>E.g. for a <code>Traversal s t a b</code> we can provide a function <code>Applicative f =&gt; a -&gt; f b</code> and it will return a <code>s -&gt; f t</code> for us.</p>
+<p>Fun fact, this combinator is actually implemented as just <code>(%%~) = id</code>, which in practice just "applies" the optic to the effectful function we provide. It really does help make things more readable though, so we tend to use it despite the fact that it's really just a glorified <code>id</code>.</p>
+<p>So what can we do with <code>withered</code>? We start by considering different functions of the type <code>Alternative f =&gt; a -&gt; f b</code>, since that allows us to leverage the new functionality we've added. By picking different Alternatives we may get some different results.</p>
+<p>Parsing is a great use-case, it's always possible that a string may not match the format of the result we want. Spoilers, <code>withered</code> works wonderfully with parser combinators, but we'll start with something a little simpler:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">import</span> <span class="dt">Text.Read</span></span>
+<span id="cb12-2"><a href="#cb12-2"></a><span class="op">&gt;&gt;&gt;</span> <span class="op">:</span>t readMaybe</span>
+<span id="cb12-3"><a href="#cb12-3"></a><span class="ot">readMaybe ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a</span></code></pre></div>
+<p>Okay, so <code>readMaybe</code> will try to parse a string into a value of the provided type, and will fail as a <code>Nothing</code> if it doesn't work out.</p>
+<p>A regular ol' Traversal will sequence effects from deep inside a structure all the way to the outside, what will <code>withered</code> do?</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> y <span class="ot">=</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, [<span class="st">&quot;1&quot;</span>, <span class="st">&quot;2&quot;</span>, <span class="st">&quot;Tangerine&quot;</span>]), (<span class="ch">&#39;b&#39;</span>, [<span class="st">&quot;4&quot;</span>, <span class="st">&quot;Alpaca&quot;</span>, <span class="st">&quot;6&quot;</span>])] </span>
+<span id="cb13-2"><a href="#cb13-2"></a><span class="op">&gt;&gt;&gt;</span> (y <span class="op">&amp;</span> withered <span class="op">.</span> withered <span class="op">%%~</span> readMaybe)<span class="ot"> ::</span> <span class="dt">Maybe</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> [<span class="dt">Int</span>])</span>
+<span id="cb13-3"><a href="#cb13-3"></a><span class="dt">Just</span> (fromList [(<span class="ch">&#39;a&#39;</span>,[<span class="dv">1</span>,<span class="dv">2</span>]),(<span class="ch">&#39;b&#39;</span>,[<span class="dv">4</span>,<span class="dv">6</span>])])</span></code></pre></div>
+<p>Okay, so like, you gotta admit, that's pretty cool! With the wave of a hand we've gone two levels deep into a complex structure, applied a parsing operation that could fail, and automatically filtered down the containing list to remove failed parses, then rebuilt the outer structure!</p>
+<p>Compare this to what happens if try the same with a traversal instead:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> y <span class="ot">=</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, [<span class="st">&quot;1&quot;</span>, <span class="st">&quot;2&quot;</span>, <span class="st">&quot;Tangerine&quot;</span>]), (<span class="ch">&#39;b&#39;</span>, [<span class="st">&quot;4&quot;</span>, <span class="st">&quot;Alpaca&quot;</span>, <span class="st">&quot;6&quot;</span>])] </span>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="op">&gt;&gt;&gt;</span> (y <span class="op">&amp;</span> <span class="fu">traverse</span> <span class="op">.</span> <span class="fu">traverse</span> <span class="op">%%~</span> readMaybe)<span class="ot"> ::</span> <span class="dt">Maybe</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> [<span class="dt">Int</span>])</span>
+<span id="cb14-3"><a href="#cb14-3"></a><span class="dt">Nothing</span></span></code></pre></div>
+<p>Oof, well that's disappointing! <code>withered</code> is clearly the better match for this sort of thing, and is adding some secret sauce to the whole equation.</p>
+<p>Let's chat about how this actually works.</p>
+<h2 id="filtering-branches">Filtering branches</h2>
+<p>We can think of traversals as "branching" data explorations, they help you dive down deeply into <strong>many</strong> sections of a data structure at once, apply their transformations, then "re-build" the structure as those branches unwind one by one! Each of those branches carry an <strong>independent</strong> set of effects with them, but as the structure is rebuilt, those branches are merged back together and those effects are combined. In the case of <code>traverse</code>, those effects are combined and sequenced using <code>Applicative</code>, and the structure is rebuilt within that Applicative context. This is why, when we tried using <code>traverse</code> for our parsing the whole result was <code>Nothing</code> even though we had a few passing parses. The Applicative instance of <code>Maybe</code> dictates that all function applications inside a <code>Nothing</code> just keep returning <code>Nothing</code> and it clobbered the whole structure!</p>
+<p>Our <code>withered</code> combinator is <strong>failure-aware</strong>; and the <code>Witherable</code> instance knows how interpret that failure as a <em>filter</em> for a data structure rather than completely <em>clobbering</em> it.</p>
+<p>One important thing to notice here is that as <code>wither</code> <strong>collects</strong> all the branches of its computation (one for each element of the structure), it <strong>catches</strong> the failure of the <code>Alternative</code> structure by using <code>optional</code>. This means that failures to the right of a <code>withered</code> <strong>will not propagate past it to the left</strong>. The <code>withered</code> will catch it and filter out that branch from the structure as it rebuilds it.</p>
+<p>A second thing to notice is that a call to <code>wither</code> itself will <strong>never "fail"</strong> (i.e. it won't return the <code>empty</code> value of the Alternative). This is because the <code>Witherable</code> class will simply return an empty structure (rather than the empty effect) if all the elements are filtered out. Take a look at what I mean:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="op">&gt;&gt;&gt;</span> withered (<span class="fu">const</span> <span class="dt">Nothing</span>) [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>]</span>
+<span id="cb15-2"><a href="#cb15-2"></a><span class="dt">Just</span> []</span></code></pre></div>
+<p>We can see the same behaviour in <code>wither</code> if we provide the equivalent:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="op">&gt;&gt;&gt;</span> wither (<span class="fu">const</span> (<span class="dt">Identity</span> <span class="dt">Nothing</span>)) [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>]</span>
+<span id="cb16-2"><a href="#cb16-2"></a><span class="dt">Identity</span> []</span></code></pre></div>
+<p>It doesn't matter if every element "fails", the result will still "succeed" with an empty structure.</p>
+<p>This is actually a huge benefit for us. We've seen that <code>traverse</code> <strong>propagates</strong> any failures to the left, and that <code>withered</code> <strong>catches</strong> any failures and doesn't propagate them at all. By manipulating these facts we can <strong>choose how and when to handle failure</strong>!</p>
+<h2 id="catching-failures">Catching failures</h2>
+<p>To demonstrate the point, let's stick to parsing with <code>readMaybe</code>.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> z <span class="ot">=</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, [<span class="st">&quot;1&quot;</span>, <span class="st">&quot;2&quot;</span>, <span class="st">&quot;3&quot;</span>]), (<span class="ch">&#39;b&#39;</span>, [<span class="st">&quot;4&quot;</span>, <span class="st">&quot;Alpaca&quot;</span>, <span class="st">&quot;6&quot;</span>])] </span></code></pre></div>
+<p>I've altered the structure, now it has an outer map with two keys, the 'a' key contains all valid parses for integers. The 'b' key contains 2 good parses and one bad one.</p>
+<p>Let's see what happens if we use <code>withered</code> to drill down through both structures:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="op">&gt;&gt;&gt;</span> (z <span class="op">&amp;</span> withered <span class="op">.</span> withered <span class="op">%%~</span> readMaybe)<span class="ot"> ::</span> <span class="dt">Maybe</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> [<span class="dt">Int</span>])</span>
+<span id="cb18-2"><a href="#cb18-2"></a><span class="dt">Just</span> (fromList [(<span class="ch">&#39;a&#39;</span>,[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>]), (<span class="ch">&#39;b&#39;</span>,[<span class="dv">4</span>,<span class="dv">6</span>])])</span></code></pre></div>
+<p>Just as expected, it has parsed the valid integers from 'a', in 'b' it has filtered out the bad parse while still keeping the valid parses.</p>
+<p>Given our new understanding of how <code>traverse</code> <strong>propagates</strong> errors rather than catching them, what do we expect to happen if we replace the second <code>withered</code> with <code>traverse</code>?</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="op">&gt;&gt;&gt;</span> (z <span class="op">&amp;</span> withered <span class="op">.</span> <span class="fu">traverse</span> <span class="op">%%~</span> readMaybe)<span class="ot"> ::</span> <span class="dt">Maybe</span> (<span class="dt">M.Map</span> <span class="dt">Char</span> [<span class="dt">Int</span>])</span>
+<span id="cb19-2"><a href="#cb19-2"></a><span class="dt">Just</span> (fromList [(<span class="ch">&#39;a&#39;</span>,[<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>])])</span></code></pre></div>
+<p>Aha! <code>traverse</code> caused the single failure to propagate and kill the branch at the next level up. Now the first <code>withered</code> catches the error when rebuilding the Map and it will filter out the entire <code>b</code> key from the map!</p>
+<p>This can take a bit of getting used to of course, but ultimately it allows <strong>composable</strong> filtering, and lets you to filter complex data structures in tandem with using lenses or traversals to base your judgements on their internals.</p>
+<p>Until now I've been using <code>%%~</code> to pass explicit <code>Alternative f =&gt; a -&gt; f b</code> functions, but we can build some handy combinators around it to make it a bit easier to use.</p>
+<h2 id="combinators">Combinators</h2>
+<p>So, if filtering is our game, what if we want to filter one of the traversed structures based on a predicate?</p>
+<p>First I'll point out that the <code>Data.Witherable</code> package exports combinators of the same name as what we define below, <strong>however</strong>, they work under the assumption that the <code>Maybe</code> is propagated explicitly, and thus they <strong>do not compose with any of the optics from <code>lens</code></strong>. The versions we define here avoid this problem by using <code>Alternative f =&gt; f b</code> instead of <code>f (Maybe b)</code>, and are more composable.</p>
+<p>Assume that we use the combinators that we manually define rather than those exported from <code>Data.Witherable</code> for the rest of this post.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="co">-- Just a nifty helper to lift a predicate into an Alternative</span></span>
+<span id="cb20-2"><a href="#cb20-2"></a><span class="ot">guarding ::</span> <span class="dt">Alternative</span> f <span class="ot">=&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> f a</span>
+<span id="cb20-3"><a href="#cb20-3"></a>guarding p a</span>
+<span id="cb20-4"><a href="#cb20-4"></a>    <span class="op">|</span> p a <span class="ot">=</span> <span class="fu">pure</span> a</span>
+<span id="cb20-5"><a href="#cb20-5"></a>    <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> empty</span>
+<span id="cb20-6"><a href="#cb20-6"></a></span>
+<span id="cb20-7"><a href="#cb20-7"></a><span class="co">-- Filter based on a predicate using witherables</span></span>
+<span id="cb20-8"><a href="#cb20-8"></a><span class="ot">filterOf ::</span> <span class="dt">LensLike</span> <span class="dt">Maybe</span> s t a a <span class="ot">-&gt;</span> (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> <span class="dt">Maybe</span> t</span>
+<span id="cb20-9"><a href="#cb20-9"></a>filterOf w p s <span class="ot">=</span> s <span class="op">&amp;</span> w <span class="op">%%~</span> guarding p</span></code></pre></div>
+<p>Now we can express our filtering operations like this:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1"></a><span class="co">-- Filter all odd numbers out from the nested list</span></span>
+<span id="cb21-2"><a href="#cb21-2"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> filterOf (withered <span class="op">.</span> withered) <span class="fu">even</span> </span>
+<span id="cb21-3"><a href="#cb21-3"></a><span class="dt">Just</span> [[<span class="dv">2</span>],[<span class="dv">4</span>,<span class="dv">6</span>]]</span></code></pre></div>
+<p>Now that we have a combinator for it, here's another example. We can actually filter a list that's <strong>in the middle of our structure</strong>, not just at the start or the end, based on deeply nested values inside by composing our withers with lenses and prisms!</p>
+<p>Let's set up some data-types to work with:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1"></a><span class="co">-- We&#39;ll keep track of whether an email has been validated at the type level</span></span>
+<span id="cb22-2"><a href="#cb22-2"></a><span class="kw">newtype</span> <span class="dt">UnvalidatedEmail</span> <span class="ot">=</span> <span class="dt">UnvalidatedEmail</span> {<span class="ot">_unvalidatedEmail ::</span> <span class="dt">String</span>}</span>
+<span id="cb22-3"><a href="#cb22-3"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">IsString</span>)</span>
+<span id="cb22-4"><a href="#cb22-4"></a><span class="kw">newtype</span> <span class="dt">ValidEmail</span> <span class="ot">=</span> <span class="dt">ValidEmail</span> {<span class="ot">_validEmail ::</span> <span class="dt">String</span>}</span>
+<span id="cb22-5"><a href="#cb22-5"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb22-6"><a href="#cb22-6"></a></span>
+<span id="cb22-7"><a href="#cb22-7"></a><span class="kw">data</span> <span class="dt">Address</span> <span class="ot">=</span> <span class="dt">Address</span></span>
+<span id="cb22-8"><a href="#cb22-8"></a>    {<span class="ot"> _country ::</span> <span class="dt">String</span></span>
+<span id="cb22-9"><a href="#cb22-9"></a>    <span class="co">--  ...</span></span>
+<span id="cb22-10"><a href="#cb22-10"></a>    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb22-11"><a href="#cb22-11"></a><span class="kw">data</span> <span class="dt">Employee</span> email <span class="ot">=</span> <span class="dt">Employee</span></span>
+<span id="cb22-12"><a href="#cb22-12"></a>    {<span class="ot"> _age ::</span> <span class="dt">Int</span></span>
+<span id="cb22-13"><a href="#cb22-13"></a>    ,<span class="ot"> _address ::</span> <span class="dt">Address</span></span>
+<span id="cb22-14"><a href="#cb22-14"></a>    ,<span class="ot"> _email ::</span> email</span>
+<span id="cb22-15"><a href="#cb22-15"></a>    <span class="co">--  ...</span></span>
+<span id="cb22-16"><a href="#cb22-16"></a>    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb22-17"><a href="#cb22-17"></a><span class="kw">data</span> <span class="dt">Company</span> email <span class="ot">=</span> <span class="dt">Company</span></span>
+<span id="cb22-18"><a href="#cb22-18"></a>    {<span class="ot"> _employees ::</span> [<span class="dt">Employee</span> email]</span>
+<span id="cb22-19"><a href="#cb22-19"></a>    <span class="co">--  ...</span></span>
+<span id="cb22-20"><a href="#cb22-20"></a>    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb22-21"><a href="#cb22-21"></a></span>
+<span id="cb22-22"><a href="#cb22-22"></a>makeLenses &#39;<span class="dt">&#39;UnvalidatedEmail</span></span>
+<span id="cb22-23"><a href="#cb22-23"></a>makeLenses &#39;<span class="dt">&#39;ValidEmail</span></span>
+<span id="cb22-24"><a href="#cb22-24"></a>makeLenses &#39;<span class="dt">&#39;Address</span></span>
+<span id="cb22-25"><a href="#cb22-25"></a>makeLenses &#39;<span class="dt">&#39;Employee</span></span>
+<span id="cb22-26"><a href="#cb22-26"></a>makeLenses &#39;<span class="dt">&#39;Company</span></span></code></pre></div>
+<p>And here's a company to work with:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="ot">company ::</span> <span class="dt">Company</span> <span class="dt">UnvalidatedEmail</span></span>
+<span id="cb23-2"><a href="#cb23-2"></a>company <span class="ot">=</span> <span class="dt">Company</span></span>
+<span id="cb23-3"><a href="#cb23-3"></a>    [ <span class="dt">Employee</span> <span class="dv">22</span> (<span class="dt">Address</span> <span class="st">&quot;US&quot;</span>) <span class="st">&quot;stan@example.com&quot;</span></span>
+<span id="cb23-4"><a href="#cb23-4"></a>    , <span class="dt">Employee</span> <span class="dv">43</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) <span class="st">&quot;what do I fill in here?&quot;</span></span>
+<span id="cb23-5"><a href="#cb23-5"></a>    , <span class="dt">Employee</span> <span class="dv">35</span> (<span class="dt">Address</span> <span class="st">&quot;NO&quot;</span>) <span class="st">&quot;bob@bobloblawslaw.com&quot;</span></span>
+<span id="cb23-6"><a href="#cb23-6"></a>    , <span class="dt">Employee</span> <span class="dv">37</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) <span class="st">&quot;dude@wheresmycar.com&quot;</span></span>
+<span id="cb23-7"><a href="#cb23-7"></a>    ]</span></code></pre></div>
+<p>Check this out:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1"></a><span class="co">-- Filter our company for only Canadians:</span></span>
+<span id="cb24-2"><a href="#cb24-2"></a><span class="op">&gt;&gt;&gt;</span> company <span class="op">&amp;</span> filterOf (employees <span class="op">.</span> withered <span class="op">.</span> address <span class="op">.</span> country) (<span class="op">==</span> <span class="st">&quot;CA&quot;</span>)</span>
+<span id="cb24-3"><a href="#cb24-3"></a><span class="dt">Just</span> (<span class="dt">Company</span></span>
+<span id="cb24-4"><a href="#cb24-4"></a>       [ <span class="dt">Employee</span> <span class="dv">43</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) (<span class="dt">UnvalidatedEmail</span> <span class="st">&quot;what do I fill in here?&quot;</span>)</span>
+<span id="cb24-5"><a href="#cb24-5"></a>       , <span class="dt">Employee</span> <span class="dv">37</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) (<span class="dt">UnvalidatedEmail</span> <span class="st">&quot;dude@wheresmycar.com&quot;</span>)</span>
+<span id="cb24-6"><a href="#cb24-6"></a>       ]</span>
+<span id="cb24-7"><a href="#cb24-7"></a>     )</span></code></pre></div>
+<p>This is deceptively simple at first glance, but it's pretty impressive what this is accomplishing for us. Not only does it allow us to filter our employees easily based on <strong>deeply nested state</strong> within each employee, but it allows us to <strong>filter them from a structure that's ALSO nested inside our larger state</strong>! If we were to do this in any way OTHER than using <code>withered</code> we'd have to first focus the employees, THEN run a nested filter over the employees separately, and ALSO find a way to filter them based on their nested "country" values.</p>
+<p>We get even MORE mileage out of our combinators when we want to perform a transformation that may fail over our structure.</p>
+<p>Let's say we want to validate the email of all of our employees, and track the results at the type level with our newtype wrapper.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1"></a><span class="co">-- Validate an email</span></span>
+<span id="cb25-2"><a href="#cb25-2"></a><span class="ot">validateEmail ::</span> <span class="dt">UnvalidatedEmail</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">ValidEmail</span></span>
+<span id="cb25-3"><a href="#cb25-3"></a>validateEmail (<span class="dt">UnvalidatedEmail</span> e)</span>
+<span id="cb25-4"><a href="#cb25-4"></a>  <span class="op">|</span> <span class="fu">elem</span> <span class="ch">&#39;@&#39;</span> e <span class="ot">=</span> <span class="dt">Just</span> (<span class="dt">ValidEmail</span> e)</span>
+<span id="cb25-5"><a href="#cb25-5"></a>  <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="dt">Nothing</span></span>
+<span id="cb25-6"><a href="#cb25-6"></a></span>
+<span id="cb25-7"><a href="#cb25-7"></a><span class="co">-- This will filter out our invalid &quot;what do I fill in here?&quot; email,</span></span>
+<span id="cb25-8"><a href="#cb25-8"></a><span class="co">-- And will wrap all the others in the &quot;ValidEmail&quot; type!</span></span>
+<span id="cb25-9"><a href="#cb25-9"></a><span class="op">&gt;&gt;&gt;</span> company <span class="op">&amp;</span> (employees <span class="op">.</span> withered <span class="op">.</span> email) <span class="op">%%~</span> validateEmail</span>
+<span id="cb25-10"><a href="#cb25-10"></a><span class="dt">Just</span> (<span class="dt">Company</span></span>
+<span id="cb25-11"><a href="#cb25-11"></a>       [ <span class="dt">Employee</span> <span class="dv">22</span> (<span class="dt">Address</span> <span class="st">&quot;US&quot;</span>) (<span class="dt">ValidEmail</span> <span class="st">&quot;stan@example.com&quot;</span>)</span>
+<span id="cb25-12"><a href="#cb25-12"></a>       , <span class="dt">Employee</span> <span class="dv">35</span> (<span class="dt">Address</span> <span class="st">&quot;NO&quot;</span>) (<span class="dt">ValidEmail</span> <span class="st">&quot;bob@bobloblawslaw.com&quot;</span>)</span>
+<span id="cb25-13"><a href="#cb25-13"></a>       , <span class="dt">Employee</span> <span class="dv">37</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) (<span class="dt">ValidEmail</span> <span class="st">&quot;dude@wheresmycar.com&quot;</span>)</span>
+<span id="cb25-14"><a href="#cb25-14"></a>       ])</span></code></pre></div>
+<p>Because this is a <strong>type-changing-traversal</strong> it's much clunkier to do this sort of filter &amp; transform operations without using <code>Witherable</code>. Most obvious "two pass" implementations will tend to be less performant and less composable as well.</p>
+<p>Now you've seen the "gist" of what the tooling can do, let's just go ham on some examples.</p>
+<h2 id="bonus-fun-examples">Bonus: Fun examples</h2>
+<p>If you've made it this far you're doing great! Here's a bunch of cool stuff we can do, I'll be providing a bit less explanation of each of these.</p>
+<hr />
+<p>Prisms already capture the idea of success and failure, but they simply skip the traversal if the prism doesn't match, we can lift prisms into withers such that they'll fail in a way that wither can catch!</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1"></a><span class="ot">witherPrism ::</span> (<span class="dt">Alternative</span> f, <span class="dt">Choice</span> p) <span class="ot">=&gt;</span> <span class="dt">Prism</span> s t a b <span class="ot">-&gt;</span> <span class="dt">Optic</span> p f s t a b</span>
+<span id="cb26-2"><a href="#cb26-2"></a>witherPrism prsm <span class="ot">=</span></span>
+<span id="cb26-3"><a href="#cb26-3"></a>    withPrism prsm <span class="op">$</span> \embed match <span class="ot">-&gt;</span></span>
+<span id="cb26-4"><a href="#cb26-4"></a>        dimap match (<span class="fu">either</span> (<span class="fu">const</span> empty) (<span class="fu">fmap</span> embed))  <span class="op">.</span> right&#39;</span></code></pre></div>
+<p>Note that unfortunately the result of <code>witherPrism</code> will no longer work with most of the prism combinators due to the added Alternative constraint, but that's fine, if you need that behaviour, then simply don't <code>wither</code> the prism in those circumstances.</p>
+<p>Now we can witherize a prism to turn it into a filter such that if the value fails to match the prism the branch "fails", and if the prism matches, it will run the predicate on the result!</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb27-1"><a href="#cb27-1"></a><span class="op">&gt;&gt;&gt;</span> [(<span class="ch">&#39;a&#39;</span>, <span class="dt">Right</span> <span class="dv">1</span>), (<span class="ch">&#39;b&#39;</span>, <span class="dt">Left</span> <span class="dv">2</span>), (<span class="ch">&#39;c&#39;</span>, <span class="dt">Left</span> <span class="dv">3</span>)] <span class="op">&amp;</span> withered <span class="op">.</span> _2 <span class="op">.</span> witherPrism _Left <span class="op">%%~</span> guarding <span class="fu">odd</span></span>
+<span id="cb27-2"><a href="#cb27-2"></a><span class="dt">Just</span> [(<span class="ch">&#39;c&#39;</span>,<span class="dt">Left</span> <span class="dv">3</span>)]</span></code></pre></div>
+<p>If we didn't lift our prism, it would simply "skip" unmatched values, and thus they wouldn't fail or be filtered:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb28-1"><a href="#cb28-1"></a><span class="op">&gt;&gt;&gt;</span> [(<span class="ch">&#39;a&#39;</span>, <span class="dt">Right</span> <span class="dv">1</span>), (<span class="ch">&#39;b&#39;</span>, <span class="dt">Left</span> <span class="dv">2</span>), (<span class="ch">&#39;c&#39;</span>, <span class="dt">Left</span> <span class="dv">3</span>)] <span class="op">&amp;</span> withered <span class="op">.</span> _2 <span class="op">.</span> _Left <span class="op">%%~</span> guarding <span class="fu">odd</span></span>
+<span id="cb28-2"><a href="#cb28-2"></a><span class="dt">Just</span> [(<span class="ch">&#39;a&#39;</span>,<span class="dt">Right</span> <span class="dv">1</span>),(<span class="ch">&#39;c&#39;</span>,<span class="dt">Left</span> <span class="dv">3</span>)]</span></code></pre></div>
+<hr />
+<p>Have you ever used <code>filtered</code>? It's a traversal that skips any elements that don't match a predicate. Here's the <code>Wither</code> version which "fails" any elements that don't match:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb29-1"><a href="#cb29-1"></a><span class="ot">guarded ::</span> (a <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Wither</span> a b a b</span>
+<span id="cb29-2"><a href="#cb29-2"></a>guarded p f a</span>
+<span id="cb29-3"><a href="#cb29-3"></a>  <span class="op">|</span> p a <span class="ot">=</span> f a</span>
+<span id="cb29-4"><a href="#cb29-4"></a>  <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> empty</span></code></pre></div>
+<p>This allows us to "do more" in a single pass. What if we want to validate &amp; filter on emails AND filter by employee age in a single pass?</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb30-1"><a href="#cb30-1"></a><span class="op">&gt;&gt;&gt;</span> company <span class="op">&amp;</span> (employees <span class="op">.</span> withered <span class="op">.</span> guarded ((<span class="op">&gt;</span> <span class="dv">35</span>) <span class="op">.</span> _age) <span class="op">.</span> email) <span class="op">%%~</span> validateEmail</span>
+<span id="cb30-2"><a href="#cb30-2"></a><span class="dt">Just</span> (<span class="dt">Company</span> [ <span class="dt">Employee</span> <span class="dv">37</span> (<span class="dt">Address</span> <span class="st">&quot;CA&quot;</span>) (<span class="dt">ValidEmail</span> <span class="st">&quot;dude@wheresmycar.com&quot;</span>)])</span></code></pre></div>
+<p>In this case the failures "stack", if either fails the branch will fail! You could also use multiple guards interspersed between <code>withered</code>s to filter at many different levels of your structure.</p>
+<hr />
+<p>Since IO has an alternative instance which "fails" on IO Errors, we can take a map containing filepaths and fetch the contents of files, removing any key-value pairs from the map if the file doesn't exist.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb31-1"><a href="#cb31-1"></a><span class="co">-- Read in the content of files that exist, filter ones that fail to read!</span></span>
+<span id="cb31-2"><a href="#cb31-2"></a><span class="op">&gt;&gt;&gt;</span> M.fromList [(<span class="st">&quot;The Readme&quot;</span>, <span class="st">&quot;README.md&quot;</span>), (<span class="st">&quot;Missing File&quot;</span>, <span class="st">&quot;nonexistent.txt&quot;</span>)]</span>
+<span id="cb31-3"><a href="#cb31-3"></a>      <span class="op">&amp;</span> withered <span class="op">%%~</span> <span class="fu">readFile</span></span>
+<span id="cb31-4"><a href="#cb31-4"></a>fromList [(<span class="st">&quot;The Readme&quot;</span>,<span class="st">&quot;# wither\n&quot;</span>)]</span></code></pre></div>
+<p>Note that since the alternative interface will <strong>only</strong> catch IO errors I'd suggest against relying on this behaviour in any sort of production scenario, but you could of course make the failure mode explicit with <code>MaybeT</code> and do something similar!</p>
+<hr />
+<p>STM implements Alternative! A "transaction" is considered to have <strong>failed</strong> if it ever needs to <strong>block</strong> on a variable or channel, or someone calls <code>retry</code>.</p>
+<p>Check out this nifty implementation of a structure-preserving "multi-channel-select":</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb32-1"><a href="#cb32-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></span>
+<span id="cb32-2"><a href="#cb32-2"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">import</span> <span class="dt">Control.Concurrent.STM</span></span>
+<span id="cb32-3"><a href="#cb32-3"></a></span>
+<span id="cb32-4"><a href="#cb32-4"></a><span class="co">-- Initialize some new channels</span></span>
+<span id="cb32-5"><a href="#cb32-5"></a><span class="op">&gt;&gt;&gt;</span> [a, b, c] <span class="ot">&lt;-</span> <span class="fu">sequenceA</span> <span class="op">$</span> [newTChanIO, newTChanIO, newTChanIO]</span>
+<span id="cb32-6"><a href="#cb32-6"></a></span>
+<span id="cb32-7"><a href="#cb32-7"></a><span class="co">-- Build a map of the channels keyed by their name</span></span>
+<span id="cb32-8"><a href="#cb32-8"></a><span class="op">&gt;&gt;&gt;</span> chans <span class="ot">=</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, a), (<span class="ch">&#39;b&#39;</span>, b), (<span class="ch">&#39;c&#39;</span>, c)]<span class="ot"> ::</span> <span class="dt">M.Map</span> <span class="dt">Char</span> (<span class="dt">TChan</span> <span class="dt">Int</span>)</span>
+<span id="cb32-9"><a href="#cb32-9"></a></span>
+<span id="cb32-10"><a href="#cb32-10"></a><span class="co">-- Write some data into only channels &#39;a&#39; and &#39;b&#39;</span></span>
+<span id="cb32-11"><a href="#cb32-11"></a><span class="op">&gt;&gt;&gt;</span> atomically <span class="op">$</span> writeTChan a <span class="dv">1</span> <span class="op">&gt;&gt;</span> writeTChan b <span class="dv">2</span></span>
+<span id="cb32-12"><a href="#cb32-12"></a></span>
+<span id="cb32-13"><a href="#cb32-13"></a><span class="co">-- Get a filtered map of only the channels that have data available!</span></span>
+<span id="cb32-14"><a href="#cb32-14"></a><span class="op">&gt;&gt;&gt;</span> atomically <span class="op">.</span> withered readTChan <span class="op">$</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, a), (<span class="ch">&#39;b&#39;</span>, b), (<span class="ch">&#39;c&#39;</span>, c)]</span>
+<span id="cb32-15"><a href="#cb32-15"></a>fromList [(<span class="ch">&#39;a&#39;</span>,<span class="dv">1</span>),(<span class="ch">&#39;b&#39;</span>,<span class="dv">2</span>)]</span>
+<span id="cb32-16"><a href="#cb32-16"></a></span>
+<span id="cb32-17"><a href="#cb32-17"></a><span class="co">-- Now that we&#39;ve consumed the values, the channels are all empty, so we get an empty map!</span></span>
+<span id="cb32-18"><a href="#cb32-18"></a><span class="op">&gt;&gt;&gt;</span> atomically <span class="op">.</span> withered readTChan <span class="op">$</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, a), (<span class="ch">&#39;b&#39;</span>, b), (<span class="ch">&#39;c&#39;</span>, c)]</span>
+<span id="cb32-19"><a href="#cb32-19"></a>fromList []</span></code></pre></div>
+<hr />
+<p>If we require <code>Monad</code> in addition to <code>Alternative</code> we get power equivalent to <code>MonadPlus</code> and can actually filter on the <strong>results</strong> of computations rather than the arguments to them!</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb33-1"><a href="#cb33-1"></a><span class="co">-- We need an additional Monad constraint, so we&#39;ll add some new type aliases</span></span>
+<span id="cb33-2"><a href="#cb33-2"></a><span class="kw">type</span> <span class="dt">Selector&#39;</span> s a <span class="ot">=</span> <span class="dt">Selector</span> s s a a</span>
+<span id="cb33-3"><a href="#cb33-3"></a><span class="co">-- We could optionally just use MonadPlus here since it&#39;s equivalent to Alternative + Monad</span></span>
+<span id="cb33-4"><a href="#cb33-4"></a><span class="kw">type</span> <span class="dt">Selector</span> s t a b <span class="ot">=</span> <span class="kw">forall</span> f<span class="op">.</span> (<span class="dt">Alternative</span> f, <span class="dt">Monad</span> f) <span class="ot">=&gt;</span> <span class="dt">LensLike</span> f s t a b</span>
+<span id="cb33-5"><a href="#cb33-5"></a></span>
+<span id="cb33-6"><a href="#cb33-6"></a><span class="co">-- Conditionally fail a branch based on a predicate over the RESULT of a computation</span></span>
+<span id="cb33-7"><a href="#cb33-7"></a><span class="ot">selectResult ::</span> (b <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Selector</span> a b a b</span>
+<span id="cb33-8"><a href="#cb33-8"></a>selectResult p f a <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb33-9"><a href="#cb33-9"></a>    f a <span class="op">&gt;&gt;=</span> \<span class="kw">case</span></span>
+<span id="cb33-10"><a href="#cb33-10"></a>      b <span class="op">|</span> p b <span class="ot">-&gt;</span> <span class="fu">pure</span> b</span>
+<span id="cb33-11"><a href="#cb33-11"></a>        <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">-&gt;</span> empty</span></code></pre></div>
+<p>We can use this to build a combinator that filters out any "empty" lists from a map AFTER we've done the initial filtering using wither:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb34-1"><a href="#cb34-1"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="ot">=</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, [<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">5</span>]), (<span class="ch">&#39;b&#39;</span>, [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>])]</span>
+<span id="cb34-2"><a href="#cb34-2"></a><span class="co">-- Original version, even though we &quot;wither&quot; we still end up with empty lists!</span></span>
+<span id="cb34-3"><a href="#cb34-3"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> filterOf (withered <span class="op">.</span> withered) <span class="fu">even</span> </span>
+<span id="cb34-4"><a href="#cb34-4"></a><span class="dt">Just</span> (fromList [(<span class="ch">&#39;a&#39;</span>,[]),(<span class="ch">&#39;b&#39;</span>,[<span class="dv">2</span>])])</span>
+<span id="cb34-5"><a href="#cb34-5"></a></span>
+<span id="cb34-6"><a href="#cb34-6"></a><span class="co">-- How annoying, we can clean those up by adding an additional filter which</span></span>
+<span id="cb34-7"><a href="#cb34-7"></a><span class="co">-- withers the containing map and kills empty lists!</span></span>
+<span id="cb34-8"><a href="#cb34-8"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> filterOf (withered <span class="op">.</span> selectResult (<span class="fu">not</span> <span class="op">.</span> <span class="fu">null</span>) <span class="op">.</span> withered) <span class="fu">even</span> </span>
+<span id="cb34-9"><a href="#cb34-9"></a><span class="dt">Just</span> (fromList [(<span class="ch">&#39;b&#39;</span>,[<span class="dv">2</span>])])</span></code></pre></div>
+<p>We can of course mix &amp; match result filters with any of our other guards.</p>
+<hr />
+<p>When building traversals we don't just always use <code>traverse</code>, sometimes we write custom traversals; anything of that matches the <code>LensLike</code> shape will compose well with other optics!</p>
+<p>With that in mind, we can write custom <code>Wither</code>s too!</p>
+<p>Here's one that allows us to "delete" the email field of a user!</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb35-1"><a href="#cb35-1"></a><span class="kw">type</span> <span class="dt">Name</span> <span class="ot">=</span> <span class="dt">String</span></span>
+<span id="cb35-2"><a href="#cb35-2"></a><span class="kw">type</span> <span class="dt">Email</span> <span class="ot">=</span> <span class="dt">String</span></span>
+<span id="cb35-3"><a href="#cb35-3"></a><span class="kw">data</span> <span class="dt">User</span> <span class="ot">=</span></span>
+<span id="cb35-4"><a href="#cb35-4"></a>     <span class="dt">User</span> <span class="dt">Name</span></span>
+<span id="cb35-5"><a href="#cb35-5"></a>  <span class="op">|</span>  <span class="dt">UserWithEmail</span> <span class="dt">Name</span> <span class="dt">Email</span></span>
+<span id="cb35-6"><a href="#cb35-6"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Ord</span>)</span>
+<span id="cb35-7"><a href="#cb35-7"></a></span>
+<span id="cb35-8"><a href="#cb35-8"></a><span class="ot">witherEmail ::</span> <span class="dt">Wither&#39;</span> <span class="dt">User</span> <span class="dt">Email</span></span>
+<span id="cb35-9"><a href="#cb35-9"></a>witherEmail _ (<span class="dt">User</span> name) <span class="ot">=</span> <span class="fu">pure</span> <span class="op">$</span> <span class="dt">User</span> name</span>
+<span id="cb35-10"><a href="#cb35-10"></a>witherEmail f (<span class="dt">UserWithEmail</span> name emailStr) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb35-11"><a href="#cb35-11"></a>    <span class="co">-- Check whether the operation over email succeeded or failed</span></span>
+<span id="cb35-12"><a href="#cb35-12"></a>    optional (f emailStr) <span class="op">&lt;&amp;&gt;</span> \<span class="kw">case</span></span>
+<span id="cb35-13"><a href="#cb35-13"></a>      <span class="dt">Just</span> e <span class="ot">-&gt;</span> <span class="dt">UserWithEmail</span> name e</span>
+<span id="cb35-14"><a href="#cb35-14"></a>      <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">User</span> name</span></code></pre></div>
+<p>Here're two users, one email is valid the other isn't</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb36-1"><a href="#cb36-1"></a><span class="ot">users ::</span> [<span class="dt">User</span>]</span>
+<span id="cb36-2"><a href="#cb36-2"></a>users <span class="ot">=</span></span>
+<span id="cb36-3"><a href="#cb36-3"></a>    [ <span class="dt">UserWithEmail</span> <span class="st">&quot;bob&quot;</span> <span class="st">&quot;invalid email&quot;</span></span>
+<span id="cb36-4"><a href="#cb36-4"></a>    , <span class="dt">UserWithEmail</span> <span class="st">&quot;alice&quot;</span> <span class="st">&quot;alice@example.com&quot;</span></span>
+<span id="cb36-5"><a href="#cb36-5"></a>    ]</span>
+<span id="cb36-6"><a href="#cb36-6"></a></span>
+<span id="cb36-7"><a href="#cb36-7"></a></span>
+<span id="cb36-8"><a href="#cb36-8"></a><span class="op">&gt;&gt;&gt;</span> users <span class="op">&amp;</span> <span class="fu">traverse</span> <span class="op">.</span> witherEmail <span class="op">%%~</span> guarding (<span class="fu">elem</span> <span class="ch">&#39;@&#39;</span>)</span>
+<span id="cb36-9"><a href="#cb36-9"></a><span class="dt">Just</span> [<span class="dt">User</span> <span class="st">&quot;bob&quot;</span>,<span class="dt">UserWithEmail</span> <span class="st">&quot;alice&quot;</span> <span class="st">&quot;alice@example.com&quot;</span>]</span></code></pre></div>
+<p>Notice how our custom wither has "caught" the failure when operating over email, and instead of simply removing the user from the list it has instead reconstructed it as a User without an email! Pretty cool!</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>Anyways, I think that's enough from me for now. If there's interest I can look into merging some tools from this post into the <code>witherable</code> package itself, or perhaps spin off a new <code>lens-witherable</code> package to contain it.</p>
+<p>Cheers!</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Silly job interview questions in Haskell</title>
       <link href="https://chrispenner.ca/posts/interview"/>
