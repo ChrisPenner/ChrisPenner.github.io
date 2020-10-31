@@ -555,5 +555,3 @@ as a User without an email! Pretty cool!
 Anyways, I think that's enough from me for now. If there's interest I can look into
 merging some tools from this post into the `witherable` package itself, or perhaps spin off a new
 `lens-witherable` package to contain it.
-
-Cheers!
