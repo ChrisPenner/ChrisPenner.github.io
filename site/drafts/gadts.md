@@ -1,10 +1,10 @@
 ---
-title: ''
+title: 'Simpler and safer API design using GADTs'
 author: "Chris Penner"
-date: "Oct 31, 2020"
+date: "Dec 10, 2020"
 tags: [haskell]
-description: ""
-image: withered.jpg
+description: "Herein we look at how, for certain situations, GADTs can sometimes provide a cleaner approach than typeclasses."
+image: gadts.jpg
 ---
 
 Hey folks! Today we'll be talking about **GADTs**, that is, "Generalized Abstract Data Types".  As the name implies, they're just like Haskell's normal data types, but the _generalized_ bit adds a few new features!  They aren't actually too tough to use once you understand a few principles.
