@@ -2,12 +2,386 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <title>Chris Penner</title>
     <link href="https://chrispenner.ca/atom.xml" rel="self" type="application/rss+xml" />
-  <updated>2020-11-26T02:27:54Z</updated>
+  <updated>2020-12-10T04:11:42Z</updated>
   <author>
       <name>Chris Penner</name>
   </author>
   <id>https://chrispenner.ca/</id>
 
+  <entry>
+      <title>Simpler and safer API design using GADTs</title>
+      <link href="https://chrispenner.ca/posts/gadt-design"/>
+      <id>https://chrispenner.ca/posts/gadt-design</id>
+      <updated>2020-12-10T00:00:00Z</updated>
+      <summary>Herein we look at how, for certain situations, GADTs can sometimes provide a cleaner approach than typeclasses.</summary>
+      <content type="html"><![CDATA[
+          <img src="https://chrispenner.ca/images/gadts.jpg" alt="Simpler and safer API design using GADTs">
+              <p>Hey folks! Today we'll be talking about <strong>GADTs</strong>, that is, "Generalized Abstract Data Types". As the name implies, they're just like Haskell's normal data types, but the <em>generalized</em> bit adds a few new features! They aren't actually too tough to use once you understand a few principles.</p>
+<p>A lot of the writing out there regarding GADTs is pretty high-level research and academia, in contrast, today I'm going to show off a relatively practical and simple use-case. In this post we'll take a look at a very real example where we can leveraged GADTs in a real-world Haskell library to build a simple and expressive end-user interface.</p>
+<p>We'll be designing a library for CSV manipulation. I used all of the following techniques to design the interface for my <a href="https://hackage.haskell.org/package/lens-csv">lens-csv</a> library. Let's get started!</p>
+<hr />
+<p>Here's a teensy CSV that we'll work with throughout the rest of the post. Any time you see <code>input</code> used in examples, assume it's this CSV.</p>
+<pre class="csv"><code>Name,Age,Home
+Luke,19,Tatooine
+Leia,19,Alderaan
+Han,32,Corellia</code></pre>
+<p>In its essence, a CSV is really just a list of <strong>rows</strong> and each <strong>row</strong> is just a list of <strong>columns</strong>. That's pretty much it! Any other meaning, even something as benign as "this column contains numbers" isn't tracked in the CSV itself.</p>
+<p>This means we can model the data in a CSV using a simple type like <code>[[String]]</code>, so far, so simple! There's a bit of a catch here though. Although it's clear to us humans that <code>Name,Age,Home</code> is the <strong>header row</strong> for this CSV, there's no marker in the CSV itself to indicate that! It's up to the user of the library to specify whether to treat the first row of a CSV as a header or not, and herein lies our challenge!</p>
+<p>Depending on whether the CSV has a header row or not, the user of our library will want to reference the CSV columns by a either a <strong>column name</strong> or <strong>column number</strong> respectively. In a <strong>dynamic language</strong> (like Python) this is easily handled, we would provide separate methods for indexing columns by either header name or column number, and it would be the programmer's job to keep track of when to use which. In a strongly-typed language like Haskell however, we prefer to prevent such mistakes at compile time. Effectively, we want to give the programmer jigsaw pieces that only fit together in a way that works!</p>
+<p>For the sake of pedagogy our miniature CSV library will perform the following tasks:</p>
+<ul>
+<li>Decode a CSV string into a structured type</li>
+<li>Get all the values in a given row</li>
+</ul>
+<h2 id="an-initial-approach">An Initial Approach</h2>
+<p>First things first we'll need a <code>decode</code> function to parse the CSV into a more structured type. In a production environment you'd likely use performant types like <code>ByteString</code> and <code>Vector</code>, but for our toy parser we'll stick to the types provided by the Prelude.</p>
+<p>Since this is a post about GADTs and not CSVs encodings, we won't worry about escaping or quoting here. We can just do the naive thing and split our rows into cells on every comma. The Prelude, unfortunately, provides <code>lines</code> and <code>words</code>, but doesn't provide a more generic splitting function, so I'll whip one up to suit our needs.</p>
+<p>Here's a function which splits a string on commas in such a way that each "cell" is separated in the resulting list.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">splitOn ::</span> <span class="dt">Eq</span> a <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [[a]]</span>
+<span id="cb2-2"><a href="#cb2-2"></a>splitOn splitter <span class="ot">=</span> <span class="fu">foldr</span> go [[]]</span>
+<span id="cb2-3"><a href="#cb2-3"></a>  <span class="kw">where</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>    go char xs</span>
+<span id="cb2-5"><a href="#cb2-5"></a>      <span class="co">-- If the current character is our &quot;split&quot; character create a new partition</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>      <span class="op">|</span> splitter <span class="op">==</span> char <span class="ot">=</span> []<span class="op">:</span>xs</span>
+<span id="cb2-7"><a href="#cb2-7"></a>      <span class="co">-- Otherwise we can add the next char to the current cell</span></span>
+<span id="cb2-8"><a href="#cb2-8"></a>      <span class="op">|</span> <span class="fu">otherwise</span> <span class="ot">=</span> <span class="kw">case</span> xs <span class="kw">of</span></span>
+<span id="cb2-9"><a href="#cb2-9"></a>          (cell<span class="op">:</span>rest) <span class="ot">-&gt;</span> (char<span class="op">:</span>cell)<span class="op">:</span>rest</span>
+<span id="cb2-10"><a href="#cb2-10"></a>          [] <span class="ot">-&gt;</span> [[char]]</span></code></pre></div>
+<p>We can try it out to ensure it works as expected:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="op">&gt;&gt;&gt;</span> splitOn <span class="ch">&#39;,&#39;</span> <span class="st">&quot;a,b,c&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a>[<span class="st">&quot;a&quot;</span>,<span class="st">&quot;b&quot;</span>,<span class="st">&quot;c&quot;</span>]</span>
+<span id="cb3-3"><a href="#cb3-3"></a></span>
+<span id="cb3-4"><a href="#cb3-4"></a><span class="co">-- Remember that CSV cells might be empty and we need it to handle that:</span></span>
+<span id="cb3-5"><a href="#cb3-5"></a><span class="op">&gt;&gt;&gt;</span> splitOn <span class="ch">&#39;,&#39;</span> <span class="st">&quot;,,&quot;</span></span>
+<span id="cb3-6"><a href="#cb3-6"></a>[<span class="st">&quot;&quot;</span>,<span class="st">&quot;&quot;</span>,<span class="st">&quot;&quot;</span>]</span></code></pre></div>
+<p>Now we'll write a type to represent our CSV structure, it will have a constructor for a CSV with headers, one for a CSV without headers:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">data</span> <span class="dt">CSV</span> <span class="ot">=</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a>      <span class="co">-- A CSV with headers has named columns</span></span>
+<span id="cb4-3"><a href="#cb4-3"></a>      <span class="dt">NamedCsv</span> [<span class="dt">String</span>] [[<span class="dt">String</span>]]</span>
+<span id="cb4-4"><a href="#cb4-4"></a>      <span class="co">-- A CSV without headers has numbered columns</span></span>
+<span id="cb4-5"><a href="#cb4-5"></a>    <span class="op">|</span> <span class="dt">NumberedCsv</span> [[<span class="dt">String</span>]]</span>
+<span id="cb4-6"><a href="#cb4-6"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span></code></pre></div>
+<p>Great, now we can write our first attempt of a decoding function. The implementation isn't really important here, so just focus on the type!</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">decode ::</span> <span class="dt">Bool</span> <span class="co">-- Whether to parse a header row or not</span></span>
+<span id="cb5-2"><a href="#cb5-2"></a>       <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="co">-- The csv file</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a>       <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">CSV</span> <span class="co">-- We&#39;ll return &quot;Nothing&quot; if anything is wrong</span></span></code></pre></div>
+<p>And here's the implementation just in case you're following along at home:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="co">-- Parse a header row</span></span>
+<span id="cb6-2"><a href="#cb6-2"></a>decode <span class="dt">True</span> input <span class="ot">=</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a>    <span class="kw">case</span> splitOn <span class="ch">&#39;,&#39;</span> <span class="op">&lt;$&gt;</span> <span class="fu">lines</span> input <span class="kw">of</span></span>
+<span id="cb6-4"><a href="#cb6-4"></a>        (headers<span class="op">:</span>rows) <span class="ot">-&gt;</span> <span class="dt">Just</span> (<span class="dt">NamedCsv</span> headers rows)</span>
+<span id="cb6-5"><a href="#cb6-5"></a>        [] <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span>
+<span id="cb6-6"><a href="#cb6-6"></a><span class="co">-- No header row</span></span>
+<span id="cb6-7"><a href="#cb6-7"></a>decode <span class="dt">False</span> input <span class="ot">=</span></span>
+<span id="cb6-8"><a href="#cb6-8"></a>  <span class="kw">let</span> rows <span class="ot">=</span> splitOn <span class="ch">&#39;,&#39;</span> <span class="op">&lt;$&gt;</span> <span class="fu">lines</span> input</span>
+<span id="cb6-9"><a href="#cb6-9"></a>   <span class="kw">in</span> <span class="dt">Just</span> (<span class="dt">NumberedCsv</span> rows)</span></code></pre></div>
+<p>Simple enough; we create a CSV with the correct constructor based on whether we expect headers or not.</p>
+<p>Now let's write a function to get a whole column of the CSV. Here's where things get a bit more interesting:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> <span class="dt">Int</span>    <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="ot">getColumnByName   ::</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>Since each type of CSV takes a different index type we need two different functions in order to do effectively the same thing; let's see the implementations:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="co">-- A safe indexing function to get elements by index.</span></span>
+<span id="cb8-2"><a href="#cb8-2"></a><span class="co">-- This is strangely missing from the Prelude... 🤔</span></span>
+<span id="cb8-3"><a href="#cb8-3"></a><span class="ot">safeIndex ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a</span>
+<span id="cb8-4"><a href="#cb8-4"></a>safeIndex i <span class="ot">=</span> <span class="fu">lookup</span> i <span class="op">.</span> <span class="fu">zip</span> [<span class="dv">0</span><span class="op">..</span>]</span>
+<span id="cb8-5"><a href="#cb8-5"></a></span>
+<span id="cb8-6"><a href="#cb8-6"></a><span class="co">-- Get all values of a column by the column index</span></span>
+<span id="cb8-7"><a href="#cb8-7"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb8-8"><a href="#cb8-8"></a>getColumnByNumber columnIndex (<span class="dt">NumberedCsv</span> rows) <span class="ot">=</span></span>
+<span id="cb8-9"><a href="#cb8-9"></a>    <span class="co">-- Fail if a column is missing from any row</span></span>
+<span id="cb8-10"><a href="#cb8-10"></a>    <span class="fu">traverse</span> (safeIndex columnIndex) rows</span>
+<span id="cb8-11"><a href="#cb8-11"></a>getColumnByNumber columnIndex (<span class="dt">NamedCsv</span> _ rows) <span class="ot">=</span></span>
+<span id="cb8-12"><a href="#cb8-12"></a>    <span class="fu">traverse</span> (safeIndex columnIndex) rows</span>
+<span id="cb8-13"><a href="#cb8-13"></a></span>
+<span id="cb8-14"><a href="#cb8-14"></a><span class="co">-- Get all values of a column by the column name</span></span>
+<span id="cb8-15"><a href="#cb8-15"></a><span class="ot">getColumnByName ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb8-16"><a href="#cb8-16"></a>getColumnByName  _ (<span class="dt">NumberedCsv</span> _) <span class="ot">=</span> <span class="dt">Nothing</span></span>
+<span id="cb8-17"><a href="#cb8-17"></a>getColumnByName columnName (<span class="dt">NamedCsv</span> headers rows) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-18"><a href="#cb8-18"></a>    <span class="co">-- Get the column index from the headers</span></span>
+<span id="cb8-19"><a href="#cb8-19"></a>    columnIndex <span class="ot">&lt;-</span> elemIndex columnName headers</span>
+<span id="cb8-20"><a href="#cb8-20"></a>    <span class="co">-- Lookup the column from each row, failing if the column is missing from any row</span></span>
+<span id="cb8-21"><a href="#cb8-21"></a>    <span class="fu">traverse</span> (safeIndex columnIndex) rows</span></code></pre></div>
+<p>This works of course, but it <em>feels</em> like we're programming in a dynamic language! If you try to get a column <strong>by name</strong> from a <strong>numbered CSV</strong> we know it will ALWAYS fail, so why do we even allow the programmer to express that? Certainly it should fail to typecheck instead!</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">True</span> input <span class="op">&gt;&gt;=</span> getColumnByName <span class="st">&quot;Name&quot;</span></span>
+<span id="cb9-2"><a href="#cb9-2"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span>
+<span id="cb9-3"><a href="#cb9-3"></a></span>
+<span id="cb9-4"><a href="#cb9-4"></a><span class="co">-- We&#39;ll get &#39;Nothing&#39; no matter what if we index a numbered csv by name!</span></span>
+<span id="cb9-5"><a href="#cb9-5"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">False</span> input <span class="op">&gt;&gt;=</span> getColumnByName <span class="st">&quot;Name&quot;</span></span>
+<span id="cb9-6"><a href="#cb9-6"></a><span class="dt">Nothing</span></span></code></pre></div>
+<p>The problem here becomes even more pronounced when we write a function like <code>getHeaders</code>. Which type signature should it have?</p>
+<p>This one:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">getHeaders ::</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>Or this one?</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">getHeaders ::</span> <span class="dt">CSV</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>We could pick the first signature and always return the empty list <code>[]</code> if someone mistakenly tries to get the headers of a numbered CSV, but that seems a bit disingenuous; It's common to check the number of columns in a CSV by counting the headers, and it's not that every numbered CSV has zero columns! If we go with the latter signature it properly handles the failure case of calling <code>getHeaders</code> on a numbered CSV, but we know that getting the headers from a <code>NamedCSV</code> should <strong>never</strong> fail, so in that case we're adding a bit of unnecessary overhead, all callers will have to unwrap <code>Maybe</code> in that case no matter what 😬.</p>
+<p>In order to fix this issue we'll need to go back to the drawing board and see if we can keep track of whether our CSV has headers inside its <strong>type</strong>.</p>
+<h2 id="differentiating-csvs-using-types">Differentiating CSVs using types</h2>
+<p>I promise we'll get to using GADTs soon, but let's look at the "simple" approach that I suspect most folks would try next and see where it ends up so we can motivate the need for <strong>GADTs</strong>.</p>
+<p>The goal is to prevent the user from calling "header" specific methods on a CSV that doesn't have headers. The simplest thing to do is provide two separate <code>decode</code> methods which return completely different concrete result types:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">decodeWithoutHeaders ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [[<span class="dt">String</span>]]</span>
+<span id="cb12-2"><a href="#cb12-2"></a><span class="ot">decodeWithHeaders    ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]])</span></code></pre></div>
+<p>Next we could would implement:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [[<span class="dt">String</span>]]             <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb13-2"><a href="#cb13-2"></a><span class="ot">getColumnByName   ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]]) <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>This solves the problem at hand, if we decode a CSV without headers we'll have a <code>[[String]]</code> value, and can't pass that into <code>getColumnByName</code>. However, there are a few minor annoyances with this approach. Notice how we can no longer use <code>getColumnByNumber</code> to get a column by number on a CSV which has headers? Of course we could could <code>snd</code> it into <code>[[String]]</code> first, but converting between types everywhere is annoying and also means we <strong>can't write code which is polymorphic over both kinds of CSV</strong>. Ideally we would have a single set of functions which was <em>smart</em> about which type of CSV so it could do <strong>the right thing</strong> while also ensuring type-safety.</p>
+<p>Some readers are likely thinking "Hrmmm, a <strong>group of functions polymorphic over a type</strong>? Sounds like a <strong>typeclass</strong>!" and you'd be right! As it turns out, this is roughly the approach that the popular <a href="https://hackage.haskell.org/package/cassava"><code>cassava</code></a> library takes to its library design.</p>
+<p><code>cassava</code> is more <strong>record-centric</strong> than the library we're designing, so it provides separate typeclasses for named and unnamed record types; <code>ToNamedRecord</code>, <code>FromNamedRecord</code>, and their numbered variants <code>ToRecord</code> and <code>FromRecord</code>. In our case we'll be defining different typeclass instances for the CSV itself.</p>
+<p>Here's the rough idea:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="ot">{-# LANGUAGE TypeFamilies #-}</span></span>
+<span id="cb14-2"><a href="#cb14-2"></a><span class="ot">{-# LANGUAGE FlexibleInstances #-}</span></span>
+<span id="cb14-3"><a href="#cb14-3"></a><span class="ot">{-# LANGUAGE InstanceSigs #-}</span></span>
+<span id="cb14-4"><a href="#cb14-4"></a></span>
+<span id="cb14-5"><a href="#cb14-5"></a><span class="kw">class</span> <span class="dt">IsCSV</span> c <span class="kw">where</span></span>
+<span id="cb14-6"><a href="#cb14-6"></a>  <span class="co">-- A type family to specify the &quot;indexing&quot; type of the CSV</span></span>
+<span id="cb14-7"><a href="#cb14-7"></a>  <span class="kw">type</span> <span class="dt">Index</span><span class="ot"> c ::</span> <span class="dt">Type</span></span>
+<span id="cb14-8"><a href="#cb14-8"></a>  <span class="co">-- Try parsing a CSV of the appropriate type</span></span>
+<span id="cb14-9"><a href="#cb14-9"></a><span class="ot">  decode ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> c</span>
+<span id="cb14-10"><a href="#cb14-10"></a></span>
+<span id="cb14-11"><a href="#cb14-11"></a><span class="ot">  getColumnByIndex  ::</span> <span class="dt">Index</span> c <span class="ot">-&gt;</span> c <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb14-12"><a href="#cb14-12"></a><span class="ot">  getColumnByNumber ::</span> <span class="dt">Int</span>     <span class="ot">-&gt;</span> c <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb14-13"><a href="#cb14-13"></a><span class="ot">  getRow ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Row</span> c</span></code></pre></div>
+<p>Let's talk about the <code>Index</code> type family. Numbered CSVs are indexed by an <code>Int</code>, while Named CSVs are indexed by a String. We can use the <code>Index</code> <em>associated type family</em> to specify a different type of Index for each typeclass instance.</p>
+<p>The headerless CSV is pretty easy to implement:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="kw">instance</span> <span class="dt">IsCSV</span> [[<span class="dt">String</span>]] <span class="kw">where</span></span>
+<span id="cb15-2"><a href="#cb15-2"></a>  <span class="kw">type</span> <span class="dt">Index</span> [[<span class="dt">String</span>]] <span class="ot">=</span> <span class="dt">Int</span></span>
+<span id="cb15-3"><a href="#cb15-3"></a>  <span class="co">-- You can re-purpose the earlier decoder here.</span></span>
+<span id="cb15-4"><a href="#cb15-4"></a>  decode <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb15-5"><a href="#cb15-5"></a></span>
+<span id="cb15-6"><a href="#cb15-6"></a>  <span class="co">-- The Index type is Int, so we index by Int here:</span></span>
+<span id="cb15-7"><a href="#cb15-7"></a><span class="ot">  getColumnByIndex ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [[<span class="dt">String</span>]] <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb15-8"><a href="#cb15-8"></a>  getColumnByIndex n rows <span class="ot">=</span> <span class="fu">traverse</span> (safeIndex n) rows</span>
+<span id="cb15-9"><a href="#cb15-9"></a></span>
+<span id="cb15-10"><a href="#cb15-10"></a>  <span class="co">-- Since the index is an Int we can re-use the other implementation</span></span>
+<span id="cb15-11"><a href="#cb15-11"></a><span class="ot">  getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [[<span class="dt">String</span>]] <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb15-12"><a href="#cb15-12"></a>  getColumnByNumber <span class="ot">=</span> getColumnByIndex</span></code></pre></div>
+<p>Now an instance for a CSV with headers:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="kw">instance</span> <span class="dt">IsCSV</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]]) <span class="kw">where</span></span>
+<span id="cb16-2"><a href="#cb16-2"></a>  <span class="co">-- We can index a column by the header name</span></span>
+<span id="cb16-3"><a href="#cb16-3"></a>  <span class="kw">type</span> <span class="dt">Index</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]]) <span class="ot">=</span> <span class="dt">String</span></span>
+<span id="cb16-4"><a href="#cb16-4"></a>  decode <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb16-5"><a href="#cb16-5"></a></span>
+<span id="cb16-6"><a href="#cb16-6"></a>  <span class="co">-- The &#39;index&#39; for this type of CSV is a String</span></span>
+<span id="cb16-7"><a href="#cb16-7"></a><span class="ot">  getColumnByIndex ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]]) <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb16-8"><a href="#cb16-8"></a>  getColumnByIndex columnName (headers, rows) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb16-9"><a href="#cb16-9"></a>    columnIndex <span class="ot">&lt;-</span> elemIndex columnName headers</span>
+<span id="cb16-10"><a href="#cb16-10"></a>    <span class="fu">traverse</span> (safeIndex columnIndex) rows</span>
+<span id="cb16-11"><a href="#cb16-11"></a>  <span class="co">-- We can still index a Headered CSV by column number</span></span>
+<span id="cb16-12"><a href="#cb16-12"></a><span class="ot">  getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]]) <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb16-13"><a href="#cb16-13"></a>  getColumnByNumber n <span class="ot">=</span> getColumnByNumber n <span class="op">.</span> <span class="fu">snd</span></span></code></pre></div>
+<p>This works out pretty well, here's how it looks to use it:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="op">&gt;&gt;&gt;</span> decode input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="st">&quot;Name&quot;</span><span class="ot"> ::</span> <span class="dt">String</span>)</span>
+<span id="cb17-2"><a href="#cb17-2"></a><span class="op">&lt;</span>interactive<span class="op">&gt;:</span><span class="dv">99</span><span class="op">:</span><span class="dv">36</span><span class="op">:</span> <span class="fu">error</span><span class="op">:</span></span>
+<span id="cb17-3"><a href="#cb17-3"></a>    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="dt">Index</span> c0’ with ‘<span class="dt">String</span>’</span>
+<span id="cb17-4"><a href="#cb17-4"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">Index</span> c0</span>
+<span id="cb17-5"><a href="#cb17-5"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">String</span></span>
+<span id="cb17-6"><a href="#cb17-6"></a>      <span class="dt">The</span> <span class="kw">type</span> variable ‘c0’ is ambiguous</span>
+<span id="cb17-7"><a href="#cb17-7"></a>    • <span class="dt">In</span> the first argument <span class="kw">of</span> ‘getColumnByIndex’, namely</span>
+<span id="cb17-8"><a href="#cb17-8"></a>        ‘<span class="st">&quot;Name&quot;</span>’</span>
+<span id="cb17-9"><a href="#cb17-9"></a>      <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">&gt;&gt;=</span>)’, namely</span>
+<span id="cb17-10"><a href="#cb17-10"></a>        ‘getColumnByIndex <span class="st">&quot;Name&quot;</span>’</span>
+<span id="cb17-11"><a href="#cb17-11"></a>      <span class="dt">In</span> the expression<span class="op">:</span></span>
+<span id="cb17-12"><a href="#cb17-12"></a>        decode input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span></code></pre></div>
+<p>Uh oh... one issue with type classes is that GHC might not know which which instance to use in certain situations!</p>
+<p>We can help out GHC with a type hint, but it's a bit annoying and the error message isn't always so clear!</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="op">@</span>([<span class="dt">String</span>], [[<span class="dt">String</span>]]) input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb18-2"><a href="#cb18-2"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span>
+<span id="cb18-3"><a href="#cb18-3"></a></span>
+<span id="cb18-4"><a href="#cb18-4"></a><span class="co">-- Or we can define a type alias to clean it up a smidge</span></span>
+<span id="cb18-5"><a href="#cb18-5"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">type</span> <span class="dt">Named</span> <span class="ot">=</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]])</span>
+<span id="cb18-6"><a href="#cb18-6"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="op">@</span><span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb18-7"><a href="#cb18-7"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span></code></pre></div>
+<p>This works out okay, it's by no means "unusable", but let's take a look at how GADTs can allow us to encourage better error messages while also making it easier to read, and reduce the required boilerplate all at once!</p>
+<h2 id="the-gadt-approach">The GADT approach</h2>
+<p>Before we use them for CSVs let's get a quick primer on GADTs, if you're well-acquainted already feel free to skip to the next section.</p>
+<p>GADTs, a.k.a. <strong>Generalized Abstract Data Types</strong>, bring a few upgrades over regular Haskell <code>data</code> types. Just in case you haven't seen one before, let's compare the regular <code>Maybe</code> definition to its GADT version.</p>
+<p>Here's how <code>Maybe</code> is written using standard <code>data</code> syntax:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="kw">data</span> <span class="dt">Maybe</span> a <span class="ot">=</span></span>
+<span id="cb19-2"><a href="#cb19-2"></a>    <span class="dt">Nothing</span></span>
+<span id="cb19-3"><a href="#cb19-3"></a>  <span class="op">|</span> <span class="dt">Just</span> a</span></code></pre></div>
+<p>When we turn on <code>GADTs</code> we can write the exact same type like this instead:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="kw">data</span> <span class="dt">Maybe</span> a <span class="kw">where</span></span>
+<span id="cb20-2"><a href="#cb20-2"></a>  <span class="dt">Nothing</span><span class="ot"> ::</span> <span class="dt">Maybe</span> a</span>
+<span id="cb20-3"><a href="#cb20-3"></a>  <span class="dt">Just</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a</span></code></pre></div>
+<p>This slightly different syntax, which looks a bit foreign at first, is really just spelling out the type of constructors as though they were functions!</p>
+<p>Compare the definition with the type of each constructor:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="op">:</span>t <span class="dt">Nothing</span></span>
+<span id="cb21-2"><a href="#cb21-2"></a><span class="dt">Nothing</span><span class="ot"> ::</span> <span class="dt">Maybe</span> a</span>
+<span id="cb21-3"><a href="#cb21-3"></a><span class="op">&gt;&gt;&gt;</span> <span class="op">:</span>t <span class="dt">Just</span></span>
+<span id="cb21-4"><a href="#cb21-4"></a><span class="dt">Just</span><span class="ot"> ::</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a</span></code></pre></div>
+<p>Each argument to the function represents a "slot" in the constructor.</p>
+<p>But of course there's more than just the definition syntax! Why use GADTs? They bring a few upgrades over regular <code>data</code> definitions. GADTs are most often used for their ability to <strong>include constraints over polymorphic types</strong> in their constructor definitions. This means you can write a type like this:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1"></a><span class="ot">{-# LANGUAGE GADTs #-}</span></span>
+<span id="cb22-2"><a href="#cb22-2"></a></span>
+<span id="cb22-3"><a href="#cb22-3"></a><span class="kw">data</span> <span class="dt">HasEq</span> a <span class="kw">where</span></span>
+<span id="cb22-4"><a href="#cb22-4"></a>  <span class="dt">HasEq</span><span class="ot"> ::</span> <span class="dt">Eq</span> a <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">HasEq</span> a</span></code></pre></div>
+<p>Where the <code>Eq a</code> constraint gets "<em>baked in</em>" to the constructor such that we can then write a function like this:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="ot">checkEq ::</span> <span class="dt">HasEq</span> a <span class="ot">-&gt;</span> <span class="dt">HasEq</span> a <span class="ot">-&gt;</span> <span class="dt">Bool</span></span>
+<span id="cb23-2"><a href="#cb23-2"></a>checkEq (<span class="dt">HasEq</span> one) (<span class="dt">HasEq</span> two) <span class="ot">=</span> one <span class="op">==</span> two</span></code></pre></div>
+<p>We don't need to include an <code>Eq a</code> constraint in the type because GHC knows that it's impossible to construct <code>HasEq</code> without one, and it carries that constraint <em>with the value</em> in the constructor!</p>
+<p>In this post we'll be using a technique which follows (perhaps unintuitively) from this; take a look at this type:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1"></a><span class="kw">data</span> <span class="dt">IntOrString</span> a <span class="kw">where</span></span>
+<span id="cb24-2"><a href="#cb24-2"></a>  <span class="dt">AnInt</span><span class="ot"> ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">IntOrString</span> <span class="dt">Int</span></span>
+<span id="cb24-3"><a href="#cb24-3"></a>  <span class="dt">AString</span><span class="ot"> ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">IntOrString</span> <span class="dt">String</span></span></code></pre></div>
+<p>Notice how each constructor fills in a value for the polymorphic <code>a</code> type? E.g. <code>IntOrString Int</code> where <code>a</code> is now <code>Int</code>? GHC can use this information when it's matching constructors to types. It lets us write a silly function like this:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1"></a><span class="fu">toInt</span><span class="ot"> ::</span> <span class="dt">IntOrString</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Int</span></span>
+<span id="cb25-2"><a href="#cb25-2"></a><span class="fu">toInt</span> (<span class="dt">AnInt</span> n) <span class="ot">=</span> n</span></code></pre></div>
+<p>Again, this doesn't seem too interesting, but there's something unique here. It <strong>looks</strong> like I've got an incomplete implementation for <code>toInt</code>; it lacks a case for the <code>AString</code> constructor! However, GHC is smart enough to realize that any values produced using the <code>AString</code> constructor MUST have the type <code>IntOrString String</code>, and so it knows that I don't need to handle that pattern here, in fact if I <strong>do</strong> provide a pattern match on it, GHC will display an "inaccessible code" warning!</p>
+<p>The really nifty thing is that we can choose whether to be polymorphic over the argument or not in each function definition and GHC will know which patterns can appear in each case. This means we can just as easily write this function:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1"></a><span class="ot">toString ::</span> <span class="dt">IntOrString</span> a <span class="ot">-&gt;</span> <span class="dt">String</span></span>
+<span id="cb26-2"><a href="#cb26-2"></a>toString (<span class="dt">AnInt</span> n) <span class="ot">=</span> <span class="fu">show</span> n</span>
+<span id="cb26-3"><a href="#cb26-3"></a>toString (<span class="dt">AString</span> s) <span class="ot">=</span> s</span></code></pre></div>
+<p>Since <code>a</code> might be <code>Int</code> OR <code>String</code> we need to provide an implementation for <strong>both</strong> constructors here, but note that EVEN in the polymorphic case we still know the type of the value stored in each constructor, we know that <code>AnInt</code> holds an <code>Int</code> and <code>AString</code> holds a <code>String</code>.</p>
+<p>If you're a bit confused, or just generally unconvinced, try writing <code>IntOrString</code>, <code>toInt</code> and <code>toString</code> in a type-safe manner using a regular <code>data</code> constructor, it's a good exercise (it won't work 😉). Make sure you have <code>-Wall</code> turned on as well. .</p>
+<h2 id="gadts-and-csvs">GADTs and CSVs</h2>
+<p>After that diversion, let's dive into writing a new CSV type!</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb27-1"><a href="#cb27-1"></a><span class="ot">{-# LANGUAGE GADTs #-}</span></span>
+<span id="cb27-2"><a href="#cb27-2"></a><span class="ot">{-# LANGUAGE StandaloneDeriving #-}</span></span>
+<span id="cb27-3"><a href="#cb27-3"></a></span>
+<span id="cb27-4"><a href="#cb27-4"></a><span class="kw">data</span> <span class="dt">CSV</span> <span class="fu">index</span> <span class="kw">where</span></span>
+<span id="cb27-5"><a href="#cb27-5"></a>  <span class="dt">NamedCsv</span><span class="ot">    ::</span> [<span class="dt">String</span>] <span class="ot">-&gt;</span> [[<span class="dt">String</span>]] <span class="ot">-&gt;</span> <span class="dt">CSV</span> <span class="dt">String</span></span>
+<span id="cb27-6"><a href="#cb27-6"></a>  <span class="dt">NumberedCsv</span><span class="ot"> ::</span>             [[<span class="dt">String</span>]] <span class="ot">-&gt;</span> <span class="dt">CSV</span> <span class="dt">Int</span></span>
+<span id="cb27-7"><a href="#cb27-7"></a></span>
+<span id="cb27-8"><a href="#cb27-8"></a><span class="co">-- A side-effect of using GADTs is that we need to use standalone deriving </span></span>
+<span id="cb27-9"><a href="#cb27-9"></a><span class="co">-- for our instances.</span></span>
+<span id="cb27-10"><a href="#cb27-10"></a><span class="kw">deriving</span> <span class="kw">instance</span> <span class="dt">Show</span> (<span class="dt">CSV</span> i)</span>
+<span id="cb27-11"><a href="#cb27-11"></a><span class="kw">deriving</span> <span class="kw">instance</span> <span class="dt">Eq</span>   (<span class="dt">CSV</span> i)</span></code></pre></div>
+<p>This type has two constructors, one for a CSV with headers and one without. We're specifying a polymorphic <code>index</code> type variable and saying that CSVs with headers are specifically indexed by <code>String</code> and CSVs without headers are indexed by <code>Int</code>. Notice that it's okay for us to specify a specific type for the <code>index</code> parameter even though it's a phantom-type (i.e. we don't actually store the <code>index</code> type inside our structure anywhere).</p>
+<p>Let's implement our CSV functions again and see how they look.</p>
+<p>We still need the end-user to specify whether to parse headers or not, but we can use another <strong>GADT</strong> to reflect their choice in the type, and propagate that to the resulting CSV. Here's what a CSV selector type looks like where each constructor carries some type information with it (i.e. whether the resulting CSV is either String or Int indexed).</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb28-1"><a href="#cb28-1"></a><span class="kw">data</span> <span class="dt">CSVType</span> i <span class="kw">where</span></span>
+<span id="cb28-2"><a href="#cb28-2"></a>  <span class="dt">Named</span><span class="ot"> ::</span> <span class="dt">CSVType</span> <span class="dt">String</span></span>
+<span id="cb28-3"><a href="#cb28-3"></a>  <span class="dt">Numbered</span><span class="ot"> ::</span> <span class="dt">CSVType</span> <span class="dt">Int</span></span>
+<span id="cb28-4"><a href="#cb28-4"></a></span>
+<span id="cb28-5"><a href="#cb28-5"></a><span class="kw">deriving</span> <span class="kw">instance</span> <span class="dt">Show</span> (<span class="dt">CSVType</span> i)</span>
+<span id="cb28-6"><a href="#cb28-6"></a><span class="kw">deriving</span> <span class="kw">instance</span> <span class="dt">Eq</span> (<span class="dt">CSVType</span> i)</span></code></pre></div>
+<p>Now we can write <code>decode</code> like this:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb29-1"><a href="#cb29-1"></a><span class="ot">decode ::</span> <span class="dt">CSVType</span> i <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">CSV</span> i)</span>
+<span id="cb29-2"><a href="#cb29-2"></a>decode <span class="dt">Named</span> s <span class="ot">=</span> <span class="kw">case</span> splitOn <span class="ch">&#39;,&#39;</span> <span class="op">&lt;$&gt;</span> <span class="fu">lines</span> s <span class="kw">of</span></span>
+<span id="cb29-3"><a href="#cb29-3"></a>    (h<span class="op">:</span>xs) <span class="ot">-&gt;</span> <span class="dt">Just</span> <span class="op">$</span> <span class="dt">NamedCsv</span> h xs</span>
+<span id="cb29-4"><a href="#cb29-4"></a>    _ <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span>
+<span id="cb29-5"><a href="#cb29-5"></a>decode <span class="dt">Numbered</span> s <span class="ot">=</span> <span class="dt">Just</span> <span class="op">.</span> <span class="dt">NumberedCsv</span> <span class="op">.</span> <span class="fu">fmap</span> (splitOn <span class="ch">&#39;,&#39;</span>) <span class="op">.</span> <span class="fu">lines</span> <span class="op">$</span> s</span></code></pre></div>
+<p>By accepting <code>CSVType</code> as an argument it acts as a proxy for the type information we need. We can provide then provide a separate implementation for each csv-type easily, and the index type provided on the <code>CSVType</code> option is propagated to the result, thus determining the type of the output CSV too!</p>
+<p>Now for <code>getColumnByIndex</code> and <code>getColumnByNumber</code>; in the typeclass version we needed to provide an implementation for each class instance, using GADTs we can collapse everything down to a single implementation for function.</p>
+<p>Here's <code>getColumnByIndex</code>:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb30-1"><a href="#cb30-1"></a><span class="ot">getColumnByIndex ::</span> i <span class="ot">-&gt;</span> <span class="dt">CSV</span> i <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb30-2"><a href="#cb30-2"></a>getColumnByIndex  columnName (<span class="dt">NamedCsv</span> headers rows) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb30-3"><a href="#cb30-3"></a>    columnIndex <span class="ot">&lt;-</span> elemIndex columnName headers</span>
+<span id="cb30-4"><a href="#cb30-4"></a>    <span class="fu">traverse</span> (safeIndex columnIndex) rows</span>
+<span id="cb30-5"><a href="#cb30-5"></a>getColumnByIndex n (<span class="dt">NumberedCsv</span> rows) <span class="ot">=</span> <span class="fu">traverse</span> (safeIndex n) rows</span></code></pre></div>
+<p>The type signature says, if you give me the index type which matches the index to the CSV you provide, I can get you that column if it exists. It's smarter than it looks!</p>
+<p>Even though the GADT constructor comes after the first argument, by pattern matching on it we can determine the type of <code>i</code>, and we then know that the first argument must match that <code>i</code> type. So when we match on <code>NamedCsv</code> the first argument is a <code>String</code>, and when we match on <code>NumberedCsv</code> it's guaranteed to be an <code>Int</code></p>
+<p>In the original "simple" CSV implementation you could try indexing into a numbered CSV with a <code>String</code> header and it would always return a <code>Nothing</code>, now it's actually a type error; we've prevented a whole failure mode!</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb31-1"><a href="#cb31-1"></a><span class="co">-- Decode our input into a CSV with numbered columns</span></span>
+<span id="cb31-2"><a href="#cb31-2"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> <span class="dt">Just</span> result <span class="ot">=</span> decode <span class="dt">Numbered</span> input</span>
+<span id="cb31-3"><a href="#cb31-3"></a><span class="op">&gt;&gt;&gt;</span> result</span>
+<span id="cb31-4"><a href="#cb31-4"></a><span class="dt">NumberedCsv</span> [</span>
+<span id="cb31-5"><a href="#cb31-5"></a>  [<span class="st">&quot;Name&quot;</span>,<span class="st">&quot;Age&quot;</span>,<span class="st">&quot;Home&quot;</span>],</span>
+<span id="cb31-6"><a href="#cb31-6"></a>  [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;19&quot;</span>,<span class="st">&quot;Tatooine&quot;</span>],</span>
+<span id="cb31-7"><a href="#cb31-7"></a>  [<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;19&quot;</span>,<span class="st">&quot;Alderaan&quot;</span>],</span>
+<span id="cb31-8"><a href="#cb31-8"></a>  [<span class="st">&quot;Han&quot;</span>,<span class="st">&quot;32&quot;</span>,<span class="st">&quot;Corellia&quot;</span>]]</span>
+<span id="cb31-9"><a href="#cb31-9"></a><span class="co">-- Here&#39;s what happens if we try to write the wrong index type!</span></span>
+<span id="cb31-10"><a href="#cb31-10"></a><span class="op">&gt;&gt;&gt;</span> getColumnByIndex <span class="st">&quot;Name&quot;</span> result</span>
+<span id="cb31-11"><a href="#cb31-11"></a>    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="dt">Int</span>’ with ‘<span class="dt">String</span>’</span>
+<span id="cb31-12"><a href="#cb31-12"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">String</span></span>
+<span id="cb31-13"><a href="#cb31-13"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">Int</span></span></code></pre></div>
+<p>It works fine if provide an index which matches the way we decoded:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb32-1"><a href="#cb32-1"></a><span class="co">-- By number using `Numbered`</span></span>
+<span id="cb32-2"><a href="#cb32-2"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Numbered</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="dv">0</span></span>
+<span id="cb32-3"><a href="#cb32-3"></a><span class="dt">Just</span> [<span class="st">&quot;Name&quot;</span>,<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span>
+<span id="cb32-4"><a href="#cb32-4"></a><span class="co">-- ...Or by header name using `Named`</span></span>
+<span id="cb32-5"><a href="#cb32-5"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb32-6"><a href="#cb32-6"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span></code></pre></div>
+<p>When indexing by number we can ignore the index type of the CSV entirely, since we know we can index either a Named or Numbered CSV by column number regardless.</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb33-1"><a href="#cb33-1"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">CSV</span> i <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb33-2"><a href="#cb33-2"></a>getColumnByNumber n (<span class="dt">NamedCsv</span> _ rows) <span class="ot">=</span> <span class="fu">traverse</span> (safeIndex n) rows</span>
+<span id="cb33-3"><a href="#cb33-3"></a>getColumnByNumber n (<span class="dt">NumberedCsv</span> rows) <span class="ot">=</span> <span class="fu">traverse</span> (safeIndex n) rows</span></code></pre></div>
+<p>In an earlier attempt we ran into problems writing <code>getHeaders</code>, since we <strong>knew</strong> intuitively that it should always be safe to return the headers from a "Named" csv, but we needed to introduce a <code>Maybe</code> into the type since we couldn't be sure of the type of the CSV argument!</p>
+<p>Now that the CSV has the index as part of the type we can solve that handily by restricting the possible inputs the correct CSV type:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb34-1"><a href="#cb34-1"></a><span class="ot">getHeaders ::</span> <span class="dt">CSV</span> <span class="dt">String</span> <span class="ot">-&gt;</span> [<span class="dt">String</span>]</span>
+<span id="cb34-2"><a href="#cb34-2"></a>getHeaders (<span class="dt">NamedCsv</span> headers _) <span class="ot">=</span> headers</span></code></pre></div>
+<p>We don't need to match on <code>NumberedCsv</code>, since it has type <code>CSV Int</code>, and that omission allows us to remove the need for a <code>Maybe</code> from the signature. Pretty slick!</p>
+<p>This is the brilliance of <strong>GADTs</strong> in this approach, we can be general when we want to be general, or specific when we want to be specific.</p>
+<p>The interfaces provided by each approach look relatively similar at the end of the day. The typeclass signatures have a fully polymorphic variable with a type constraint AND a type family, whereas the GADT signatures are simpler, including only a polymorphic index type, and the consumers of the library won't need to know anything about GADTs in order to use it.</p>
+<p>The typeclass approach:</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb35-1"><a href="#cb35-1"></a><span class="ot">decode ::</span> <span class="dt">IsCSV</span> c <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> c</span>
+<span id="cb35-2"><a href="#cb35-2"></a><span class="ot">getColumnByIndex ::</span> <span class="dt">IsCSV</span> c <span class="ot">=&gt;</span> <span class="dt">Index</span> c <span class="ot">-&gt;</span> c <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb35-3"><a href="#cb35-3"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">IsCSV</span> c <span class="ot">=&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> c <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb35-4"><a href="#cb35-4"></a><span class="ot">getHeaders ::</span> <span class="dt">IsCSV</span> c <span class="ot">=&gt;</span> c <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>The GADT approach:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb36-1"><a href="#cb36-1"></a><span class="ot">decode ::</span> <span class="dt">CSVType</span> i <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> (<span class="dt">CSV</span> i)</span>
+<span id="cb36-2"><a href="#cb36-2"></a><span class="ot">getColumnByIndex ::</span> i <span class="ot">-&gt;</span> <span class="dt">CSV</span> i <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb36-3"><a href="#cb36-3"></a><span class="ot">getColumnByNumber ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">CSV</span> i <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb36-4"><a href="#cb36-4"></a><span class="ot">getHeaders ::</span> <span class="dt">CSV</span> <span class="dt">String</span> <span class="ot">-&gt;</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>Though similar, I find the GADT version easier to understand as a consumer, everything you need to know is available to you, and you can look up the <code>CSV</code> type to learn more about how to build one, or which types are available.</p>
+<p>The GADT types also result in simpler type errors when something goes wrong.</p>
+<p>Here's one common problem with the <strong>typeclass approach</strong>, decode has a <strong>polymorphic result</strong> and <code>getColumnByIndex</code> has a polymorphic argument, GHC can't figure out what the intermediate type should be if we string them together:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb37-1"><a href="#cb37-1"></a><span class="op">&gt;&gt;&gt;</span> decode input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb37-2"><a href="#cb37-2"></a>    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="dt">Index</span> c0’ with ‘<span class="dt">String</span>’</span>
+<span id="cb37-3"><a href="#cb37-3"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">Index</span> c0</span>
+<span id="cb37-4"><a href="#cb37-4"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">String</span></span>
+<span id="cb37-5"><a href="#cb37-5"></a>      <span class="dt">The</span> <span class="kw">type</span> variable ‘c0’ is ambiguous</span>
+<span id="cb37-6"><a href="#cb37-6"></a>    • <span class="dt">In</span> the first argument <span class="kw">of</span> ‘getColumnByIndex’, namely</span>
+<span id="cb37-7"><a href="#cb37-7"></a>        ‘(<span class="st">&quot;Hi&quot;</span><span class="ot"> ::</span> <span class="dt">String</span>)’</span>
+<span id="cb37-8"><a href="#cb37-8"></a>      <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">&gt;&gt;=</span>)’, namely</span>
+<span id="cb37-9"><a href="#cb37-9"></a>        ‘getColumnByIndex (<span class="st">&quot;Hi&quot;</span><span class="ot"> ::</span> <span class="dt">String</span>)’</span>
+<span id="cb37-10"><a href="#cb37-10"></a>      <span class="dt">In</span> the expression<span class="op">:</span></span>
+<span id="cb37-11"><a href="#cb37-11"></a>        decode input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="st">&quot;Hi&quot;</span><span class="ot"> ::</span> <span class="dt">String</span>)</span></code></pre></div>
+<p>We can fix this with an explicit type application, but that requires us to know the underlying type that implements the instance.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb38-1"><a href="#cb38-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">type</span> <span class="dt">Named</span> <span class="ot">=</span> ([<span class="dt">String</span>], [[<span class="dt">String</span>]])</span>
+<span id="cb38-2"><a href="#cb38-2"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="op">@</span><span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb38-3"><a href="#cb38-3"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span></code></pre></div>
+<p>If we mismatch the index type here, even when providing an explicit type annotation, we get a slightly confusing error since it still mentions a type family:</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb39-1"><a href="#cb39-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="op">@</span><span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)</span>
+<span id="cb39-2"><a href="#cb39-2"></a>    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="dt">Int</span>’ with ‘<span class="dt">String</span>’</span>
+<span id="cb39-3"><a href="#cb39-3"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">Index</span> <span class="dt">Named</span></span>
+<span id="cb39-4"><a href="#cb39-4"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">Int</span></span>
+<span id="cb39-5"><a href="#cb39-5"></a>    • <span class="dt">In</span> the first argument <span class="kw">of</span> ‘getColumnByIndex’, namely ‘(<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)’</span>
+<span id="cb39-6"><a href="#cb39-6"></a>      <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">&gt;&gt;=</span>)’, namely</span>
+<span id="cb39-7"><a href="#cb39-7"></a>        ‘getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)’</span>
+<span id="cb39-8"><a href="#cb39-8"></a>      <span class="dt">In</span> the expression<span class="op">:</span></span>
+<span id="cb39-9"><a href="#cb39-9"></a>        decode <span class="op">@</span><span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)</span></code></pre></div>
+<p>Compare these to the errors generated by the GADT approach; first we'll chain <code>decode</code> with <code>getColumnByIndex</code>:</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb40-1"><a href="#cb40-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex <span class="st">&quot;Name&quot;</span></span>
+<span id="cb40-2"><a href="#cb40-2"></a><span class="dt">Just</span> [<span class="st">&quot;Luke&quot;</span>,<span class="st">&quot;Leia&quot;</span>,<span class="st">&quot;Han&quot;</span>]</span></code></pre></div>
+<p>There's no ambiguity here! We only have a single CSV type to choose, and the "index" type variable is fully determined by the <code>Named</code> argument. Very nice!</p>
+<p>What if we try to index by number instead?</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb41-1"><a href="#cb41-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)</span>
+<span id="cb41-2"><a href="#cb41-2"></a><span class="fu">error</span><span class="op">:</span></span>
+<span id="cb41-3"><a href="#cb41-3"></a>    • <span class="dt">Couldn&#39;t</span> match <span class="kw">type</span> ‘<span class="dt">String</span>’ with ‘<span class="dt">Int</span>’</span>
+<span id="cb41-4"><a href="#cb41-4"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb41-5"><a href="#cb41-5"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb41-6"><a href="#cb41-6"></a>    • <span class="dt">In</span> the second argument <span class="kw">of</span> ‘(<span class="op">&gt;&gt;=</span>)’, namely</span>
+<span id="cb41-7"><a href="#cb41-7"></a>        ‘getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)’</span>
+<span id="cb41-8"><a href="#cb41-8"></a>      <span class="dt">In</span> the expression<span class="op">:</span></span>
+<span id="cb41-9"><a href="#cb41-9"></a>        decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)</span>
+<span id="cb41-10"><a href="#cb41-10"></a>      <span class="dt">In</span> an equation for ‘it’<span class="op">:</span></span>
+<span id="cb41-11"><a href="#cb41-11"></a>          it <span class="ot">=</span> decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getColumnByIndex (<span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Int</span>)</span></code></pre></div>
+<p>It clearly outlines the expected and actual types:</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb42-1"><a href="#cb42-1"></a>      <span class="dt">Expected</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span>
+<span id="cb42-2"><a href="#cb42-2"></a>        <span class="dt">Actual</span> <span class="kw">type</span><span class="op">:</span> <span class="dt">CSV</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> [<span class="dt">String</span>]</span></code></pre></div>
+<p>Which should be enough for the user to spot their mistake and patch it up.</p>
+<h2 id="next-steps">Next steps</h2>
+<p>Still unconvinced? Try taking it a step further!</p>
+<p>Try writing <code>getRow</code> and <code>getColumn</code> functions for both the typeclass and GADT approaches. The row that's returned should support type-safe index by <code>String</code> or <code>Int</code> depending on the type of the source CSV.</p>
+<p>E.g. the GADT version should look like this:</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb43-1"><a href="#cb43-1"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Named</span> input <span class="op">&gt;&gt;=</span> getRow <span class="dv">1</span> <span class="op">&gt;&gt;=</span> getColumn <span class="st">&quot;Name&quot;</span></span>
+<span id="cb43-2"><a href="#cb43-2"></a><span class="dt">Just</span> <span class="st">&quot;Leia&quot;</span></span>
+<span id="cb43-3"><a href="#cb43-3"></a><span class="op">&gt;&gt;&gt;</span> decode <span class="dt">Numbered</span> input <span class="op">&gt;&gt;=</span> getRow <span class="dv">1</span> <span class="op">&gt;&gt;=</span> getColumn <span class="dv">0</span></span>
+<span id="cb43-4"><a href="#cb43-4"></a><span class="dt">Just</span> <span class="st">&quot;Leia&quot;</span></span></code></pre></div>
+<p>You'll likely run into a rough patch or two when specifying different Row result types in the typeclass approach (but it's certainly possible, good luck!)</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>This was just a peek at how typeclasses and GADTs can <em>sometimes</em> overlap in the design space. When trying to decide whether to use GADTs or a typeclass for a given problem, try asking the following question:</p>
+<p>Will users of my library need to define instances for their own datatypes?</p>
+<p>If the answer is <strong>no</strong>, a GADT is often clearer, cleaner, and has better type inference properties than the equivalent typeclass approach!</p>
+<p>For a more in-depth "real world" example of this technique in action check out my <code>lens-csv</code> library. It provides lensy combinators for interacting with either of named or numbered CSVs in a streaming fashion, and uses the <strong>GADT</strong> approach to (I believe) great effect.</p>
+<p>Enjoy playing around!</p>
+        <p>Hopefully you learned something 🤞! Did you know I'm currently writing a book? It's all about Lenses and Optics! It takes you all the way from beginner to optics-wizard and it's currently in early access! Consider supporting it, and more posts like this one by pledging on my <a
+            href="https://www.patreon.com/bePatron?u=7263362">Patreon page</a>! It takes quite a bit of work to put
+        these things together, if I managed to teach your something or even just entertain you for a minute or two
+        maybe send a few bucks my way for a coffee? Cheers! 🍻</p>
+    <div class="centered"> <a href="https://www.patreon.com/bePatron?u=7263362"><img width="170" height="40" src="data:image/png;base64,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" alt="Become a Patron!"></a></div>
+              ]]></content>
+      </entry>
   <entry>
       <title>Virtual Record Fields Using Lenses</title>
       <link href="https://chrispenner.ca/posts/virtual-fields"/>
