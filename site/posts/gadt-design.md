@@ -28,7 +28,7 @@ In its essence, a CSV is really just a list of **rows** and each **row** is just
 
 This means we can model the data in a CSV using a simple type like `[[String]]`, so far, so simple! There's a bit of a catch here though. Although it's clear to us humans that `Name,Age,Home` is the **header row** for this CSV, there's no marker in the CSV itself to indicate that! It's up to the user of the library to specify whether to treat the first row of a CSV as a header or not, and herein lies our challenge!
 
-Depending on whether the CSV has a header row or not, the user of our library will want to reference the CSV columns by a either a **column name** or **column number** respectively.  In a **dynamic language** (like Python) this is easily handled, we would provide separate methods for indexing columns by either header name or column number, and it would be the programmer's job to keep track of when to use which. In a strongly-typed language like Haskell however, we prefer to prevent such mistakes at compile time. Effectively, we want to give the programmer jigsaw pieces that only fit together in a way that works!
+Depending on whether the CSV has a header row or not, the user of our library will want to reference the CSV columns by either a **column name** or **column number**.  In a **dynamic language** (like Python) this is easily handled. We would provide separate methods for indexing columns by either header name or column number, and it would be the programmer's job to keep track of when to use which. In a strongly-typed language like Haskell however, we prefer to prevent such mistakes at compile time. Effectively, we want to give the programmer jigsaw pieces that only fit together in a way that works!
 
 For the sake of pedagogy our miniature CSV library will perform the following tasks:
 
@@ -39,7 +39,7 @@ For the sake of pedagogy our miniature CSV library will perform the following ta
 
 First things first we'll need a `decode` function to parse the CSV into a more structured type. In a production environment you'd likely use performant types like `ByteString` and `Vector`, but for our toy parser we'll stick to the types provided by the Prelude.
 
-Since this is a post about GADTs and not CSVs encodings, we won't worry about escaping or quoting here.  We can just do the naive thing and split our rows into cells on every comma. The Prelude, unfortunately, provides `lines` and `words`, but doesn't provide a more generic splitting function, so I'll whip one up to suit our needs.
+Since this is a post about GADTs and not CSVs encodings we won't worry about comma-escaping or quoting here,  We'll do the naive thing and split our rows into cells on every comma. The Prelude, unfortunately, provides `lines` and `words`, but doesn't provide a more generic splitting function, so I'll whip one up to suit our needs.
 
 Here's a function which splits a string on commas in such a way that each "cell" is separated in the resulting list.
 
@@ -63,18 +63,18 @@ We can try it out to ensure it works as expected:
 >>> splitOn ',' "a,b,c"
 ["a","b","c"]
 
--- Remember that CSV cells might be empty and we need it to handle that:
+-- Remember that CSV cells might be empty and we need it to handle that properly:
 >>> splitOn ',' ",,"
 ["","",""]
 ```
 
-Now we'll write a type to represent our CSV structure, it will have a constructor for a CSV with headers, one for a CSV without headers:
+Now we'll write a type to represent our CSV structure. We'll define two constructors: one for a CSV with headers, one for a CSV without headers.
 
 ```haskell
 data CSV =
-      -- A CSV with headers has named columns
+      -- A CSV with headers includes a list of headers
       NamedCsv [String] [[String]]
-      -- A CSV without headers has numbered columns
+      -- A CSV without headers contains only the CSV rows
     | NumberedCsv [[String]]
     deriving (Show, Eq)
 ```
@@ -82,12 +82,12 @@ data CSV =
 Great, now we can write our first attempt of a decoding function. The implementation isn't really important here, so just focus on the type!
 
 ```haskell
-decode :: Bool -- Whether to parse a header row or not
-       -> String -- The csv file
-       -> Maybe CSV -- We'll return "Nothing" if anything is wrong
+decode :: Bool -- ^ Whether to parse a header row or not
+       -> String --  ^ The csv file
+       -> Maybe CSV --  ^ We'll return "Nothing" if anything fails
 ```
 
-And here's the implementation just in case you're following along at home:
+And here's our implementation just in case you're following along at home:
 
 ```haskell
 -- Parse a header row
@@ -103,14 +103,16 @@ decode False input =
 
 Simple enough; we create a CSV with the correct constructor based on whether we expect headers or not.
 
-Now let's write a function to get a whole column of the CSV. Here's where things get a bit more interesting:
+So what if we want to get all of the names from our CSV? Let's write a function 
+to get all the values of a specific column. Here's where things get a bit more interesting:
 
 ```haskell
 getColumnByNumber :: CSV -> Int    -> Maybe [String]
 getColumnByName   :: CSV -> String -> Maybe [String]
 ```
 
-Since each type of CSV takes a different index type we need two different functions in order to do effectively the same thing; let's see the implementations:
+Since each type of CSV takes a different index type we need a different function
+for each of the index types. Let's implement them!
 
 ```haskell
 -- A safe indexing function to get elements by index.
@@ -136,13 +138,13 @@ getColumnByName columnName (NamedCsv headers rows) = do
     traverse (safeIndex columnIndex) rows
 ```
 
-This works of course, but it _feels_ like we're programming in a dynamic language! If you try to get a column **by name** from a **numbered CSV** we know it will ALWAYS fail, so why do we even allow the programmer to express that? Certainly it should fail to typecheck instead! 
+This works of course, but it feels like we're programming in a **dynamic language**! If you try to get a column **by name** from a **numbered CSV** we know it will ALWAYS fail, so why do we even allow the programmer to express that? Certainly it should fail to typecheck instead.
 
 ```haskell
 >>> decode True input >>= getColumnByName "Name"
 Just ["Luke","Leia","Han"]
 
--- We'll get 'Nothing' no matter what if we index a numbered csv by name!
+-- If we index a numbered CSV by name we'll get 'Nothing' no matter what.
 >>> decode False input >>= getColumnByName "Name"
 Nothing
 ```
@@ -159,7 +161,7 @@ Or this one?
 getHeaders :: CSV -> Maybe [String]
 ```
 
-We could pick the first signature and always return the empty list `[]` if someone mistakenly tries to get the headers of a numbered CSV, but that seems a bit disingenuous; It's common to check the number of columns in a CSV by counting the headers, and it's not that every numbered CSV has zero columns! If we go with the latter signature it properly handles the failure case of calling `getHeaders` on a numbered CSV, but we know that getting the headers from a `NamedCSV` should **never** fail, so in that case we're adding a bit of unnecessary overhead, all callers will have to unwrap `Maybe` in that case no matter what 😬.
+We could pick the first signature and always return the _empty list_ when someone mistakenly tries to get the headers of a numbered CSV, but that seems a bit disingenuous; It's common to check the number of columns in a CSV by counting the headers, and that approach would imply that every numbered CSV has zero columns! If we go with the latter signature it properly handles the failure case of calling `getHeaders` on a numbered CSV, but we know that getting the headers from a `NamedCSV` should **never** fail, so in that case we're adding a bit of unnecessary overhead, all callers will have to unwrap `Maybe` in that case no matter what 😬.
 
 In order to fix this issue we'll need to go back to the drawing board and see if we can keep track of whether our CSV has headers inside its **type**.
 
@@ -175,14 +177,16 @@ decodeWithoutHeaders :: String -> Maybe [[String]]
 decodeWithHeaders    :: String -> Maybe ([String], [[String]])
 ```
 
-Next we could would implement:
+Next we could implement:
 
 ```haskell
 getColumnByNumber :: Int -> [[String]]             -> Maybe [String]
 getColumnByName   :: Int -> ([String], [[String]]) -> Maybe [String]
 ```
 
-This solves the problem at hand, if we decode a CSV without headers we'll have a `[[String]]` value, and can't pass that into `getColumnByName`.  However, there are a few minor annoyances with this approach.  Notice how we can no longer use `getColumnByNumber` to get a column by number on a CSV which has headers? Of course we could could `snd` it into `[[String]]` first, but converting between types everywhere is annoying and also means we **can't write code which is polymorphic over both kinds of CSV**. Ideally we would have a single set of functions which was _smart_ about which type of CSV so it could do **the right thing** while also ensuring type-safety.
+This solves the problem at hand, if we decode a CSV without headers we'll have a `[[String]]` value, and can't pass that into `getColumnByName`.  However there's an issue with this approach:  We can no longer use `getColumnByNumber` to get a column by number on a CSV which has headers.
+
+We could, of course we could could `snd` it into `[[String]]` first, but converting between types everywhere is annoying and also means we **can't write code which is polymorphic over both kinds of CSV**. Ideally we would have a single set of functions which was _smart_ about which type of CSV so it could do **the right thing** while also ensuring type-safety.
 
 Some readers are likely thinking "Hrmmm, a **group of functions polymorphic over a type**? Sounds like a **typeclass**!" and you'd be right! As it turns out, this is roughly the approach that the popular [`cassava`](https://hackage.haskell.org/package/cassava) library takes to its library design.
 
@@ -274,7 +278,7 @@ Just ["Luke","Leia","Han"]
 Just ["Luke","Leia","Han"]
 ```
 
-This works out okay, it's by no means "unusable", but let's take a look at how GADTs can allow us to encourage better error messages while also making it easier to read, and reduce the required boilerplate all at once!
+This works out okay but it's unintuitive to users to *need* a type annotation. Let's take a look at how GADTs can allow us to encourage better error messages while also making it easier to read, and reduce the amount of boilerplate required.
 
 ## The GADT approach
 
