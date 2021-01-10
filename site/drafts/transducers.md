@@ -473,7 +473,7 @@ type OldTransducer r i o = RF r o -> (RF r i)
 type Transducer r i o = RF r o -> IO (RF r i)
 ```
 
-This change takes place in the type of the transducer itself, but otherwise looks to be the same idea! We're wrapping the result of our transformation function in IO so that we can use effects, its just that this time we're modifying our transformation OVER a reducing function, rather than modifying a reducing function itself.
+This change takes place in the type of the transducer itself, but otherwise looks to be the same idea! We're wrapping the result of our transformation function in IO so that we can use effects, its just that this time we're modifying our transformation OVER a reducing function, rather than modifying a reducing function itself. This provides us with a "setup" phase which is run when producing the pipeline. We can use this setup to initialize any state we might need within the reducing function. We'll usually use it to allocate stateful variables like IORefs.
 
 Just like last time we'll need to edit all of our existing definitions to support this tweak. We'll only do this one more time I promise.
 
@@ -619,4 +619,178 @@ For those who are wondering; yes, you could also wrap each transducer in somethi
 [[2,4,6],[8,10,12],[14,16,18],[20]]
 ```
 
-This example takes the integers from 1 through 20, selects only the even numbers, then batches them up into lists of 3. We can see that our completion handler has successfully flushed the 'leftovers' because we have a list of the single element `20` in our output.
+This example takes the integers from 1 through 20, selects only the even numbers, then batches them up into lists of 3. We can see that our completion handler has successfully flushed the 'leftovers' because we have a list containing the single element `20` in our output.
+
+## Early Termination
+
+We've almost done it! We have one last feature left to achieve feature parity with Clojure's transducers. We need to implement the idea of "Early Termination".
+
+The concept is quite simple; any link in our transducer chain, including the final sink, can decide at any point to abandon the computation and stop the whole process. This can occur in response to an unrecoverable error, or in more mundane circumstances such as a transducer like `take 3` where there's no need to continue working after it has received three elements.
+
+The Clojure implementation accomplishes this by using a [Sentinel Value](https://en.wikipedia.org/wiki/Sentinel_value#:~:text=In%20computer%20programming%2C%20a%20sentinel,a%20loop%20or%20recursive%20algorithm.), specifically they use a value-wrapper called `Reduced` to wrap the result value. Transducers can use the predicate `reduced?` to check whether a result has been wrapped in `Reduced`, and should subsequently avoid calling that reducing function with any more input.
+
+We can easily port this idea into Haskell by adding a new wrapper type that behaves the same way:
+
+
+```haskell
+data Result r = 
+      Continue r
+    | Stop r
+```
+
+By returning this new `Result` wrapper from our reducing functions we allow each transducer to handle a request to abort the computation. Here's what the new `RF` looks like:
+
+```haskell
+type OldRF r i = Input r i -> IO r
+
+type    RF r i = Input r i -> IO (Result r)
+```
+
+As before, we'll need to update a few of our implementations to thread the `Result` through, but I promise this will be the last time!
+
+At this point we're pros at this, so here's the everything we've built with the final tweaks needed to handle the `Result` types. Don't worry, I'll highlight a few interesting parts if you don't feel like reading everything through.
+
+```haskell
+import Data.IORef ( atomicModifyIORef', newIORef, readIORef )
+import Data.Foldable ( Foldable(toList) )
+
+data Input r i =
+      Init
+    | Completion r
+    | Step r i
+  deriving Show
+
+data Result r =
+      Continue r
+    | Stop r
+  deriving Show
+
+type RF r i = Input r i -> IO (Result r)
+type Transducer r i o = RF r o -> IO (RF r i)
+
+getResult :: Result r -> r
+getResult (Continue r) = r
+getResult (Stop r) = r
+
+mapT :: (i -> o) -> Transducer r i o
+mapT f rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i -> rf (Step r (f i))
+
+toRF :: r -> (r -> o -> IO r) -> RF r o
+toRF initialR _step Init = pure (Continue initialR)
+toRF _initialR _step (Completion r) = pure (Continue r)
+toRF _initialR step (Step r o) = fmap Continue (step r o)
+
+accumList :: RF [a] a
+accumList = toRF [] (\r o -> pure $ r <> [o])
+
+sumAll :: Num n => RF n n
+sumAll = toRF 0 (\a b -> pure $ a + b)
+
+foldWithResult :: RF r i -> [i] -> r -> IO (Result r)
+foldWithResult _ [] r = pure $ Continue r
+foldWithResult rf (i:rest) result  = do
+    rf (Step result i) >>= \case
+        Stop nextResult -> pure (Stop nextResult)
+        Continue nextResult -> foldWithResult rf rest nextResult
+
+transduce :: forall r f i o. Foldable f => Transducer r i o -> RF r o -> Maybe r -> f i -> IO r
+transduce xf rf maybeInitial inputs = do
+    xform <- xf rf
+    initialResult <- case maybeInitial of
+                       Just initialR -> pure initialR
+                       Nothing -> getResult <$> xform Init
+    foldWithResult xform (toList inputs) initialResult >>= \case
+      Stop r -> pure r
+      Continue r -> getResult <$> xform (Completion r)
+
+filterT :: (i -> Bool) -> Transducer r i i
+filterT keep rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i ->
+      if keep i then rf (Step r i)
+                else pure (Continue r)
+
+catT :: forall r f i. Foldable f => Transducer r (f i) i
+catT rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r inputs -> foldWithResult rf (toList inputs) r
+
+tapT :: Show i => Transducer r i i
+tapT rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i -> print i >> rf (Step r i)
+
+partitionT :: Int -> Transducer r i [i]
+partitionT size rf = do
+  buffer <- newIORef []
+  pure $ \case
+    Init -> rf Init
+    Completion r -> do
+      leftovers <- readIORef buffer
+      if not . null $ leftovers
+        then rf (Step r leftovers)
+        else pure (Continue r)
+    Step r i -> do
+      emission <- atomicModifyIORef' buffer (updateBuffer i)
+      case emission of
+        Just is -> rf (Step r is)
+        Nothing -> pure (Continue r)
+  where
+    updateBuffer :: a -> [a] -> ([a], Maybe [a])
+    updateBuffer a xs =
+        if length (xs <> [a]) == size
+           then ([], Just (xs <> [a]))
+           else ((xs <> [a]), Nothing)
+```
+
+I've added a new folding combinator to help us out:
+
+```haskell
+foldWithResult :: RF r i -> [i] -> r -> IO (Result r)
+foldWithResult _ [] r = pure $ Continue r
+foldWithResult rf (i:rest) result  = do
+    rf (Step result i) >>= \case
+        Stop nextResult -> pure (Stop nextResult)
+        Continue nextResult -> foldWithResult rf rest nextResult
+```
+
+This function folds a reducing function over a list of inputs, but will short circuit if it is ever told to `Stop`. We use this fold within `catT` and `transduce` since those are the only places where we need to decide whether to continue partway through an iteration.
+
+Last of all we'll need to write a transducer which uses this feature so that we're able to test it out. Clojure has an example in the way of `halt-when`, which will halt the entire pipeline if a predicate is true on its input.
+
+```haskell
+haltWhenT :: (i -> Bool) -> Transducer r i i
+haltWhenT predicate rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i ->
+        if predicate i then pure $ Stop r
+                       else rf (Step r i)
+```
+
+This bears a lot of similarity to `filterT`, it checks each input to see if the predicate passes, and if it does, it returns the `Stop` result instead of calling through. Let's try it:
+
+```haskell
+>>> let pipeline = filterT even <=< tapT <=< haltWhenT (>10)
+>>> result <- transduce pipeline accumList Nothing [1..20]
+2
+4
+6
+8
+10
+12
+>>> result
+[2,4,6,8,10]
+```
+
+Here we can see using `tapT` that we process inputs up to and including `12`, but as soon as `haltWhen` receives `12`, which is greater than `10`, it halts execution and doesn't pass the `12` to the final step. We can also see from this that we've successfully implemented the **laziness**  that is expected from transducers, we didn't process any more elements than we needed, with the exception of the 12 which was needed to trigger our termination condition.
+
+## In Summary
+
+
