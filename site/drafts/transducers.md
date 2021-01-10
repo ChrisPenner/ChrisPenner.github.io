@@ -61,9 +61,7 @@ Transducers implement all of the following aspects which we'll do our best to re
 * Cancelling the entire transduction pipeline (e.g. on an unrecoverable error)
 * Initialization: Transducers can optionally provide a "default" value on a run without input.
 
-## Faithful Implementation
-
-### Writing our first Transducer
+## Writing our first Transducer
 
 Let's look at some clojure code! Again, watching the [introduction talk](https://www.youtube.com/watch?v=6mTbuzafcII) is the best way to understand this, but I'll do my best to provide a basic understanding. 
 
@@ -201,7 +199,7 @@ The `Maybe r` is an optional starting value for the accumulation. If `Nothing` i
 
 Lastly is `f i`, which is the Haskell way to represent an arbitrary collection of inputs. The `Foldable` constraint we saw earlier provides an interface for us to consume elements of `f i` one by one. We could pass a list, key-value map, or a Set of inputs here and transduce will pull inputs from the collection for the pipeline.
 
-Here's the implmentation:
+Here's the implementation:
 
 ```haskell
 import Data.Foldable ( Foldable(foldl') )
@@ -209,12 +207,13 @@ import Data.Maybe ( fromMaybe )
 
 transduce :: forall r f i o. Foldable f => Transducer r i o -> RF r o -> Maybe r -> f i -> r
 transduce xf rf maybeInitial inputs =
-    foldl' step initalResult (toList inputs)
+    let result = foldl' step initialResult inputs
+     in xform (Completion result)
   where
     xform :: RF r i
     xform = xf rf
-    initalResult :: r
-    initalResult = (fromMaybe (xform Init) maybeInitial)
+    initialResult :: r
+    initialResult = (fromMaybe (xform Init) maybeInitial)
     step :: r -> i -> r
     step r i = xform (Step r i)
 ```
@@ -229,8 +228,8 @@ xform = xf rf
 This applies the 'final' reducing function to our transducer pipeline which results in a new reducing function which runs on one input at a time generating a new result.
 
 ```haskell
-initalResult :: r
-initalResult = fromMaybe (xform Init) maybeInitial
+initialResult :: r
+initialResult = fromMaybe (xform Init) maybeInitial
 ```
 
 Here we pick our initial value. If an explicit initial value was provided we'll use that; otherwise we'll run our reducing function with the `Init` value to have it generate one for us.
@@ -243,13 +242,18 @@ step r i = xform (Step r i)
 This simply restructures our reducing function into a normal ol' folding function, we'll need it to fold all of our inputs together.
 
 
-Now we can look at the expression we use to compute the final result:
+Next we can look at the expression we use to compute result:
 
 ```haskell
-foldl' step initalResult inputs
+foldl' step initialResult inputs
 ```
 
-We're using a strict left-fold to apply our `step` function over our inputs one-by-one starting with the initial result. After all is said and done we'll have consumed all our input and have the final result!
+We're using a strict left-fold to apply our `step` function over our inputs one-by-one starting with the initial result. After all is said and done we'll have consumed all our input and have the final result! But wait, there's more! We have to run the transducer one last time using the `Completion` tag so that transducers can clean things up if they like. This final run will return the result which will be returned by transduce.
+
+```haskell
+    let result = foldl' step initialResult inputs
+     in xform (Completion result)
+```
 
 Let's try this on-for-size. We only have a single transducer implemented so far, so it'll be a very simple transducer. Just like in Clojure we can sequence many transducers by simply composing each transducer together using regular function composition. If you've ever used lenses in Haskell this will look pretty familiar:
 
@@ -262,7 +266,7 @@ Functions compose from right to left, and indeed we're passing the reducing func
 
 This simple transducer accepts integers as input, multiplies them by ten, then outputs the `String` representation using show.
 
-The last piece we'll need to run the transducer is a Reducing Function to process the outputs. This is one area where Clojure's arities work well syntactically; becaue arities are untyped, they can use any function which matches the correct shape as a reducing function. In Haskell we try to be more explicit about what we allow to be used where, so we'll probably want a utility function to take **normal** Haskell functions and turn them into reducing functions.
+The last piece we'll need to run the transducer is a Reducing Function to process the outputs. This is one area where Clojure's arities work well syntactically; because arities are untyped, they can use any function which matches the correct shape as a reducing function. In Haskell we try to be more explicit about what we allow to be used where, so we'll probably want a utility function to take **normal** Haskell functions and turn them into reducing functions.
 
 ```haskell
 toRF :: r -> (r -> o -> r) -> RF r o
@@ -340,7 +344,7 @@ catT rf (Step r inputs) = foldl' step r inputs
     step result input = rf (Step result input)
 ```
 
-`catT` accepts any foldable container as input and will output each element as input to the rest of the pipeline. Think of it as breaking down its inputs.
+`catT` accepts any foldable container as input and will output each element as input to the rest of the pipeline.
 
 Let's experiment with our new toys:
 
@@ -358,3 +362,261 @@ Let's experiment with our new toys:
 >>> transduce (filterT ((<10) . length) . catT) accumList Nothing  words
 "catdog"
 ```
+
+## Adding Effects
+
+Our transducers are coming along, but so far they're completely pure! There are two cases in transducers where we need to run effects:
+
+1. When the transformation itself requires an effect, e.g. printing a message to screen, making a web request, or reading the filesystem.
+2. When our transformation needs to keep track of mutable state between runs.
+
+Let's start with the first case by building a transducer which logs every value it encounters before passing it along.
+
+In order to log things to the console we'll need access to the `IO` effect, and we'll need this effect **after** we've received the input. That means we'll need to edit the type of our reducing function:
+
+```haskell
+-- Here's the old version
+type OldRF r i = Input r i -> r
+-- We just need to add an IO wrapping the result
+type RF r i = Input r i -> IO r
+```
+
+With this slight tweak we can now implement our logger:
+
+```haskell
+tapT :: Show i => Transducer r i i
+tapT rf Init = rf Init
+tapT rf (Completion r) = rf (Completion r)
+tapT rf (Step r i) = print i >> rf (Step r i)
+```
+
+Since we've tweaked our `RF` type we also need to update the pure transducers:
+
+```haskell
+import Control.Monad
+
+-- mapT can actually stay exactly the same since it always just calls through.
+mapT :: (i -> o) -> Transducer r i o
+mapT _f rf Init = rf Init
+mapT _f rf (Completion r) = rf (Completion r)
+mapT f rf (Step r i) = rf (Step r (f i))
+
+-- I just needed to wrap the else clause with `pure`
+filterT :: (i -> Bool) -> Transducer r i i
+filterT _keep rf Init = rf Init
+filterT _keep rf (Completion r) = rf (Completion r)
+filterT keep rf (Step r i) = 
+    if keep i then rf (Step r i)
+              else pure r
+
+-- Swap foldl' with foldM, 
+-- Add IO to the type of the 'step'
+catT :: forall r f i. Foldable f => Transducer r (f i) i
+catT rf Init = rf Init
+catT rf (Completion r) = rf (Completion r)
+catT rf (Step r inputs) = foldM step r inputs
+  where
+    step :: r -> i -> IO r
+    step result input = rf (Step result input)
+```
+
+We'll need to rewrite a few of our combinators too:
+
+```haskell
+-- Added IO to the step function 
+-- Lifted the Init and Completion results using pure
+toRF :: r -> (r -> o -> IO r) -> RF r o
+toRF initialR _step Init = pure initialR
+toRF _initialR _step (Completion r) = pure r
+toRF _initialR step (Step r o) = step r o
+
+accumList :: RF [a] a
+accumList = toRF [] (\r o -> pure $ r <> [o])
+
+sumAll :: Num n => RF n n
+sumAll = toRF 0 (\a b -> pure $ a + b)
+
+-- transduce took a bit more re-arranging, but it's nothing to complicated.
+transduce :: forall r f i o. Foldable f => Transducer r i o -> RF r o -> Maybe r -> f i -> IO r
+transduce xf rf maybeInitial inputs = do
+    let xform = xf rf
+        step r i = xform (Step r i)
+    initialResult <- case maybeInitial of
+                       Just initialR -> pure initialR
+                       Nothing -> xform Init
+    result <- foldM step initialResult inputs
+    xform (Completion result)
+```
+
+Let's test out our new effectful transducer:
+
+```haskell
+>>> total <- transduce (mapT (*10) . tapT . mapT negate) sumAll Nothing [1..5]
+10
+20
+30
+40
+50
+>>> total
+-150
+```
+
+We're printing intermediate results to the console as we run items through the `tapT` step!
+
+This is handy, but we're still missing the ability to use any state within our transducers. Our `RF` function has access to `IO` in its output: `Step i -> IO r`, but since that IO block is going to be run once for every single input we can't initialize our stateful variables there. We'll need to follow Clojure's pattern and initialize them outside of the reducing function and include the resulting references to mutable state in a closure. Unlike Clojure however, we must also use the IO monad for the setup block, which means we need another small tweak to our types:
+
+
+```haskell
+-- Old version:
+type OldTransducer r i o = RF r o -> (RF r i)
+-- New version:
+type Transducer r i o = RF r o -> IO (RF r i)
+```
+
+This change takes place in the type of the transducer itself, but otherwise looks to be the same idea! We're wrapping the result of our transformation function in IO so that we can use effects, its just that this time we're modifying our transformation OVER a reducing function, rather than modifying a reducing function itself.
+
+Just like last time we'll need to edit all of our existing definitions to support this tweak. We'll only do this one more time I promise.
+
+Introducing an effect in the middle of our function arguments means we'll need to re-arrange our pattern matching. It's a bit annoying, but we can use extensions like `LambdaCase` to reduce the pain of the boilerplate. If you're just reading along, don't bother reading through all the tweaks, you'll see how it works when we implement our first stateful transducer.
+
+```haskell
+mapT :: (i -> o) -> Transducer r i o
+mapT f rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i -> rf (Step r (f i))
+
+filterT :: (i -> Bool) -> Transducer r i i
+filterT keep rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i ->
+      if keep i then rf (Step r i)
+                else pure r
+catT :: forall r f i. Foldable f => Transducer r (f i) i
+catT rf = pure $ \case 
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r inputs -> foldM step r inputs
+  where
+    step :: r -> i -> IO r
+    step result input = rf (Step result input)
+
+tapT :: Show i => Transducer r i i
+tapT rf = pure $ \case
+    Init -> rf Init
+    Completion r -> rf (Completion r)
+    Step r i -> print i >> rf (Step r i)
+
+transduce :: forall r f i o. Foldable f => Transducer r i o -> RF r o -> Maybe r -> f i -> IO r
+transduce xf rf maybeInitial inputs = do
+    xform <- xf rf
+    let step r i = xform (Step r i)
+    initialResult <- case maybeInitial of
+                       Just initialR -> pure initialR
+                       Nothing -> xform Init
+    result <- foldM step initialResult inputs
+    xform (Completion result)
+```
+
+Overall pretty minor tweaks all around. Now we're ready to share state across transducer runs!
+
+## Building a Stateful Transducer
+
+There are many types of transducers which require persistent state from one run to the next:
+
+* `take n`: Needs to keep track of how many items we've taken so far
+* `uniq`: Needs to keep track of the input we've already seen
+* `partition n`: Needs to keep a buffer of inputs until we have enough to group up and emit.
+
+There are many more; see if you can think of some on your own.
+
+We'll be implementing `partition` since it will also demonstrate our use of the `Completion`, which we haven't made use of yet.
+
+I'll show you the whole implementation first, then we'll break it down. This is definitely the most complex transducer we'll be implementing:
+
+```haskell
+import Data.IORef ( atomicModifyIORef', newIORef, readIORef )
+
+partitionT :: Int -> Transducer r i [i]
+partitionT size rf = do
+  -- initialize a mutable buffer to store items as we accumulate them
+  buffer <- newIORef []
+  -- return our next reducing function
+  pure $ \case
+    Init -> rf Init
+    -- Our completion handler needs to flush any remaining values
+    Completion r -> do
+      leftovers <- readIORef buffer
+      if not . null $ leftovers
+        then rf (Step r leftovers)
+        else pure r
+    Step r i -> do
+      emission <- atomicModifyIORef' buffer (updateBuffer i)
+      case emission of
+        Just is -> rf (Step r is)
+        Nothing -> pure r
+  where
+    -- Look at the number of values in our buffer.
+    -- If we've matched our output size we'll clear the buffer and emit them.
+    updateBuffer :: a -> [a] -> ([a], Maybe [a])
+    updateBuffer a xs =
+        if length (a:xs) == size
+           then ([], Just (a:xs))
+           else ((a:xs), Nothing)
+```
+
+Okay! That's a lot at once. Here's the first interesting part:
+
+```haskell
+  buffer <- newIORef []
+```
+
+This initializes a mutable variable in the "setup phase" of our transducer, which is before we've accepted any input and occurs when we're just threading all of our transducers together. Crucially, this setup phase is run inside `transduce` immediately before using the resulting transformation function, ensuring that we get fresh state each time we run `transduce`. We'll use this buffer to accumulate values across 'runs' until we reach our threshold, then we'll emit them all at once as a list.
+
+Looking at our step function next:
+
+```haskell
+    Step r i -> do
+      emission <- atomicModifyIORef' buffer (updateBuffer i)
+      case emission of
+        Just is -> rf (Step r is)
+        Nothing -> pure r
+  where
+    -- Look at the number of values in our buffer.
+    -- If we've matched our output size we'll clear the buffer and emit them.
+    updateBuffer :: a -> [a] -> ([a], Maybe [a])
+    updateBuffer a xs =
+        if length (xs <> [a]) == size
+           then ([], Just (xs <> [a]))
+           else ((xs <> [a]), Nothing)
+```
+
+We use `atomicModifyIORef'` to take a look at our buffer, and use our `updateBuffer` function to determine whether we're ready to emit or not. `updateBuffer` will clear the buffer and return a list of values to emit if we've matched the requested partition size, otherwise it will add the new value to the buffer and return `Nothing` to indicate we're not ready to emit yet. Then, inside our step function we can pattern match on the result and pass the list of values downstream or wait by returning the intermediate result.
+
+The last thing to look at is in our `Completion` branch:
+
+```haskell
+    Completion r -> do
+      leftovers <- readIORef buffer
+      if not . null $ leftovers
+        then rf (Step r leftovers)
+        else pure r
+```
+
+Remember that the Completion handler is run exactly once when the transducing process has decided to shut everything down. For our partition transducer it would be nice if we could "flush" our buffer of accumulated state if we've got any left. The completion handler gives us that chance!
+
+We check our buffer, and if we have any values chilling out in there we can flush them all downstream. We know that this transducer will never be called again after `Completion` is called, so there's no need to do any cleanup on our `buffer` IORef.
+
+Let's try it out before we do one last iteration on our design.
+
+Now that we've added yet another effect to our type signature we'll also have to adjust how we compose our transducers. Each Transducer is a function between reducing functions; but the reducing function it outputs is wrapped in `IO`. When we compose functions of the shape `a -> IO b` in Haskell we use `<=<` instead of `.`. Don't let the direction of the arrows confuse you, values still flow through the pipeline from left to right.
+
+For those who are wondering; yes, you could also wrap each transducer in something like `Kleisli` or `Star` and use `Control.Cateogory ((.))`, but we won't cover that here.
+
+```haskell
+>>> transduce (filterT even <=< partitionT 3) accumList Nothing [1..20]
+[[2,4,6],[8,10,12],[14,16,18],[20]]
+```
+
+This example takes the integers from 1 through 20, selects only the even numbers, then batches them up into lists of 3. We can see that our completion handler has successfully flushed the 'leftovers' because we have a list of the single element `20` in our output.
