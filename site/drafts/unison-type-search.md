@@ -7,80 +7,80 @@ description: Building an efficient and scalable type search for Unison
 image: flux-monoid/flux.jpg
 ---
 
-# Motivating type-directed search
+Hello! Today we'll be looking into type-based search, what it is, how it helps, 
+and how to build one for the [Unison programming language](https://www.unison-lang.org/) at production scale.
 
-If you haven't used a type-directed code search like [Hoogle](https://hoogle.haskell.org/) before
-it can be tough to fully understand how useful it can be. Before I started on my journey to learn Haskell
-I had never even thought to ask for a tool like it. Now I reach for it daily.
+## Motivating type-directed search
 
-Many languages offer some form of code search, or a package search at least, which allows you to find code which is relevant for 
-the task you're trying to accomplish, but typically one searches these using human language which causes a few issues. For one, 
-these searches require the code or package being documented well enough to contain the phrases you're searching for. 
-For two, searching at the package level is often far too rough-grained for the problem at hand. If I just want to very quickly remember the name of the function 
-which lifts a `Char` into a `Text`, I already know it's in the Text package, but can save a bit of time by asking for it precisely.
-Most importantly though, natural languages are quite imprecise (incidentally a reason programming languages continue to exist).
+If you've never used a type-directed code search like [Hoogle](https://hoogle.haskell.org/)
+it's tough to fully understand how useful it can be. Before starting on my journey to learn Haskell
+I had never even thought to ask for a tool like it, now I reach for it every day.
 
-If I google "javascript function to group elements of a list using a predicate" I find many different functions which do _some_ form of grouping, 
+Many languages offer some form of code search, or at the very least a package search. This allows users to find code which is relevant for 
+the task they're trying to accomplish. Typically you'd use these searches by querying for a natural language phrase 
+describing what you want, e.g. `"Markdown Parser"`. 
+
+This works great for finding entire packages, but searching at the package level is often far too rough-grained for the problem at hand. 
+If I just want to very quickly remember the name of the function 
+which lifts a `Char` into a `Text`, I already know it's probably in the `Text` package, but I can save some time digging through the package by asking a search precisely for definitions of this type.
+Natural languages are quite imprecise, so a more  specialized query-by-type language allows us to get better results faster.
+
+If I search using google for "javascript function to group elements of a list using a predicate" I find many different functions which do _some_ form of grouping, 
 but none of them quite match the shape I had in mind, and I need to read through blogs, stack-overflow answers, and package documentation to determine
 whether the provided functions actually do what I'd like them to.
 
-In Haskell, I would instead express that question using a type! 
+In Haskell I can instead express that question using a type! 
 If I enter the type `[a] -> (a -> Bool) -> ([a], [a])` into Hoogle I get a list of
 functions which match that type exactly, there are few other operations with a matching signature, 
-but I can quickly open those definitions on Package and determine that `partition` is what I was looking for in this case.
+but I can quickly open those definitions on Package and determine that `partition` is exactly what I was looking for.
 
-Hopefully that helps to convince you of the utility of a type-directed search, 
-though it does raise a question; if type-directed search is so useful, why isn't it more ubiquitous?
+Hopefully this helps to convince you on the utility of a type-directed search, 
+though it does raise a question: if type-directed search is so **useful**, why isn't it more **ubiquitous**?
 
-I haven't interviewed or surveyed anyone to know for sure, but there are few rather significant obstacles
-implementors face.
+Here are a few possible reasons this could be:
 
-* A lot of languages don't have sufficiently advanced type-systems to express useful queries
-* Not all languages have a centralized package repository
+* Some languages lack a sufficiently sophisticated type-system with which to express useful queries
+* Some languages don't have a centralized package repository
 * Indexing every function ever written in your language can be computationally expensive
 * It's not immediately obvious how to implement such a system
 
-I hope to help with at least the final point in this post.
+Read on and I'll do what my best to help with the latter limitation.
 
-# Establishing our goals
+## Establishing our goals
 
-Before attempting to build a system which solves our search problem we should be precise about what our search problem actually is.
+Before we start building anything, we should nail-down what our search problem actually is.
 
 Here are a few goals we had for the Unison type-directed search:
 
-* I should be able to find functions based on a partial type-signature
-* I shouldn't need to know the argument order of a given function in order to find it
-* I shouldn't need to know the names the implementor used for their type variables
-* The search should be fast
-* The search should scale
-* The search should be *good*...
+* It should be able to find functions based on a partial type-signature
+* The names given to type variables shouldn't matter.
+* The ordering of arguments to a function shouldn't matter.
+* It should be fast
+* It should should scale
+* It should be *good*...
 
-The last criteria is subjective of course, but you know it when you see it.
+The last criterion is a bit subjective of course, but you know it when you see it.
 
-# The method
+## The method
 
-Let's talk about how we'll accomplish these goals. I'll skim past how we implemented search-by-name since
-that's a pretty straight-forward plain-text search, and will instead focus on the type-search aspect.
+It's easy to imagine search methods which match _some_ of the required characteristics.
+E.g. we can imagine iterating through every definition and running the typechecker to see if the query unifies with the definition's signature,
+but this would be **far** too slow, and wouldn't allow partial matches or mismatched argument orders.
 
-It's easy to imagine search methods which match _some_ of these characteristics, 
-e.g. we could imagine running the typechecker to unify the user-provided type with 
-the type of every definition, but this would be far too slow, wouldn't allow partial matches,
-and it definitely wouldn't scale. Or we could do a plain-text search over rendered type signatures, 
-but this would be very imprecise.
+Alternatively we could perform a plain-text search over rendered type signatures, 
+but this would be very imprecise and would break our requirement that type variable names are unimportant.
 
-Surprisingly, Hoogle uses a linear scan over a set of pre-built function-fingerprints
-for whittling down potential matches. In our case,
-Unison Share (our code-hosting platform and package manager for Unison) is backed
-by a Postgres database which is where the code we'll be indexing is stored, so 
+Investigating prior art, Neil Mitchell's excellent Hoogle uses a linear scan over a set of pre-built function-fingerprints
+for whittling down potential matches. The level of speed accomplished with this method is quite impressive!
+
+In our case, Unison Share, the code-hosting platform and package manager for Unison is backed
+by a Postgres database where all the code is stored. 
 I investigated a few different Postgres index variants and landed on a GIN (Generalized inverted index).
 
-I won't go too in-depth here on how GIN indexes work, as you can consult the excellent [Postgres documentation](https://www.postgresql.org/docs/current/gin.html)
-if you'd like a deeper dive into that area.
-For a quick overview, the gist of it is that a GIN index allows us to quickly find rows which are associated to a given combination of search tokens.
+If you're unfamiliar with GIN indexes the gist of it is that it allows us to quickly find rows which are associated with any given combination of search tokens.
 They're typically useful when implementing full-text searches, for instance we may choose to index a text document like the following:
 
 ```
-
 postgres=# select to_tsvector('And what is the use of a book without pictures or conversations?');
                       to_tsvector
 -------------------------------------------------------
@@ -90,18 +90,24 @@ postgres=# select to_tsvector('And what is the use of a book without pictures or
 
 The generated lexemes represent a fingerprint of the text file which can be used to 
 quickly and efficiently determine a subset of stored documents which can then be filtered
-using other more precise methods.
+using other more precise methods. So for instance we could search for `book & pictur` to very efficiently find all documents which contain
+at least one word that tokenizes as `book` AND any word that tokenizes as `pictur`.
 
-We can do something similar to search for a set of properties of a type signature.
+I won't go too in-depth here on how GIN indexes work as you can consult the excellent [Postgres documentation](https://www.postgresql.org/docs/current/gin.html)
+if you'd like a deeper dive into that area.
 
-The properties we want to search for can be distilled from our requirements; we need to know
+Although our problem isn't exactly full-text-search, we can leverage GIN into something similar to search type signatures by a set of attributes.
+
+The attributes we want to search for can be distilled from our requirements; we need to know
 which types are mentioned in the signature, and we need some way to _normalize_ type variables and argument position.
 
-From this I devised how we'd build a set of lexemes (a.k.a. search tokens) from a given type signature to facilitate this.
+Let's come up with a way to _tokenize_ type signatures into the attributes we care about.
 
-## Mentions of concrete types
+## Computing Tokens for type signature search
 
-Assuming we can parse a user-provided signature, let's start with normalizing mentions of concrete types.
+### Mentions of concrete types
+
+If the user metnions a concrete type in their query, we'll need to find all type signatures which mention it.
 
 Consider the following signature: `Text.take : Nat -> Text -> Text`
 
@@ -110,70 +116,87 @@ We can boil down the info here into the following data:
 * A type called `Nat` is mentioned _once_, and it does _NOT_ appear in the return type of the function.
 * A type called `Text` is mentioned _twice_, and it _does_ appear in the return type of the function.
 
-There really aren't any rules on how to represent lexemes in a GIN index; earlier we saw an English language tokenizer
-doing its thing, but we can just as easily construct our own literal lexemes manually from this information.
+There really aren't any rules on how to represent lexemes in a GIN index, it's really just a set of string tokens. 
+Earlier we saw how Postgres used an English language tokenizer to distill down the essence of a block of text into a set of tokens;
+we can just as easily devise our own token format for the information we care about.
 
-Here's the format I went with for type mentions
+Here's the format I went with for our search tokens: `<token-kind>,<number-of-occurrences>,<name|hash|variable-id>`
 
-Here's a token: `mn,1,Nat.`. I start by namespacing the token by its type, in this case `mn` for Mention by Name. 
-Next I include the number of times it has been mentioned, followed by it's fully qualified name with the path _reversed_.
+So for the mentions of `Nat` in `Text.take`'s signature we can build the token: `mn,1,Nat.`. It starts with the token's kind (`mn` for Mention by Name), which prevents conflicts between tokens even though they'll all be stored in the same `tsvector` column.
+Next I include the number of times it's mentioned in the signature followed by it's fully qualified name with the path _reversed_.
 
 In this case `Nat` is a single segment, but if the type were named `data.JSON.Array` it would be encoded as `Array.JSON.data.`,
-Why? Well Postgres allows us to do wild-card matches over tokens in GIN indexes, so later on this will allow us to search for matches 
-for any valid suffix of the path, e.g. `mn,1,Array.*`, `mn,1,Array.JSON.*` or `mn,1,Array.JSON.data.*` would all match a single mention of this type.
 
-Users don't always know ALL of the arguments of a function they're looking for, so we'd love for partial type matches to still return results. 
+Why? Postgres allows us to do _prefix_ matches over tokens in GIN indexes. This allows us to search for matches 
+for any valid suffix of the query's path, e.g. `mn,1,Array.*`, `mn,1,Array.JSON.*` or `mn,1,Array.JSON.data.*` would all match a single mention of this type.
+
+Users don't always know **all** of the arguments of a function they're looking for, so we'd love for partial type matches to still return results. 
+This also helps us to start searching for and displaying potentially relevant results while the user is still typing out their query.
+
 For instance `Nat -> Text` should still find `Text.take`, so to facilitate that,
-when we have more than a single mention we make a separate token for each of the `1..n` mentions, e.g. in `Text.take : Nat -> Text -> Text` we'd have both `mn,1,Text` AND `mn,2,Text`.
-This is that this is primarily a text index, so we can't easily search for tokens where the number of mentions is greater than or equal to some number, but if we just include all the tokens for each 
-lower number of mentions the partial type search will work just fine.
+when we have more than a single mention we make a separate token for each of the `1..n` mentions. 
+E.g. in `Text.take : Nat -> Text -> Text` we'd store both `mn,1,Text` AND `mn,2,Text` in our set of tokens.
 
-This is Unison after all, so if there's a SPECIFIC type you care about you can search for it exactly by hash, e.g. `#abcdef -> #ghijk` will boil down to the tokens:
-`mh,1,#abcdef` and `mh,1,#ghijk`. Similar to name mentions this allows us to search using only a prefix of the actual hash.
+We can't perform arithmetic in our GIN lookup, so this method is a workaround which allows us to find any type where the number of mentions is greater than or equal to the number of mentions in the query. 
 
-Lastly I want to track when a given mention appears in the return type of a definition, which I do by simply including an extra token with `r` in the 'mentions' place, e.g. `mn,r,Text`
+### Type mentions by hash
 
-We can use this later to filter, or score results, or even perform more advances searches like "Show me all functions which produce a value of this type", a.k.a. functions which return that type but don't accept it as an argument.
+This is Unison after all, so if there's a specific type you care about but you don't care what the particular package has named that type, or if there's even a specific **version** of a type you care about, 
+you can search for it by hash: E.g. `#abcdef -> #ghijk`. 
+This will tokenize into `mh,1,#abcdef` and `mh,1,#ghijk`. Similar to name mentions this allows us to search using only a prefix of the actual hash.
 
-A note on higher-kinded types and abilities like `Map Text Nat` and `a -> {Exception} b`, I simply treat each of these as its own concrete type mention. The system could be expanded to include more token types for each of these, but one has to be wary of an explosion in the number of generated tokens and in initial testing the search seems to work quite well despite no special treatment.
+### Handling return types
 
-## Mentions of type variables
+Although we don't care about the order of _arguments_ to a given function, the return-type _is_ a very high value piece of information. 
+We can add additional tokens to track every type which is mentioned in the return type of a function by simply adding an additional token with an `r` in the 'mentions' place, e.g. `mn,r,Text`
 
-That handles concrete types, but what about type variables? Consider the type signature: `const: b -> a -> b`.
+We'll use this later to improve the scoring of returned results, and may in the future allow performing more advanced searches like "Show me all functions which produce a value of this type", a.k.a. functions which return that type but don't accept it as an argument, or perhaps "Show me all handlers of this ability", which corresponds to all functions which accept that ability as an argument but _don't_ return it, e.g. `'mn,1,Stream' & (! 'mn,r,Stream')`.
 
-This type contains `a` and `b` which are type _variables_. The names of type variables are not important on their own,
+A note on higher-kinded types and abilities like `Map Text Nat` and `a -> {Exception} b`, we simply treat each of these as its own concrete type mention. 
+The system could be expanded to include more token types for each of these, but one has to be wary of an explosion in the number of generated tokens and in initial testing the search seems to work quite well despite no special treatment.
+
+### Mentions of type variables
+
+Concrete types are covered, but what about type variables? Consider the type signature: `const: b -> a -> b`.
+
+This type contains `a` and `b` which are _type variables_. The names of type variables are not important on their own,
 you can rename any type variable to anything you like as long as you consider its scope and rename all the mentions of the same variable within its scope.
 
-To normalize the names of type variables I simply use numbers instead; so in this example we may choose to assign `b` the number `1` and `a` the number `2`.
-However, we have to be careful because we _also_ want to be agnostic to argument order, such that a search for `a -> b -> b` would still find `const`, if we assigned 
+To normalize the names of type variables I assign each variable a numerical ID instead. In this example we may choose to assign `b` the number `1` and `a` the number `2`.
+However, we have to be careful because we _also_ want to be indifferent with regard to argument order. A search for `a -> b -> b` should still find `const`! if we assigned 
 `a` to `1` and `b` to `2` according to the order of their appearance we wouldn't have a match.
 
 To fix this issue we can simply sort the type variables according to their number of _occurrences_, so in this example `a` has fewer occurrences than `b`, so it gets the lower variable ID.
 
-`a` generates the token: `v,1,1`, and `b` generates a token for each occurrence, plus its occurrence in the in the return value of the function:  `v,1,2` `v,2,2` `v,r,2`
+This means that both `a -> b -> b` and `b -> a -> b` will tokenize to the same set of tokens: `v,1,1` for `a`, and `v,1,2`, `v,2,2`, and `v,r,2` for `b`.
 
+## Parsing the search query
+
+We could require that all queries are  properly formed type-signatures, but that's quite restrictive and we'd much rather allow the user to be a bit _sloppy_ in their search.
+
+To that end I wrote a custom version of our type-parser that is extremely lax in what it accepts, it will attempt to determine the arity and return type of the query, but will also happily 
+accept just a list of type names. Searching for `Nat Text Text` and `Nat -> Text -> Text` are both valid queries, but the latter will return better results since 
+we have information about both the arity of the desired function and the return type. Once we've parsed the query we can convert it into the same set of tokens we generated from the type signatures in the codebase.
 
 ## Performing the search
 
-Now that we're done figuring out our token scheme, we simply need to build the appropriate GIN index out of the tokens derived from each type signature.
-Now we can process a user search into the same tokens and use them to filter down results!
+After we've indexed all the code in our system (in Unison this takes only a few minutes) we can start searching!
 
 For Unison's search I've opted to require that each occurrence in the query MUST be present in each match, however for better partial type-signature support I 
-don't require that the return values match and instead use the existence of a matching return value to simply boost a results precedence in the results list.
+do include results which are missing specified return types, but will rank them lower than results with matching return types in the results.
 
-Other match sorting criteria include:
+Other criteria used to score matches include:
 * Types with an arity closer to the user's query are ranked higher
 * How complex the type signature is, types with more tokens are ranked lower.
 * We give a slight boost to some core projects, e.g. Unison's standard library `base` will show up higher in search results if they match.
 * You can include a text search along with your type search to further filter results, e.g. `map (a -> b) -> [a] -> [b]` will prefer finding definitions with `map` somewhere in the name.
 * Queries can include a specific user or project to search within to further filter results, e.g. `@unison/cloud Remote`
 
+## Summary
 
-# Summary
+I hope that helps shed some light on how it all works, and perhaps will help others in implementing their own type-directed-search down the road!
 
-I hope that helps shed some light on how it all works, and perhaps will help others in implementing their own type-directed-search down the road.
-
-Now all that's left is to go [try out a search or two](https://share.unison-lang.org/)!
+Now all that's left is to go [try out a search or two](https://share.unison-lang.org/) :)
 
 If you're interested in digging deeper, Unison Share, and by-proxy the entire type-directed search implementation, is all Open-Source, so go check it out!
 It's changing and improving all the time, but [this module](https://github.com/unisoncomputing/share-api/blob/6ee875db4ac35156733a0f2c9349bc528736243f/src/Share/Postgres/Search/DefinitionSearch/Queries.hs) would be a good place to start digging.
