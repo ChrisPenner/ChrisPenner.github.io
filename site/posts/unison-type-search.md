@@ -1,10 +1,10 @@
 ---
 title: "Building Type Search for Unison"
 author: Chris Penner
-date: July 30, 2024
+date: August 14, 2024
 tags: [programming, haskell, unison]
 description: Building an efficient and scalable type search for Unison
-image: flux-monoid/flux.jpg
+image: type-based-search/type-based-search.png
 ---
 
 Hello! Today we'll be looking into type-based search, what it is, how it helps, 
@@ -32,7 +32,7 @@ whether the provided functions actually do what I'd like them to.
 In Haskell I can instead express that question using a type! 
 If I enter the type `[a] -> (a -> Bool) -> ([a], [a])` into Hoogle I get a list of
 functions which match that type exactly, there are few other operations with a matching signature, 
-but I can quickly open those definitions on Package and determine that `partition` is exactly what I was looking for.
+but I can quickly open those definitions on Hackage and determine that `partition` is exactly what I was looking for.
 
 Hopefully this helps to convince you on the utility of a type-directed search, 
 though it does raise a question: if type-directed search is so **useful**, why isn't it more **ubiquitous**?
