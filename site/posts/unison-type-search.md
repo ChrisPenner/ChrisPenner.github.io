@@ -1,7 +1,7 @@
 ---
 title: "Building Type Search for Unison"
 author: Chris Penner
-date: August 14, 2024
+date: Aug 14, 2024
 tags: [programming, haskell, unison]
 description: Building an efficient and scalable type search for Unison
 image: type-based-search/type-based-search.png

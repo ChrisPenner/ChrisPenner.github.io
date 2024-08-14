@@ -5,15 +5,15 @@
 
 packages:
 - completed:
-    hackage: slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
+    hackage: slick-1.2.1.0@sha256:d93072d73598db6158a537a6498c842af20bca700bc2093e8aca61e09173e105,1312
     pantry-tree:
-      size: 601
-      sha256: df09921a3e414b9ef1873da1ea5b5cadc4a01669f474f64224e5f7a85eb16580
+      sha256: 4da4f6cab3fbb387cd07c30f2d49c530e1c65ad9899f8383883d53d8948a19c1
+      size: 602
   original:
-    hackage: slick-1.0.1.0@sha256:431013d1e03f7f7360894732b28deede944330b22e940e7579d8056dc37693b0,1307
+    hackage: slick-1.2.1.0@sha256:d93072d73598db6158a537a6498c842af20bca700bc2093e8aca61e09173e105,1312
 snapshots:
 - completed:
-    size: 523448
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/14/1.yaml
-    sha256: 0045b9bae36c3bb2dd374c29b586389845af1557eea0423958d152fc500d4fbf
-  original: lts-14.1
+    sha256: 8e7996960d864443a66eb4105338bbdd6830377b9f6f99cd5527ef73c10c01e7
+    size: 719128
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/22/26.yaml
+  original: lts-22.26
