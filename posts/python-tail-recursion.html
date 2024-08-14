@@ -771,52 +771,100 @@
         </div>
       </div>
       <article class="post">
-        <p>Some programming languages are <a href="https://en.wikipedia.org/wiki/Tail_call">tail-recursive</a>, essentially this means is that they're able to make optimizations to functions that return the result of calling themselves. That is, the function returns <strong>only</strong> a call to itself.</p>
-<p>Confusing, I know, but stick with me. It turns out that most recursive functions can be reworked into the tail-call form. Here's an example of the factorial function in it's original form, then reworked into the tail-call form.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">def</span> factorial(n):</span>
-<span id="cb1-2"><a href="#cb1-2"></a>  <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>: <span class="cf">return</span> <span class="dv">1</span></span>
-<span id="cb1-3"><a href="#cb1-3"></a>  <span class="cf">else</span>: <span class="cf">return</span> factorial(n<span class="dv">-1</span>) <span class="op">*</span> n</span>
-<span id="cb1-4"><a href="#cb1-4"></a></span>
-<span id="cb1-5"><a href="#cb1-5"></a><span class="kw">def</span> tail_factorial(n, accumulator<span class="op">=</span><span class="dv">1</span>):</span>
-<span id="cb1-6"><a href="#cb1-6"></a>  <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>: <span class="cf">return</span> accumulator</span>
-<span id="cb1-7"><a href="#cb1-7"></a>  <span class="cf">else</span>: <span class="cf">return</span> tail_factorial(n<span class="dv">-1</span>, accumulator <span class="op">*</span> n)</span></code></pre></div>
-<p>They both look similar, and in fact the original even <strong>looks</strong> like it's in the tail call form, but since there's that pesky multiplication which is outside of the recursive call it can't be optimized away. In the non-tail version the computer needs to keep track of the number you're going to multiply it with, whereas in the tail-call version the computer can realize that the only work left to do is another function call and it can forget about all of the variables and state used in the current function (or if it's really smart, it can re-use the memory of the last function call for the new one)</p>
-<p>This is all great, but there's a problem with that example, namely that python doesn't support tail-call optimization. There's a few reasons for this, the simplest of which is just that python is built more around the idea of iteration than recursion.</p>
-<p>But hey, I don't really care if this is something we should or shouldn't be doing, I'm just curious if we can! Let's see if we can make it happen.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1"></a><span class="co"># factorial.py</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="im">from</span> tail_recursion <span class="im">import</span> tail_recursive, recurse</span>
-<span id="cb2-3"><a href="#cb2-3"></a></span>
-<span id="cb2-4"><a href="#cb2-4"></a><span class="co"># Normal recursion depth maxes out at 980, this one works indefinitely</span></span>
-<span id="cb2-5"><a href="#cb2-5"></a><span class="at">@tail_recursive</span></span>
-<span id="cb2-6"><a href="#cb2-6"></a><span class="kw">def</span> factorial(n, accumulator<span class="op">=</span><span class="dv">1</span>):</span>
-<span id="cb2-7"><a href="#cb2-7"></a>    <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>:</span>
-<span id="cb2-8"><a href="#cb2-8"></a>        <span class="cf">return</span> accumulator</span>
-<span id="cb2-9"><a href="#cb2-9"></a>    recurse(n<span class="dv">-1</span>, accumulator<span class="op">=</span>accumulator<span class="op">*</span>n)</span></code></pre></div>
-<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1"></a><span class="co"># tail_recursion.py</span></span>
-<span id="cb3-2"><a href="#cb3-2"></a><span class="kw">class</span> Recurse(<span class="pp">Exception</span>):</span>
-<span id="cb3-3"><a href="#cb3-3"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb3-4"><a href="#cb3-4"></a>        <span class="va">self</span>.args <span class="op">=</span> args</span>
-<span id="cb3-5"><a href="#cb3-5"></a>        <span class="va">self</span>.kwargs <span class="op">=</span> kwargs</span>
-<span id="cb3-6"><a href="#cb3-6"></a></span>
-<span id="cb3-7"><a href="#cb3-7"></a><span class="kw">def</span> recurse(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb3-8"><a href="#cb3-8"></a>    <span class="cf">raise</span> Recurse(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
-<span id="cb3-9"><a href="#cb3-9"></a>        </span>
-<span id="cb3-10"><a href="#cb3-10"></a><span class="kw">def</span> tail_recursive(f):</span>
-<span id="cb3-11"><a href="#cb3-11"></a>    <span class="kw">def</span> decorated(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
-<span id="cb3-12"><a href="#cb3-12"></a>        <span class="cf">while</span> <span class="va">True</span>:</span>
-<span id="cb3-13"><a href="#cb3-13"></a>            <span class="cf">try</span>:</span>
-<span id="cb3-14"><a href="#cb3-14"></a>                <span class="cf">return</span> f(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
-<span id="cb3-15"><a href="#cb3-15"></a>            <span class="cf">except</span> Recurse <span class="im">as</span> r:</span>
-<span id="cb3-16"><a href="#cb3-16"></a>                args <span class="op">=</span> r.args</span>
-<span id="cb3-17"><a href="#cb3-17"></a>                kwargs <span class="op">=</span> r.kwargs</span>
-<span id="cb3-18"><a href="#cb3-18"></a>                <span class="cf">continue</span></span>
-<span id="cb3-19"><a href="#cb3-19"></a>    <span class="cf">return</span> decorated</span></code></pre></div>
-<p>Now, don't get scared by decorators if you haven't seen them before, in fact go <a href="http://thecodeship.com/patterns/guide-to-python-function-decorators/">read about them now</a>, basically they're functions which are called on other functions and change the behaviour in some way.</p>
-<p>This decorator will call the function it's given and will check to see if it wants to 'recurse'. We signal a 'recursion' by simply raising an exception with the arguments we'd like to recurse with. Then our decorator simply unpacks the variables from the exception and tries calling the function again.</p>
-<p>Eventually we'll reach our exit condition (we hope) and the function will <strong>return</strong> instead of raising an exception. At this point the decorator just passes along that return value to whoever was asking for it.</p>
-<p>This particular method helps out with doing recursive calls in python because python has a rather small limit to how many recursive calls can be made (typically ~1000). The reason for this limit is (among other things) doing recursive calls takes a lot of memory and resources because each frame in the call stack must be persisted until the call is complete. Our decorator gets around that problem by continually entering and exiting a single call, so technically our function isn't actually recursive anymore and we avoid the limits.</p>
-<p>I tested out both versions, the normal version hits the tail-recursion limit at factorial(980) whereas the tail-recursive version will happily compute numbers as large as your computer can handle.</p>
-<p>There's an <a href="http://code.activestate.com/recipes/474088-tail-call-optimization-decorator/">alternative approach</a> that actually uses stack introspection to do it, but it's a bit more complex than the one we built here.</p>
+        <p>Some programming languages are <a
+href="https://en.wikipedia.org/wiki/Tail_call">tail-recursive</a>,
+essentially this means is that they're able to make optimizations to
+functions that return the result of calling themselves. That is, the
+function returns <strong>only</strong> a call to itself.</p>
+<p>Confusing, I know, but stick with me. It turns out that most
+recursive functions can be reworked into the tail-call form. Here's an
+example of the factorial function in it's original form, then reworked
+into the tail-call form.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> factorial(n):</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>: <span class="cf">return</span> <span class="dv">1</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">else</span>: <span class="cf">return</span> factorial(n<span class="op">-</span><span class="dv">1</span>) <span class="op">*</span> n</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tail_factorial(n, accumulator<span class="op">=</span><span class="dv">1</span>):</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>: <span class="cf">return</span> accumulator</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">else</span>: <span class="cf">return</span> tail_factorial(n<span class="op">-</span><span class="dv">1</span>, accumulator <span class="op">*</span> n)</span></code></pre></div>
+<p>They both look similar, and in fact the original even
+<strong>looks</strong> like it's in the tail call form, but since
+there's that pesky multiplication which is outside of the recursive call
+it can't be optimized away. In the non-tail version the computer needs
+to keep track of the number you're going to multiply it with, whereas in
+the tail-call version the computer can realize that the only work left
+to do is another function call and it can forget about all of the
+variables and state used in the current function (or if it's really
+smart, it can re-use the memory of the last function call for the new
+one)</p>
+<p>This is all great, but there's a problem with that example, namely
+that python doesn't support tail-call optimization. There's a few
+reasons for this, the simplest of which is just that python is built
+more around the idea of iteration than recursion.</p>
+<p>But hey, I don't really care if this is something we should or
+shouldn't be doing, I'm just curious if we can! Let's see if we can make
+it happen.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># factorial.py</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tail_recursion <span class="im">import</span> tail_recursive, recurse</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Normal recursion depth maxes out at 980, this one works indefinitely</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="at">@tail_recursive</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> factorial(n, accumulator<span class="op">=</span><span class="dv">1</span>):</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> n <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> accumulator</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    recurse(n<span class="op">-</span><span class="dv">1</span>, accumulator<span class="op">=</span>accumulator<span class="op">*</span>n)</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># tail_recursion.py</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Recurse(<span class="pp">Exception</span>):</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.args <span class="op">=</span> args</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.kwargs <span class="op">=</span> kwargs</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> recurse(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> Recurse(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tail_recursive(f):</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> decorated(<span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>            <span class="cf">try</span>:</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> f(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>            <span class="cf">except</span> Recurse <span class="im">as</span> r:</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>                args <span class="op">=</span> r.args</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>                kwargs <span class="op">=</span> r.kwargs</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>                <span class="cf">continue</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> decorated</span></code></pre></div>
+<p>Now, don't get scared by decorators if you haven't seen them before,
+in fact go <a
+href="http://thecodeship.com/patterns/guide-to-python-function-decorators/">read
+about them now</a>, basically they're functions which are called on
+other functions and change the behaviour in some way.</p>
+<p>This decorator will call the function it's given and will check to
+see if it wants to 'recurse'. We signal a 'recursion' by simply raising
+an exception with the arguments we'd like to recurse with. Then our
+decorator simply unpacks the variables from the exception and tries
+calling the function again.</p>
+<p>Eventually we'll reach our exit condition (we hope) and the function
+will <strong>return</strong> instead of raising an exception. At this
+point the decorator just passes along that return value to whoever was
+asking for it.</p>
+<p>This particular method helps out with doing recursive calls in python
+because python has a rather small limit to how many recursive calls can
+be made (typically ~1000). The reason for this limit is (among other
+things) doing recursive calls takes a lot of memory and resources
+because each frame in the call stack must be persisted until the call is
+complete. Our decorator gets around that problem by continually entering
+and exiting a single call, so technically our function isn't actually
+recursive anymore and we avoid the limits.</p>
+<p>I tested out both versions, the normal version hits the
+tail-recursion limit at factorial(980) whereas the tail-recursive
+version will happily compute numbers as large as your computer can
+handle.</p>
+<p>There's an <a
+href="http://code.activestate.com/recipes/474088-tail-call-optimization-decorator/">alternative
+approach</a> that actually uses stack introspection to do it, but it's a
+bit more complex than the one we built here.</p>
 <p>Hope you learned something, cheers!</p>
 
         <p>

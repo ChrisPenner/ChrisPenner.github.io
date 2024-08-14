@@ -770,224 +770,396 @@
         </div>
       </div>
       <article class="post">
-        <p>This is a blog post about optics, if you're at all interested in optics I suggest you go check out my book: <a href="https://leanpub.com/optics-by-example">Optics By Example</a>. Although this post covers a more advanced topic the book covers everything you need to go from a beginner to master in all things optics! Check it out and tell your friends, now onwards to the post you're here for.</p>
-<p>In this article we're going to dig into a brand new type of optic, the Kaleidoscope! The theory of which is described in <a href="https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf">this abstract</a> by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons, Bartosz Milewski, Fosco Loregian, and Emily Pillmore.</p>
-<p>If you haven't read the <a href="https://chrispenner.ca/posts/algebraic">previous blog post</a> in this series it's not required, but might help to build a stronger understanding.</p>
+        <p>This is a blog post about optics, if you're at all interested in
+optics I suggest you go check out my book: <a
+href="https://leanpub.com/optics-by-example">Optics By Example</a>.
+Although this post covers a more advanced topic the book covers
+everything you need to go from a beginner to master in all things
+optics! Check it out and tell your friends, now onwards to the post
+you're here for.</p>
+<p>In this article we're going to dig into a brand new type of optic,
+the Kaleidoscope! The theory of which is described in <a
+href="https://cs.ttu.ee/events/nwpt2019/abstracts/paper14.pdf">this
+abstract</a> by Mario Román, Bryce Clarke, Derek Elkins, Jeremy Gibbons,
+Bartosz Milewski, Fosco Loregian, and Emily Pillmore.</p>
+<p>If you haven't read the <a
+href="https://chrispenner.ca/posts/algebraic">previous blog post</a> in
+this series it's not required, but might help to build a stronger
+understanding.</p>
 <h2 id="what-is-a-kaleidoscope">What is a Kaleidoscope?</h2>
-<p>Like most optics, the behaviour of a kaleidoscope is mostly dictated by the type of profunctor you're passing through it; but from a bird's eye view I'd say that kaleidoscopes allow you to perform aggregations, comparisons, and manipulations over different <strong>groupings</strong> of focuses. They can allow you to calculate summaries of each column of a table, or calculate aggregations over each respective key in a list of JSON objects! They perform this grouping using Applicative instances and can end up with interesting behaviour depending on the type of Applicative you're working with.</p>
-<p>I have hopes that as kaleidoscopes are added to more optics libraries and the kinks get worked out that we'll end up with an expressive optics language which let us express complex table queries and mutations like SQL queries do!</p>
+<p>Like most optics, the behaviour of a kaleidoscope is mostly dictated
+by the type of profunctor you're passing through it; but from a bird's
+eye view I'd say that kaleidoscopes allow you to perform aggregations,
+comparisons, and manipulations over different <strong>groupings</strong>
+of focuses. They can allow you to calculate summaries of each column of
+a table, or calculate aggregations over each respective key in a list of
+JSON objects! They perform this grouping using Applicative instances and
+can end up with interesting behaviour depending on the type of
+Applicative you're working with.</p>
+<p>I have hopes that as kaleidoscopes are added to more optics libraries
+and the kinks get worked out that we'll end up with an expressive optics
+language which let us express complex table queries and mutations like
+SQL queries do!</p>
 <h2 id="a-new-profunctor-class">A new profunctor class</h2>
-<p>For this post we'll look at kaleidoscopes from a profunctor optics perspective, meaning we'll need a profunctor class which encompasses the behaviour of the optic.</p>
-<p>Since the last article was released I had a chance to chat with Mario, the author of the abstract, on twitter which has been very helpful! He explained that the Kaleidoscope characterization in the abstract:</p>
+<p>For this post we'll look at kaleidoscopes from a profunctor optics
+perspective, meaning we'll need a profunctor class which encompasses the
+behaviour of the optic.</p>
+<p>Since the last article was released I had a chance to chat with
+Mario, the author of the abstract, on twitter which has been very
+helpful! He explained that the Kaleidoscope characterization in the
+abstract:</p>
 <ul>
 <li>Kaleidoscope: <code>π n∈N (A^n → B) → (S^n → T)</code></li>
 </ul>
 <p>Is represented by the following Profunctor class:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">class</span> <span class="dt">MStrong</span> p <span class="ot">=&gt;</span> <span class="dt">Reflector</span> p <span class="kw">where</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a><span class="ot">  reflected ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (f a) (f b)</span></code></pre></div>
-<p>Reflector has a superclass of the <code>MStrong</code> profunctor noted in the corrections at the bottom of the previous post. That every Reflector is MStrong is trivially witnessed by <code>msecond' = reflected</code> since <code>Monoid m =&gt; (m, a)</code> is an Applicative (namely the <strong>Writer</strong> Applicative).</p>
-<p>With this class defined we can say that a Kaleidoscope is any optic which depends on <code>Reflector</code>:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">type</span> <span class="dt">Kaleidoscope</span> s t a b <span class="ot">=</span> <span class="kw">forall</span> p<span class="op">.</span> <span class="dt">Reflector</span> p <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p s t</span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="kw">type</span> <span class="dt">Kaleidoscope&#39;</span> s a <span class="ot">=</span> <span class="dt">Kaleidoscope</span> s s a a</span></code></pre></div>
-<p>This provides an optic which focuses the contents of any Applicative structure!</p>
-<p>Here's what we get when we write <code>reflected</code> with its new signature:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">reflected ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> <span class="dt">Kaleidoscope</span> (f a) (f b) a b</span></code></pre></div>
-<p>At first <code>reflected</code> seems almost identical to the <code>traverse'</code> combinator from the <a href="https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-"><code>Traversing</code></a> profunctor class:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">traverse&#39; ::</span> (<span class="dt">Traversing</span> p, <span class="dt">Traversable</span> f) <span class="ot">=&gt;</span> <span class="dt">Optic</span> p (f a) (f b) a b</span></code></pre></div>
-<p>But of course <code>traverse'</code> works only on Traversables whereas our new optic works only on Applicatives. Although these have significant overlap, the <strong>behaviour</strong> induced by the use of applicative structure is distinct from the behaviour of traversables.</p>
-<p>Let's implement our new <code>Reflector</code> class for a few common profunctors so we can actually try it out!</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="co">-- (-&gt;) Allows us to set or update values through a reflector</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="kw">instance</span> <span class="dt">Reflector</span> (<span class="ot">-&gt;</span>) <span class="kw">where</span></span>
-<span id="cb5-3"><a href="#cb5-3"></a>  reflected <span class="ot">=</span> <span class="fu">fmap</span></span>
-<span id="cb5-4"><a href="#cb5-4"></a></span>
-<span id="cb5-5"><a href="#cb5-5"></a><span class="co">-- Costar allows us to run aggregations over collections like we did in the previous post</span></span>
-<span id="cb5-6"><a href="#cb5-6"></a><span class="kw">instance</span> <span class="dt">Traversable</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Costar</span> f) <span class="kw">where</span></span>
-<span id="cb5-7"><a href="#cb5-7"></a>  reflected (<span class="dt">Costar</span> f) <span class="ot">=</span> <span class="dt">Costar</span> (<span class="fu">fmap</span> f <span class="op">.</span> <span class="fu">sequenceA</span>)</span>
-<span id="cb5-8"><a href="#cb5-8"></a></span>
-<span id="cb5-9"><a href="#cb5-9"></a><span class="co">-- Tagged allows us to &quot;review&quot; through a Reflector</span></span>
-<span id="cb5-10"><a href="#cb5-10"></a><span class="kw">instance</span> <span class="dt">Reflector</span> <span class="dt">Tagged</span> <span class="kw">where</span></span>
-<span id="cb5-11"><a href="#cb5-11"></a>  reflected (<span class="dt">Tagged</span> b) <span class="ot">=</span> <span class="dt">Tagged</span> (<span class="fu">pure</span> b)</span>
-<span id="cb5-12"><a href="#cb5-12"></a></span>
-<span id="cb5-13"><a href="#cb5-13"></a><span class="co">-- Star allows us to calculate several &#39;projections&#39; of focuses </span></span>
-<span id="cb5-14"><a href="#cb5-14"></a><span class="kw">instance</span> <span class="dt">Distributive</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Star</span> f) <span class="kw">where</span></span>
-<span id="cb5-15"><a href="#cb5-15"></a>  reflected (<span class="dt">Star</span> f) <span class="ot">=</span> <span class="dt">Star</span> (collect f)</span></code></pre></div>
-<p>These are the usual suspects, in optics they correspond to the ability to run the following actions:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="dt">MStrong</span> p <span class="ot">=&gt;</span> <span class="dt">Reflector</span> p <span class="kw">where</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ot">  reflected ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (f a) (f b)</span></code></pre></div>
+<p>Reflector has a superclass of the <code>MStrong</code> profunctor
+noted in the corrections at the bottom of the previous post. That every
+Reflector is MStrong is trivially witnessed by
+<code>msecond' = reflected</code> since
+<code>Monoid m =&gt; (m, a)</code> is an Applicative (namely the
+<strong>Writer</strong> Applicative).</p>
+<p>With this class defined we can say that a Kaleidoscope is any optic
+which depends on <code>Reflector</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Kaleidoscope</span> s t a b <span class="ot">=</span> <span class="kw">forall</span> p<span class="op">.</span> <span class="dt">Reflector</span> p <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p s t</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Kaleidoscope&#39;</span> s a <span class="ot">=</span> <span class="dt">Kaleidoscope</span> s s a a</span></code></pre></div>
+<p>This provides an optic which focuses the contents of any Applicative
+structure!</p>
+<p>Here's what we get when we write <code>reflected</code> with its new
+signature:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ot">reflected ::</span> <span class="dt">Applicative</span> f <span class="ot">=&gt;</span> <span class="dt">Kaleidoscope</span> (f a) (f b) a b</span></code></pre></div>
+<p>At first <code>reflected</code> seems almost identical to the
+<code>traverse'</code> combinator from the <a
+href="https://hackage.haskell.org/package/profunctors-5.5.1/docs/Data-Profunctor-Traversing.html#v:traverse-39-"><code>Traversing</code></a>
+profunctor class:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">traverse&#39; ::</span> (<span class="dt">Traversing</span> p, <span class="dt">Traversable</span> f) <span class="ot">=&gt;</span> <span class="dt">Optic</span> p (f a) (f b) a b</span></code></pre></div>
+<p>But of course <code>traverse'</code> works only on Traversables
+whereas our new optic works only on Applicatives. Although these have
+significant overlap, the <strong>behaviour</strong> induced by the use
+of applicative structure is distinct from the behaviour of
+traversables.</p>
+<p>Let's implement our new <code>Reflector</code> class for a few common
+profunctors so we can actually try it out!</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- (-&gt;) Allows us to set or update values through a reflector</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Reflector</span> (<span class="ot">-&gt;</span>) <span class="kw">where</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  reflected <span class="ot">=</span> <span class="fu">fmap</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Costar allows us to run aggregations over collections like we did in the previous post</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Traversable</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Costar</span> f) <span class="kw">where</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  reflected (<span class="dt">Costar</span> f) <span class="ot">=</span> <span class="dt">Costar</span> (<span class="fu">fmap</span> f <span class="op">.</span> <span class="fu">sequenceA</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Tagged allows us to &quot;review&quot; through a Reflector</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Reflector</span> <span class="dt">Tagged</span> <span class="kw">where</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  reflected (<span class="dt">Tagged</span> b) <span class="ot">=</span> <span class="dt">Tagged</span> (<span class="fu">pure</span> b)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- Star allows us to calculate several &#39;projections&#39; of focuses </span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Distributive</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Star</span> f) <span class="kw">where</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  reflected (<span class="dt">Star</span> f) <span class="ot">=</span> <span class="dt">Star</span> (collect f)</span></code></pre></div>
+<p>These are the usual suspects, in optics they correspond to the
+ability to run the following actions:</p>
 <ul>
 <li><code>(-&gt;)</code>: <code>set</code>/<code>modify</code></li>
-<li><code>Costar</code>: <code>(?.)</code>/<code>(&gt;-)</code> (from the last post)</li>
+<li><code>Costar</code>: <code>(?.)</code>/<code>(&gt;-)</code> (from
+the last post)</li>
 <li><code>Tagged</code>: review</li>
 <li><code>Star</code>: traverseOf</li>
 </ul>
-<p>Unfortunately we can't implement an instance of <code>Reflector</code> for <code>Forget</code>, so we won't be able to <code>view</code> or <code>fold</code> over Kaleidoscopes. C'est la vie!</p>
+<p>Unfortunately we can't implement an instance of
+<code>Reflector</code> for <code>Forget</code>, so we won't be able to
+<code>view</code> or <code>fold</code> over Kaleidoscopes. C'est la
+vie!</p>
 <p>The class and optic are all set up! Let's see what they can do.</p>
 <h2 id="grouping-with-kaleidoscopes">Grouping with kaleidoscopes</h2>
-<p>In the previous post we managed to fill out most of the examples from the case study using Algebraic Lenses, but we got stuck when it came to <strong>aggregating</strong> over the individual measurements of the flowers in our data-set. We wanted to somehow aggregate over constituent pieces of our data-set all at once, for instance if we had the following measurements as a silly example:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="dt">Measurements</span> [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
-<span id="cb6-2"><a href="#cb6-2"></a><span class="dt">Measurements</span> [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
-<span id="cb6-3"><a href="#cb6-3"></a><span class="dt">Measurements</span> [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span></code></pre></div>
-<p>We want to average them across each <strong>column</strong>, so we want to end up with:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="dt">Measurements</span> </span>
-<span id="cb7-2"><a href="#cb7-2"></a>  [ mean [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>]</span>
-<span id="cb7-3"><a href="#cb7-3"></a>  , mean [<span class="dv">2</span>, <span class="dv">20</span>, <span class="dv">200</span>]</span>
-<span id="cb7-4"><a href="#cb7-4"></a>  , mean [<span class="dv">3</span>, <span class="dv">30</span>, <span class="dv">300</span>]</span>
-<span id="cb7-5"><a href="#cb7-5"></a>  , mean [<span class="dv">4</span>, <span class="dv">40</span>, <span class="dv">400</span>]</span>
-<span id="cb7-6"><a href="#cb7-6"></a>  ]</span></code></pre></div>
-<p>However our Algebraic lenses didn't give us any way to talk about <strong>grouping</strong> or <strong>convolution</strong> of the elements in the container, but kaleidoscopes are going to help us get there!</p>
-<p>Let's try just running our optic in a few different ways that type-check and see what happens.</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="co">-- When updating/setting it simply focuses each &#39;element&#39; of the applicative.</span></span>
-<span id="cb8-2"><a href="#cb8-2"></a><span class="co">-- It&#39;s indistinguishable from `traversed` in this case</span></span>
-<span id="cb8-3"><a href="#cb8-3"></a><span class="op">&gt;&gt;&gt;</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="op">&amp;</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
-<span id="cb8-4"><a href="#cb8-4"></a>[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>]</span>
-<span id="cb8-5"><a href="#cb8-5"></a></span>
-<span id="cb8-6"><a href="#cb8-6"></a><span class="co">-- We can compose it to nest deeper into multiple stacked applicatives of course!</span></span>
-<span id="cb8-7"><a href="#cb8-7"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> reflected <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
-<span id="cb8-8"><a href="#cb8-8"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span>
-<span id="cb8-9"><a href="#cb8-9"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> reflected <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
-<span id="cb8-10"><a href="#cb8-10"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span>
-<span id="cb8-11"><a href="#cb8-11"></a></span>
-<span id="cb8-12"><a href="#cb8-12"></a><span class="co">-- Since `Tagged` is a `Reflector` we can &#39;review&#39; through &#39;reflected&#39; </span></span>
-<span id="cb8-13"><a href="#cb8-13"></a><span class="co">-- This will embed a value into any Applicative as though we&#39;d used &#39;pure&#39;</span></span>
-<span id="cb8-14"><a href="#cb8-14"></a><span class="op">&gt;&gt;&gt;</span> review reflected <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Either</span> () <span class="dt">Int</span></span>
-<span id="cb8-15"><a href="#cb8-15"></a><span class="dt">Right</span> <span class="dv">1</span></span>
-<span id="cb8-16"><a href="#cb8-16"></a><span class="co">-- We can compose with prisms</span></span>
-<span id="cb8-17"><a href="#cb8-17"></a><span class="op">&gt;&gt;&gt;</span> review (_Just <span class="op">.</span> reflected) <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Maybe</span> [<span class="dt">Int</span>]</span>
-<span id="cb8-18"><a href="#cb8-18"></a><span class="dt">Just</span> [<span class="dv">1</span>]</span>
-<span id="cb8-19"><a href="#cb8-19"></a></span>
-<span id="cb8-20"><a href="#cb8-20"></a><span class="op">&gt;&gt;&gt;</span> review (reflected <span class="op">.</span> reflected) <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Maybe</span> [<span class="dt">Int</span>]</span>
-<span id="cb8-21"><a href="#cb8-21"></a><span class="dt">Just</span> [<span class="dv">1</span>]</span>
-<span id="cb8-22"><a href="#cb8-22"></a></span>
-<span id="cb8-23"><a href="#cb8-23"></a><span class="co">-- Unfortunately kaleidoscopes don&#39;t allow viewing or folding :&#39;(</span></span>
-<span id="cb8-24"><a href="#cb8-24"></a><span class="co">-- They can still be composed with lenses and traversals, but the resulting optic</span></span>
-<span id="cb8-25"><a href="#cb8-25"></a><span class="co">-- can only be used as a setter, or as a traversal with Distributive Functors.</span></span>
-<span id="cb8-26"><a href="#cb8-26"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">^..</span> reflected <span class="op">.</span> reflected</span>
-<span id="cb8-27"><a href="#cb8-27"></a><span class="fu">error</span><span class="op">:</span></span>
-<span id="cb8-28"><a href="#cb8-28"></a>    • <span class="dt">No</span> <span class="kw">instance</span> for (<span class="dt">Reflector</span></span>
-<span id="cb8-29"><a href="#cb8-29"></a>                         (<span class="dt">Data.Profunctor.Types.Forget</span> [<span class="dt">Integer</span>]))</span>
-<span id="cb8-30"><a href="#cb8-30"></a></span>
-<span id="cb8-31"><a href="#cb8-31"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> traversed <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
-<span id="cb8-32"><a href="#cb8-32"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span></code></pre></div>
-<p>Okay, so that covers <code>review</code>, <code>set</code> and <code>over</code>, what about <code>&gt;-</code>? This is where things start to get fun!</p>
-<p>Remember from the last post that <code>&gt;-</code> has this type:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="ot">(&gt;-) ::</span> <span class="dt">Optic</span> (<span class="dt">Costar</span> f) s t a b <span class="ot">-&gt;</span> (f a <span class="ot">-&gt;</span> b) <span class="ot">-&gt;</span> f s <span class="ot">-&gt;</span> t</span></code></pre></div>
-<p>So this means it aggregates some <strong>outer</strong> container <code>f</code> over the focuses of the provided optic. The hardest part here is keeping track of which container is the collection handled by <code>&gt;-</code> and which is the <code>Applicative</code> handled by <code>reflected</code>. To help keep things separate I'll introduce the simple <code>Pair</code> type, defined like so:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="kw">data</span> <span class="dt">Pair</span> a <span class="ot">=</span> <span class="dt">Pair</span> a a</span>
-<span id="cb10-2"><a href="#cb10-2"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Functor</span>, <span class="dt">Foldable</span>, <span class="dt">Traversable</span>)</span>
-<span id="cb10-3"><a href="#cb10-3"></a></span>
-<span id="cb10-4"><a href="#cb10-4"></a><span class="kw">instance</span> <span class="dt">Applicative</span> <span class="dt">Pair</span> <span class="kw">where</span></span>
-<span id="cb10-5"><a href="#cb10-5"></a>  <span class="fu">pure</span> a <span class="ot">=</span> <span class="dt">Pair</span> a a</span>
-<span id="cb10-6"><a href="#cb10-6"></a>  <span class="dt">Pair</span> f f&#39; <span class="op">&lt;*&gt;</span> <span class="dt">Pair</span> a a&#39; <span class="ot">=</span> <span class="dt">Pair</span> (f a) (f&#39; a&#39;)</span></code></pre></div>
-<p>Now let's run a few simple aggregations to <em>start</em> to understand <code>reflected</code>.</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="co">-- Here &#39;reflected&#39; uses the List&#39;s Applicative instance </span></span>
-<span id="cb11-2"><a href="#cb11-2"></a><span class="co">-- to group elements from each of the values in the outer Pair.</span></span>
-<span id="cb11-3"><a href="#cb11-3"></a><span class="co">-- By using `show` as our `(f a -&gt; b)` aggregation we can see </span></span>
-<span id="cb11-4"><a href="#cb11-4"></a><span class="co">-- each grouping was passed to our aggregation function.</span></span>
-<span id="cb11-5"><a href="#cb11-5"></a><span class="op">&gt;&gt;&gt;</span> <span class="dt">Pair</span> [<span class="dv">1</span>, <span class="dv">2</span>] [<span class="dv">3</span>, <span class="dv">4</span>] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
-<span id="cb11-6"><a href="#cb11-6"></a>[<span class="st">&quot;Pair 1 3&quot;</span>,<span class="st">&quot;Pair 1 4&quot;</span>,<span class="st">&quot;Pair 2 3&quot;</span>,<span class="st">&quot;Pair 2 4&quot;</span>]</span></code></pre></div>
-<p>A few things to notice here. First, the structure of outer collection gets shifted to the inside where it was aggregated, the <code>Pair</code> was flattened by our aggregation, leaving only the list's structure. Secondly we can see that we have a value representing each possible pairing of the two lists in our pair. <code>reflected</code> used the Applicative instance of the list to determine the groupings, and the Applicative for lists finds all possible pairings. Basically it did this:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="op">&gt;&gt;&gt;</span> liftA2 <span class="dt">Pair</span> [<span class="dv">1</span>, <span class="dv">2</span>] [<span class="dv">3</span>, <span class="dv">4</span>]</span>
-<span id="cb12-2"><a href="#cb12-2"></a>[<span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">3</span>, <span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">4</span>, <span class="dt">Pair</span> <span class="dv">2</span> <span class="dv">3</span>, <span class="dt">Pair</span> <span class="dv">2</span> <span class="dv">4</span>]</span></code></pre></div>
-<p>What happens if we run the same thing with the containers flip-flopped? Then <code>reflected</code> will group elements using the <code>Pair</code> applicative which matches the elements of each pair zip-wise.</p>
-<p>Note that the reason we can flip-flop them like this is that Lists and Pairs each have <code>Applicative</code> AND <code>Traversable</code> instances. This time we're using the List's Traversable instance and the Pair's Applicative.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="op">&gt;&gt;&gt;</span> [<span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">2</span>, <span class="dt">Pair</span> <span class="dv">3</span> <span class="dv">4</span>] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
-<span id="cb13-2"><a href="#cb13-2"></a><span class="dt">Pair</span> <span class="st">&quot;[1,3]&quot;</span> <span class="st">&quot;[2,4]&quot;</span></span></code></pre></div>
-<p>This time we can see we've grouped the elements into lists by their positions in the pair! Again, the outer structure was flattened by the aggregation after being grouped using the inner applicative instance.</p>
+<p>In the previous post we managed to fill out most of the examples from
+the case study using Algebraic Lenses, but we got stuck when it came to
+<strong>aggregating</strong> over the individual measurements of the
+flowers in our data-set. We wanted to somehow aggregate over constituent
+pieces of our data-set all at once, for instance if we had the following
+measurements as a silly example:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="dt">Measurements</span> [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Measurements</span> [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="dt">Measurements</span> [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span></code></pre></div>
+<p>We want to average them across each <strong>column</strong>, so we
+want to end up with:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="dt">Measurements</span> </span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  [ mean [<span class="dv">1</span>, <span class="dv">10</span>, <span class="dv">100</span>]</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  , mean [<span class="dv">2</span>, <span class="dv">20</span>, <span class="dv">200</span>]</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  , mean [<span class="dv">3</span>, <span class="dv">30</span>, <span class="dv">300</span>]</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  , mean [<span class="dv">4</span>, <span class="dv">40</span>, <span class="dv">400</span>]</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
+<p>However our Algebraic lenses didn't give us any way to talk about
+<strong>grouping</strong> or <strong>convolution</strong> of the
+elements in the container, but kaleidoscopes are going to help us get
+there!</p>
+<p>Let's try just running our optic in a few different ways that
+type-check and see what happens.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- When updating/setting it simply focuses each &#39;element&#39; of the applicative.</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- It&#39;s indistinguishable from `traversed` in this case</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="op">&amp;</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>]</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- We can compose it to nest deeper into multiple stacked applicatives of course!</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> reflected <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> reflected <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- Since `Tagged` is a `Reflector` we can &#39;review&#39; through &#39;reflected&#39; </span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- This will embed a value into any Applicative as though we&#39;d used &#39;pure&#39;</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> review reflected <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Either</span> () <span class="dt">Int</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="dt">Right</span> <span class="dv">1</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co">-- We can compose with prisms</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> review (_Just <span class="op">.</span> reflected) <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Maybe</span> [<span class="dt">Int</span>]</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="dt">Just</span> [<span class="dv">1</span>]</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> review (reflected <span class="op">.</span> reflected) <span class="dv">1</span><span class="ot"> ::</span> <span class="dt">Maybe</span> [<span class="dt">Int</span>]</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="dt">Just</span> [<span class="dv">1</span>]</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a><span class="co">-- Unfortunately kaleidoscopes don&#39;t allow viewing or folding :&#39;(</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- They can still be composed with lenses and traversals, but the resulting optic</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="co">-- can only be used as a setter, or as a traversal with Distributive Functors.</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">^..</span> reflected <span class="op">.</span> reflected</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a><span class="fu">error</span><span class="op">:</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>    • <span class="dt">No</span> <span class="kw">instance</span> for (<span class="dt">Reflector</span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>                         (<span class="dt">Data.Profunctor.Types.Forget</span> [<span class="dt">Integer</span>]))</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [[<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]] <span class="op">&amp;</span> traversed <span class="op">.</span> reflected <span class="op">%~</span> (<span class="op">*</span><span class="dv">10</span>)</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>[[<span class="dv">10</span>,<span class="dv">20</span>,<span class="dv">30</span>],[<span class="dv">40</span>,<span class="dv">50</span>,<span class="dv">60</span>]]</span></code></pre></div>
+<p>Okay, so that covers <code>review</code>, <code>set</code> and
+<code>over</code>, what about <code>&gt;-</code>? This is where things
+start to get fun!</p>
+<p>Remember from the last post that <code>&gt;-</code> has this
+type:</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">(&gt;-) ::</span> <span class="dt">Optic</span> (<span class="dt">Costar</span> f) s t a b <span class="ot">-&gt;</span> (f a <span class="ot">-&gt;</span> b) <span class="ot">-&gt;</span> f s <span class="ot">-&gt;</span> t</span></code></pre></div>
+<p>So this means it aggregates some <strong>outer</strong> container
+<code>f</code> over the focuses of the provided optic. The hardest part
+here is keeping track of which container is the collection handled by
+<code>&gt;-</code> and which is the <code>Applicative</code> handled by
+<code>reflected</code>. To help keep things separate I'll introduce the
+simple <code>Pair</code> type, defined like so:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Pair</span> a <span class="ot">=</span> <span class="dt">Pair</span> a a</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Functor</span>, <span class="dt">Foldable</span>, <span class="dt">Traversable</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Applicative</span> <span class="dt">Pair</span> <span class="kw">where</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> a <span class="ot">=</span> <span class="dt">Pair</span> a a</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Pair</span> f f&#39; <span class="op">&lt;*&gt;</span> <span class="dt">Pair</span> a a&#39; <span class="ot">=</span> <span class="dt">Pair</span> (f a) (f&#39; a&#39;)</span></code></pre></div>
+<p>Now let's run a few simple aggregations to <em>start</em> to
+understand <code>reflected</code>.</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Here &#39;reflected&#39; uses the List&#39;s Applicative instance </span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- to group elements from each of the values in the outer Pair.</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- By using `show` as our `(f a -&gt; b)` aggregation we can see </span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- each grouping was passed to our aggregation function.</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="dt">Pair</span> [<span class="dv">1</span>, <span class="dv">2</span>] [<span class="dv">3</span>, <span class="dv">4</span>] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>[<span class="st">&quot;Pair 1 3&quot;</span>,<span class="st">&quot;Pair 1 4&quot;</span>,<span class="st">&quot;Pair 2 3&quot;</span>,<span class="st">&quot;Pair 2 4&quot;</span>]</span></code></pre></div>
+<p>A few things to notice here. First, the structure of outer collection
+gets shifted to the inside where it was aggregated, the
+<code>Pair</code> was flattened by our aggregation, leaving only the
+list's structure. Secondly we can see that we have a value representing
+each possible pairing of the two lists in our pair.
+<code>reflected</code> used the Applicative instance of the list to
+determine the groupings, and the Applicative for lists finds all
+possible pairings. Basically it did this:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> liftA2 <span class="dt">Pair</span> [<span class="dv">1</span>, <span class="dv">2</span>] [<span class="dv">3</span>, <span class="dv">4</span>]</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>[<span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">3</span>, <span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">4</span>, <span class="dt">Pair</span> <span class="dv">2</span> <span class="dv">3</span>, <span class="dt">Pair</span> <span class="dv">2</span> <span class="dv">4</span>]</span></code></pre></div>
+<p>What happens if we run the same thing with the containers
+flip-flopped? Then <code>reflected</code> will group elements using the
+<code>Pair</code> applicative which matches the elements of each pair
+zip-wise.</p>
+<p>Note that the reason we can flip-flop them like this is that Lists
+and Pairs each have <code>Applicative</code> AND
+<code>Traversable</code> instances. This time we're using the List's
+Traversable instance and the Pair's Applicative.</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> [<span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">2</span>, <span class="dt">Pair</span> <span class="dv">3</span> <span class="dv">4</span>] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Pair</span> <span class="st">&quot;[1,3]&quot;</span> <span class="st">&quot;[2,4]&quot;</span></span></code></pre></div>
+<p>This time we can see we've grouped the elements into lists by their
+positions in the pair! Again, the outer structure was flattened by the
+aggregation after being grouped using the inner applicative
+instance.</p>
 <p>Let's try one more; we'll use a Map for the outer container.</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="op">&gt;&gt;&gt;</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, <span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">2</span>), (<span class="ch">&#39;b&#39;</span>, <span class="dt">Pair</span> <span class="dv">3</span> <span class="dv">4</span>)] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
-<span id="cb14-2"><a href="#cb14-2"></a><span class="dt">Pair</span> <span class="st">&quot;fromList [(&#39;a&#39;,1),(&#39;b&#39;,3)]&quot;</span> <span class="st">&quot;fromList [(&#39;a&#39;,2),(&#39;b&#39;,4)]&quot;</span></span></code></pre></div>
-<p>This creates two separate maps which have been grouped into Maps using the Applicative instance of the inner Pair! In this case it grouped elements zipwise across maps! Take a moment to see how this behavior is perhaps not very intuitive, but is nonetheless a very useful way of grouping data.</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> M.fromList [(<span class="ch">&#39;a&#39;</span>, <span class="dt">Pair</span> <span class="dv">1</span> <span class="dv">2</span>), (<span class="ch">&#39;b&#39;</span>, <span class="dt">Pair</span> <span class="dv">3</span> <span class="dv">4</span>)] <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Pair</span> <span class="st">&quot;fromList [(&#39;a&#39;,1),(&#39;b&#39;,3)]&quot;</span> <span class="st">&quot;fromList [(&#39;a&#39;,2),(&#39;b&#39;,4)]&quot;</span></span></code></pre></div>
+<p>This creates two separate maps which have been grouped into Maps
+using the Applicative instance of the inner Pair! In this case it
+grouped elements zipwise across maps! Take a moment to see how this
+behavior is perhaps not very intuitive, but is nonetheless a very useful
+way of grouping data.</p>
 <h2 id="back-to-measurements">Back to measurements</h2>
-<p>So, back to our flower problem from the previous post, now that we very <em>roughly</em> understand how <code>reflected</code> groups elements for aggregation we'll see how we can use it to group respective measurements of our flowers.</p>
-<p>Here's our simplified representation of our problem, we've got a collection of flower measurements. Each element of each list represents a unique measurement, for example maybe the first measurement in each list (the first column) represents leaf length, and the last measurement in each (the last column) represents stem length. Here's our silly simplified data set:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="ot">allMeasurements ::</span> [[<span class="dt">Float</span>]]</span>
-<span id="cb15-2"><a href="#cb15-2"></a>allMeasurements <span class="ot">=</span></span>
-<span id="cb15-3"><a href="#cb15-3"></a>      [ [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
-<span id="cb15-4"><a href="#cb15-4"></a>      , [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
-<span id="cb15-5"><a href="#cb15-5"></a>      , [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span>
-<span id="cb15-6"><a href="#cb15-6"></a>      ]</span></code></pre></div>
-<p>Our task is to get the average of the <strong>each individual measurement</strong>, i.e. the average of each <strong>column</strong> rather than each <strong>row</strong>, averaging different measurement types together doesn't make sense. We've seen how <code>reflected</code> can help us group data across an outer container, but if we try to use <code>reflected</code> here it will find ALL POSSIBLE GROUPINGS! Let's see how this gong-show unfolds:</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a><span class="op">&gt;&gt;&gt;</span> allMeasurements <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
-<span id="cb16-2"><a href="#cb16-2"></a>[<span class="st">&quot;[1,10,100]&quot;</span>,<span class="st">&quot;[1,10,200]&quot;</span>,<span class="st">&quot;[1,10,300]&quot;</span>,<span class="st">&quot;[1,10,400]&quot;</span>,<span class="st">&quot;[1,20,100]&quot;</span>,<span class="st">&quot;[1,20,200]&quot;</span></span>
-<span id="cb16-3"><a href="#cb16-3"></a>,<span class="st">&quot;[1,20,300]&quot;</span>,<span class="st">&quot;[1,20,400]&quot;</span>,<span class="st">&quot;[1,30,100]&quot;</span>,<span class="st">&quot;[1,30,200]&quot;</span>,<span class="st">&quot;[1,30,300]&quot;</span>,<span class="st">&quot;[1,30,400]&quot;</span></span>
-<span id="cb16-4"><a href="#cb16-4"></a>, <span class="op">...</span> ad<span class="op">-</span>nauseum</span>
-<span id="cb16-5"><a href="#cb16-5"></a>]</span></code></pre></div>
-<p>Hrmmm, this makes sense when we think about it; we're grouping elements using the list applicative which performs a cartesian product yielding all possible combinations! Instead we really want to group elements by their position within the list, we'll need a different <code>Applicative</code> instance! Since we want the applicative to <em>zip</em> each matching element together I suspect a <code>ZipList</code> might be just what the doctor ordered!</p>
-<p>If you're unfamiliar with <code>ZipList</code> it's a newtype around lists provided in <code>Control.Applicative</code>. Take a look at how its Applicative instance differs from plain old lists:</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="co">-- List Applicative is cartesian product; e.g. all combinations.</span></span>
-<span id="cb17-2"><a href="#cb17-2"></a><span class="op">&gt;&gt;&gt;</span> liftA2 (,) [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>] [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]</span>
-<span id="cb17-3"><a href="#cb17-3"></a>[(<span class="dv">1</span>,<span class="dv">4</span>),(<span class="dv">1</span>,<span class="dv">5</span>),(<span class="dv">1</span>,<span class="dv">6</span>),(<span class="dv">2</span>,<span class="dv">4</span>),(<span class="dv">2</span>,<span class="dv">5</span>),(<span class="dv">2</span>,<span class="dv">6</span>),(<span class="dv">3</span>,<span class="dv">4</span>),(<span class="dv">3</span>,<span class="dv">5</span>),(<span class="dv">3</span>,<span class="dv">6</span>)]</span>
-<span id="cb17-4"><a href="#cb17-4"></a></span>
-<span id="cb17-5"><a href="#cb17-5"></a><span class="co">-- ZipList Applicative does zipwise pairing instead!</span></span>
-<span id="cb17-6"><a href="#cb17-6"></a><span class="op">&gt;&gt;&gt;</span> liftA2 (,) (<span class="dt">ZipList</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>]) (<span class="dt">ZipList</span> [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>])</span>
-<span id="cb17-7"><a href="#cb17-7"></a><span class="dt">ZipList</span> [(<span class="dv">1</span>,<span class="dv">4</span>),(<span class="dv">2</span>,<span class="dv">5</span>),(<span class="dv">3</span>,<span class="dv">6</span>)]</span></code></pre></div>
-<p>That looks more like what we want, the results end up grouped according to their position in the list.</p>
+<p>So, back to our flower problem from the previous post, now that we
+very <em>roughly</em> understand how <code>reflected</code> groups
+elements for aggregation we'll see how we can use it to group respective
+measurements of our flowers.</p>
+<p>Here's our simplified representation of our problem, we've got a
+collection of flower measurements. Each element of each list represents
+a unique measurement, for example maybe the first measurement in each
+list (the first column) represents leaf length, and the last measurement
+in each (the last column) represents stem length. Here's our silly
+simplified data set:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ot">allMeasurements ::</span> [[<span class="dt">Float</span>]]</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>allMeasurements <span class="ot">=</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>      [ [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>      , [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>      , [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>      ]</span></code></pre></div>
+<p>Our task is to get the average of the <strong>each individual
+measurement</strong>, i.e. the average of each <strong>column</strong>
+rather than each <strong>row</strong>, averaging different measurement
+types together doesn't make sense. We've seen how <code>reflected</code>
+can help us group data across an outer container, but if we try to use
+<code>reflected</code> here it will find ALL POSSIBLE GROUPINGS! Let's
+see how this gong-show unfolds:</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> allMeasurements <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>[<span class="st">&quot;[1,10,100]&quot;</span>,<span class="st">&quot;[1,10,200]&quot;</span>,<span class="st">&quot;[1,10,300]&quot;</span>,<span class="st">&quot;[1,10,400]&quot;</span>,<span class="st">&quot;[1,20,100]&quot;</span>,<span class="st">&quot;[1,20,200]&quot;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>,<span class="st">&quot;[1,20,300]&quot;</span>,<span class="st">&quot;[1,20,400]&quot;</span>,<span class="st">&quot;[1,30,100]&quot;</span>,<span class="st">&quot;[1,30,200]&quot;</span>,<span class="st">&quot;[1,30,300]&quot;</span>,<span class="st">&quot;[1,30,400]&quot;</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>, <span class="op">...</span> ad<span class="op">-</span>nauseum</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<p>Hrmmm, this makes sense when we think about it; we're grouping
+elements using the list applicative which performs a cartesian product
+yielding all possible combinations! Instead we really want to group
+elements by their position within the list, we'll need a different
+<code>Applicative</code> instance! Since we want the applicative to
+<em>zip</em> each matching element together I suspect a
+<code>ZipList</code> might be just what the doctor ordered!</p>
+<p>If you're unfamiliar with <code>ZipList</code> it's a newtype around
+lists provided in <code>Control.Applicative</code>. Take a look at how
+its Applicative instance differs from plain old lists:</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- List Applicative is cartesian product; e.g. all combinations.</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> liftA2 (,) [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>] [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>]</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>[(<span class="dv">1</span>,<span class="dv">4</span>),(<span class="dv">1</span>,<span class="dv">5</span>),(<span class="dv">1</span>,<span class="dv">6</span>),(<span class="dv">2</span>,<span class="dv">4</span>),(<span class="dv">2</span>,<span class="dv">5</span>),(<span class="dv">2</span>,<span class="dv">6</span>),(<span class="dv">3</span>,<span class="dv">4</span>),(<span class="dv">3</span>,<span class="dv">5</span>),(<span class="dv">3</span>,<span class="dv">6</span>)]</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- ZipList Applicative does zipwise pairing instead!</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> liftA2 (,) (<span class="dt">ZipList</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>]) (<span class="dt">ZipList</span> [<span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>])</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="dt">ZipList</span> [(<span class="dv">1</span>,<span class="dv">4</span>),(<span class="dv">2</span>,<span class="dv">5</span>),(<span class="dv">3</span>,<span class="dv">6</span>)]</span></code></pre></div>
+<p>That looks more like what we want, the results end up grouped
+according to their position in the list.</p>
 <p>Let's try this instead:</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="ot">zippyMeasurements ::</span> [<span class="dt">ZipList</span> <span class="dt">Float</span>]</span>
-<span id="cb18-2"><a href="#cb18-2"></a>zippyMeasurements <span class="ot">=</span></span>
-<span id="cb18-3"><a href="#cb18-3"></a>      [ <span class="dt">ZipList</span> [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
-<span id="cb18-4"><a href="#cb18-4"></a>      , <span class="dt">ZipList</span> [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
-<span id="cb18-5"><a href="#cb18-5"></a>      , <span class="dt">ZipList</span> [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span>
-<span id="cb18-6"><a href="#cb18-6"></a>      ]</span>
-<span id="cb18-7"><a href="#cb18-7"></a></span>
-<span id="cb18-8"><a href="#cb18-8"></a><span class="op">&gt;&gt;&gt;</span> zippyMeasurements <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
-<span id="cb18-9"><a href="#cb18-9"></a><span class="dt">ZipList</span> [ <span class="st">&quot;[1,10,100]&quot;</span></span>
-<span id="cb18-10"><a href="#cb18-10"></a>        , <span class="st">&quot;[2,20,200]&quot;</span></span>
-<span id="cb18-11"><a href="#cb18-11"></a>        , <span class="st">&quot;[3,30,300]&quot;</span></span>
-<span id="cb18-12"><a href="#cb18-12"></a>        , <span class="st">&quot;[4,40,400]&quot;</span></span>
-<span id="cb18-13"><a href="#cb18-13"></a>        ]</span></code></pre></div>
-<p>Much better! It's common to want this alternate Applicative behaviour for lists, so I'll define a new kaleidoscope which uses this zippy behaviour for lists:</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="co">-- Use an iso to wrap/unwrap the list in ZipList before reflecting</span></span>
-<span id="cb19-2"><a href="#cb19-2"></a><span class="ot">zipWise ::</span> <span class="dt">Kaleidoscope</span> [a] [b] a b</span>
-<span id="cb19-3"><a href="#cb19-3"></a>zipWise <span class="ot">=</span> iso <span class="dt">ZipList</span> getZipList <span class="op">.</span> reflected</span></code></pre></div>
-<p>Great! Now we can use <code>zipWise</code> to do our grouping, and we'll run <code>mean</code> as our aggregation rather than <code>show</code>'ing</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="co">-- Here&#39;s an averaging function</span></span>
-<span id="cb20-2"><a href="#cb20-2"></a><span class="ot">mean ::</span> <span class="dt">Foldable</span> f <span class="ot">=&gt;</span> f <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
-<span id="cb20-3"><a href="#cb20-3"></a>mean xs <span class="ot">=</span> <span class="fu">sum</span> xs <span class="op">/</span> <span class="fu">fromIntegral</span> (<span class="fu">length</span> xs)</span>
-<span id="cb20-4"><a href="#cb20-4"></a></span>
-<span id="cb20-5"><a href="#cb20-5"></a><span class="co">-- `zipWise` will group measurements by type (e.g. get lists representing columns)</span></span>
-<span id="cb20-6"><a href="#cb20-6"></a><span class="co">-- then we can take the average of each column, which will be collected back into a single row.</span></span>
-<span id="cb20-7"><a href="#cb20-7"></a><span class="op">&gt;&gt;&gt;</span> allMeasurements <span class="op">&amp;</span> zipWise <span class="op">&gt;-</span> mean</span>
-<span id="cb20-8"><a href="#cb20-8"></a>[<span class="fl">37.0</span>, <span class="fl">74.0</span>, <span class="fl">111.0</span>, <span class="fl">148.0</span>]</span></code></pre></div>
-<p>Cool! We use any aggregation function in place of <code>mean</code>, so we could get the <code>sum</code>, <code>median</code>, <code>maximum</code>, or <code>minimum</code> of each column, whatever you like!</p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ot">zippyMeasurements ::</span> [<span class="dt">ZipList</span> <span class="dt">Float</span>]</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>zippyMeasurements <span class="ot">=</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>      [ <span class="dt">ZipList</span> [<span class="dv">1</span>  , <span class="dv">2</span>  , <span class="dv">3</span>  , <span class="dv">4</span>  ]</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>      , <span class="dt">ZipList</span> [<span class="dv">10</span> , <span class="dv">20</span> , <span class="dv">30</span> , <span class="dv">40</span> ]</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>      , <span class="dt">ZipList</span> [<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>, <span class="dv">400</span>]</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>      ]</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> zippyMeasurements <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">show</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="dt">ZipList</span> [ <span class="st">&quot;[1,10,100]&quot;</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>        , <span class="st">&quot;[2,20,200]&quot;</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        , <span class="st">&quot;[3,30,300]&quot;</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>        , <span class="st">&quot;[4,40,400]&quot;</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>        ]</span></code></pre></div>
+<p>Much better! It's common to want this alternate Applicative behaviour
+for lists, so I'll define a new kaleidoscope which uses this zippy
+behaviour for lists:</p>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Use an iso to wrap/unwrap the list in ZipList before reflecting</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="ot">zipWise ::</span> <span class="dt">Kaleidoscope</span> [a] [b] a b</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>zipWise <span class="ot">=</span> iso <span class="dt">ZipList</span> getZipList <span class="op">.</span> reflected</span></code></pre></div>
+<p>Great! Now we can use <code>zipWise</code> to do our grouping, and
+we'll run <code>mean</code> as our aggregation rather than
+<code>show</code>'ing</p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Here&#39;s an averaging function</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ot">mean ::</span> <span class="dt">Foldable</span> f <span class="ot">=&gt;</span> f <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>mean xs <span class="ot">=</span> <span class="fu">sum</span> xs <span class="op">/</span> <span class="fu">fromIntegral</span> (<span class="fu">length</span> xs)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- `zipWise` will group measurements by type (e.g. get lists representing columns)</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- then we can take the average of each column, which will be collected back into a single row.</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> allMeasurements <span class="op">&amp;</span> zipWise <span class="op">&gt;-</span> mean</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>[<span class="fl">37.0</span>, <span class="fl">74.0</span>, <span class="fl">111.0</span>, <span class="fl">148.0</span>]</span></code></pre></div>
+<p>Cool! We use any aggregation function in place of <code>mean</code>,
+so we could get the <code>sum</code>, <code>median</code>,
+<code>maximum</code>, or <code>minimum</code> of each column, whatever
+you like!</p>
 <h2 id="finishing-the-example">Finishing the example</h2>
-<p>Let's finish up the example from the previous post; if you haven't read that recently this part might not make much sense.</p>
-<p>Our new <code>zipWise</code> kaleidoscope is almost what we need, but we'll need another iso to let it accept the <code>Measurements</code> wrapper our flowers use:</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1"></a><span class="ot">aggregate ::</span> <span class="dt">Kaleidoscope&#39;</span> <span class="dt">Measurements</span> <span class="dt">Float</span></span>
-<span id="cb21-2"><a href="#cb21-2"></a>aggregate <span class="ot">=</span> iso getMeasurements <span class="dt">Measurements</span> <span class="op">.</span> zipWise</span></code></pre></div>
-<p>Kaleidoscopes compose nicely with the algebraic lenses we built in the previous post, meaning we can use the <code>measurements</code> algebraic lens we built and compose it with our new <code>aggregate</code> kaleidoscope! Using all the same <code>flowers</code> from the previous post:</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">&amp;</span> measurements <span class="op">.</span> aggregate <span class="op">&gt;-</span> mean</span>
-<span id="cb22-2"><a href="#cb22-2"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>])</span></code></pre></div>
-<p>This is doing a LOT for us; it takes a list of flowers, focuses their measurements, averages them zipwise across their independent measurements, then <em>classifies</em> the complete set of average measurements as a species using euclidean difference over measurements with the original data set! As it turns out, the 'average' flower is closest to the <code>Versicolor</code> species (in my completely made up data set)!</p>
+<p>Let's finish up the example from the previous post; if you haven't
+read that recently this part might not make much sense.</p>
+<p>Our new <code>zipWise</code> kaleidoscope is almost what we need, but
+we'll need another iso to let it accept the <code>Measurements</code>
+wrapper our flowers use:</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ot">aggregate ::</span> <span class="dt">Kaleidoscope&#39;</span> <span class="dt">Measurements</span> <span class="dt">Float</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>aggregate <span class="ot">=</span> iso getMeasurements <span class="dt">Measurements</span> <span class="op">.</span> zipWise</span></code></pre></div>
+<p>Kaleidoscopes compose nicely with the algebraic lenses we built in
+the previous post, meaning we can use the <code>measurements</code>
+algebraic lens we built and compose it with our new
+<code>aggregate</code> kaleidoscope! Using all the same
+<code>flowers</code> from the previous post:</p>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> flowers <span class="op">&amp;</span> measurements <span class="op">.</span> aggregate <span class="op">&gt;-</span> mean</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Flower</span> <span class="dt">Versicolor</span> (<span class="dt">Measurements</span> [<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">3.5</span>,<span class="fl">2.25</span>])</span></code></pre></div>
+<p>This is doing a LOT for us; it takes a list of flowers, focuses their
+measurements, averages them zipwise across their independent
+measurements, then <em>classifies</em> the complete set of average
+measurements as a species using euclidean difference over measurements
+with the original data set! As it turns out, the 'average' flower is
+closest to the <code>Versicolor</code> species (in my completely made up
+data set)!</p>
 <h2 id="other-nifty-tricks">Other nifty tricks</h2>
-<p>There's an alternative version of our <code>Reflector</code> which depends on <code>Apply</code> and <code>Traversable1</code> instead of <code>Applicative</code> and <code>Traversable</code>! It doesn't allow <code>review</code>, but opens up <code>reflected</code> to work on anything implementing <code>Apply</code>; which is particularly handy since that allows us to now <code>reflect</code> our way into Maps!</p>
+<p>There's an alternative version of our <code>Reflector</code> which
+depends on <code>Apply</code> and <code>Traversable1</code> instead of
+<code>Applicative</code> and <code>Traversable</code>! It doesn't allow
+<code>review</code>, but opens up <code>reflected</code> to work on
+anything implementing <code>Apply</code>; which is particularly handy
+since that allows us to now <code>reflect</code> our way into Maps!</p>
 <p>Here's the alternative version of our Reflector class:</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="kw">import</span> <span class="dt">Data.Profunctor</span></span>
-<span id="cb23-2"><a href="#cb23-2"></a><span class="kw">import</span> <span class="dt">Data.Profunctor.MStrong</span></span>
-<span id="cb23-3"><a href="#cb23-3"></a><span class="kw">import</span> <span class="dt">Data.Functor.Apply</span></span>
-<span id="cb23-4"><a href="#cb23-4"></a><span class="kw">import</span> <span class="dt">Data.Semigroup.Traversable</span></span>
-<span id="cb23-5"><a href="#cb23-5"></a></span>
-<span id="cb23-6"><a href="#cb23-6"></a><span class="kw">class</span> <span class="dt">MStrong</span> p <span class="ot">=&gt;</span> <span class="dt">Reflector</span> p <span class="kw">where</span></span>
-<span id="cb23-7"><a href="#cb23-7"></a><span class="ot">  reflected ::</span> <span class="dt">Apply</span> f <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (f a) (f b)</span>
-<span id="cb23-8"><a href="#cb23-8"></a></span>
-<span id="cb23-9"><a href="#cb23-9"></a><span class="kw">instance</span> <span class="dt">Traversable1</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Costar</span> f) <span class="kw">where</span></span>
-<span id="cb23-10"><a href="#cb23-10"></a>  reflected (<span class="dt">Costar</span> f) <span class="ot">=</span> <span class="dt">Costar</span> (<span class="fu">fmap</span> f <span class="op">.</span> sequence1)</span></code></pre></div>
-<p>This is only a peek at what's possible, but with this version we can use <code>reflected</code> to group elements key-wise across all Maps in a non-empty collection.</p>
-<p>Let's say we manage several business and have a list of all their profits and expenses. We can group and aggregate over all of their expenses and profits respectively! Again, think of reflected as allowing you to do "column-wise" aggregations, although certain Applicatives provide other intuitions.</p>
-<p>Here's the sum of all profits and expenses across all of our businesses</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> xs <span class="ot">=</span> M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">1</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">2</span>)] </span>
-<span id="cb24-2"><a href="#cb24-2"></a>             <span class="op">:|</span> [ M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">10</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">20</span>)]</span>
-<span id="cb24-3"><a href="#cb24-3"></a>                , M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">100</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">200</span>)]</span>
-<span id="cb24-4"><a href="#cb24-4"></a>                ]</span>
-<span id="cb24-5"><a href="#cb24-5"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">sum</span></span>
-<span id="cb24-6"><a href="#cb24-6"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="dv">222</span>),(<span class="st">&quot;profits&quot;</span>,<span class="dv">111</span>)]</span>
-<span id="cb24-7"><a href="#cb24-7"></a></span>
-<span id="cb24-8"><a href="#cb24-8"></a><span class="co">-- Average expenses, average profit</span></span>
-<span id="cb24-9"><a href="#cb24-9"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> mean</span>
-<span id="cb24-10"><a href="#cb24-10"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="fl">74.0</span>),(<span class="st">&quot;profits&quot;</span>,<span class="fl">37.0</span>)]</span>
-<span id="cb24-11"><a href="#cb24-11"></a></span>
-<span id="cb24-12"><a href="#cb24-12"></a><span class="co">-- Largest expenses and profit</span></span>
-<span id="cb24-13"><a href="#cb24-13"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">maximum</span></span>
-<span id="cb24-14"><a href="#cb24-14"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="dv">200</span>),(<span class="st">&quot;profits&quot;</span>,<span class="dv">100</span>)]</span></code></pre></div>
-<p>This is still a new, exciting, and unexplored area of optics; but I suspect that once libraries begin to adopt it we'll have an even more adaptable model for querying and aggregating across many records. Optics are getting close to the expressive power of dedicated query languages like SQL!</p>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Profunctor</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Profunctor.MStrong</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Functor.Apply</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Semigroup.Traversable</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="dt">MStrong</span> p <span class="ot">=&gt;</span> <span class="dt">Reflector</span> p <span class="kw">where</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="ot">  reflected ::</span> <span class="dt">Apply</span> f <span class="ot">=&gt;</span> p a b <span class="ot">-&gt;</span> p (f a) (f b)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">Traversable1</span> f <span class="ot">=&gt;</span> <span class="dt">Reflector</span> (<span class="dt">Costar</span> f) <span class="kw">where</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  reflected (<span class="dt">Costar</span> f) <span class="ot">=</span> <span class="dt">Costar</span> (<span class="fu">fmap</span> f <span class="op">.</span> sequence1)</span></code></pre></div>
+<p>This is only a peek at what's possible, but with this version we can
+use <code>reflected</code> to group elements key-wise across all Maps in
+a non-empty collection.</p>
+<p>Let's say we manage several business and have a list of all their
+profits and expenses. We can group and aggregate over all of their
+expenses and profits respectively! Again, think of reflected as allowing
+you to do "column-wise" aggregations, although certain Applicatives
+provide other intuitions.</p>
+<p>Here's the sum of all profits and expenses across all of our
+businesses</p>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> xs <span class="ot">=</span> M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">1</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">2</span>)] </span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>             <span class="op">:|</span> [ M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">10</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">20</span>)]</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>                , M.fromList [(<span class="st">&quot;profits&quot;</span>, <span class="dv">100</span>), (<span class="st">&quot;expenses&quot;</span>, <span class="dv">200</span>)]</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>                ]</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">sum</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="dv">222</span>),(<span class="st">&quot;profits&quot;</span>,<span class="dv">111</span>)]</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- Average expenses, average profit</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> mean</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="fl">74.0</span>),(<span class="st">&quot;profits&quot;</span>,<span class="fl">37.0</span>)]</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- Largest expenses and profit</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> xs <span class="op">&amp;</span> reflected <span class="op">&gt;-</span> <span class="fu">maximum</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>fromList [(<span class="st">&quot;expenses&quot;</span>,<span class="dv">200</span>),(<span class="st">&quot;profits&quot;</span>,<span class="dv">100</span>)]</span></code></pre></div>
+<p>This is still a new, exciting, and unexplored area of optics; but I
+suspect that once libraries begin to adopt it we'll have an even more
+adaptable model for querying and aggregating across many records. Optics
+are getting close to the expressive power of dedicated query languages
+like SQL!</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

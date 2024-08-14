@@ -12,7 +12,8 @@
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Update Monads: Variation on State Monads">
-    <meta name="twitter:description" content="We explore the applications and implementation of a generalized version of Reader/Writer monads.">
+    <meta name="twitter:description" content="We explore the applications and implementation of a generalized version
+of Reader/Writer monads.">
     <meta name="twitter:image" content="http://chrispenner.ca/images/update-monad/change.jpg">
     <title>Update Monads: Variation on State Monads</title>
     <link
@@ -771,181 +772,381 @@
         </div>
       </div>
       <article class="post">
-        <p>Today we're going to take a peek at the Update monad! It's a monad which was formalized and described in <a href="https://danelahman.github.io/papers/types13postproc.pdf">Update Monads: Cointerpreting Directed Containers</a> by Danel Ahman and Tarmo Uustalu. Most folks probably haven't heard of it before, likely because most of what you'd use it for is well encompassed by the Reader, Writer, and State monads. The Update Monad can do everything that Reader, Writer, and State can do, but as a trade-off tends to be less efficient at each of those tasks. It's definitely still worth checking out though; not only is it interesting, there are a few things it handles quite elegantly that might be a bit awkward to do in other ways.</p>
-<p>Heads up; this probably isn't a great post for absolute beginners, you'll want to have a decent understanding of <a href="https://wiki.haskell.org/Monoid">monoids</a> and how <a href="https://wiki.haskell.org/State_Monad">StateT</a> works before you dive in here.</p>
-<p>For readers who've spent a bit of time in Javascript land you may notice that the Update Monad is basically a formalization of the <a href="https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial">Flux architecture</a>, most commonly associated with the Redux library; although of course the Update Monad paper came first 😉. Most of the concepts carry over in some form. The <code>Store</code> in redux corresponds to the state of the Update monad, the <code>Action</code>s in Redux correspond directly to our monoidal Actions in the Update monad, and the view and dispatcher are left up to the implementor, but could be likened to a base monad in a monad transformer stack which could render, react, or get user input (e.g. IO).</p>
-<p>The Update monad is very similar to the State monad; and in fact you can implement either of them in terms of the other! Each has tasks at which it excels; the Update Monad is good at keeping an audit log of updates and limiting computations to a fixed set of permissible updates. State on the other hand has a simpler interface, less boiler-plate, and is MUCH more efficient at most practical tasks. It's no wonder that <code>State</code> won out in the end, but the Update monad is still fun to look at!</p>
-<h2 id="structure-of-the-update-monad">Structure of the Update Monad</h2>
-<p>The Update Monad kinda looks like Reader, Writer and State got into a horrific car accident and are now hopelessly entangled! Each computation receives the current computation <code>state</code> (like <code>Reader</code>) and can result in a monoidal action (like <code>Writer</code>). The action is them applied to the state according to a helper typeclass which I'll call <code>ApplyAction</code>: it has a single method <code>applyAction :: p -&gt; s -&gt; s</code>; which applies a given monoidal action <code>p</code> to a state resulting in a new state. This edited state is passed on to the next computation (like <code>State</code>) and away we go! Here's my implementation of this idea for a new data type called <code>Update</code>.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">class</span> (<span class="dt">Monoid</span> p) <span class="ot">=&gt;</span> <span class="dt">ApplyAction</span> p s <span class="kw">where</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a><span class="ot">  applyAction ::</span> p <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> s</span>
-<span id="cb1-3"><a href="#cb1-3"></a></span>
-<span id="cb1-4"><a href="#cb1-4"></a><span class="kw">data</span> <span class="dt">Update</span> s p a <span class="ot">=</span> <span class="dt">Update</span></span>
-<span id="cb1-5"><a href="#cb1-5"></a>  {<span class="ot"> runUpdate ::</span> (s <span class="ot">-&gt;</span> (p, a))</span>
-<span id="cb1-6"><a href="#cb1-6"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>)</span>
-<span id="cb1-7"><a href="#cb1-7"></a></span>
-<span id="cb1-8"><a href="#cb1-8"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Applicative</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></span>
-<span id="cb1-9"><a href="#cb1-9"></a>  <span class="fu">pure</span> a <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \_ <span class="ot">-&gt;</span> (<span class="fu">mempty</span>, a)</span>
-<span id="cb1-10"><a href="#cb1-10"></a>  <span class="dt">Update</span> u <span class="op">&lt;*&gt;</span> <span class="dt">Update</span> t <span class="ot">=</span></span>
-<span id="cb1-11"><a href="#cb1-11"></a>    <span class="dt">Update</span> <span class="op">$</span> \s</span>
-<span id="cb1-12"><a href="#cb1-12"></a>      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></span>
-<span id="cb1-13"><a href="#cb1-13"></a>      <span class="co">-- and get the monoidal action and the function out</span></span>
-<span id="cb1-14"><a href="#cb1-14"></a>     <span class="ot">-&gt;</span></span>
-<span id="cb1-15"><a href="#cb1-15"></a>      <span class="kw">let</span> (p, f) <span class="ot">=</span> u s</span>
-<span id="cb1-16"><a href="#cb1-16"></a>      <span class="co">-- Run the second &#39;Update&#39; with a state which has been altered by</span></span>
-<span id="cb1-17"><a href="#cb1-17"></a>      <span class="co">-- the first action to get the &#39;a&#39; and another action</span></span>
-<span id="cb1-18"><a href="#cb1-18"></a>          (p&#39;, a) <span class="ot">=</span> t (applyAction p s)</span>
-<span id="cb1-19"><a href="#cb1-19"></a>      <span class="co">-- Combine the actions together and run the function</span></span>
-<span id="cb1-20"><a href="#cb1-20"></a>       <span class="kw">in</span> (p&#39; <span class="op">&lt;&gt;</span> p, f a)</span>
-<span id="cb1-21"><a href="#cb1-21"></a></span>
-<span id="cb1-22"><a href="#cb1-22"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Monad</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></span>
-<span id="cb1-23"><a href="#cb1-23"></a>  <span class="dt">Update</span> u <span class="op">&gt;&gt;=</span> f <span class="ot">=</span></span>
-<span id="cb1-24"><a href="#cb1-24"></a>    <span class="dt">Update</span> <span class="op">$</span> \s</span>
-<span id="cb1-25"><a href="#cb1-25"></a>      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></span>
-<span id="cb1-26"><a href="#cb1-26"></a>      <span class="co">-- and get the monoidal action and the function out</span></span>
-<span id="cb1-27"><a href="#cb1-27"></a>     <span class="ot">-&gt;</span></span>
-<span id="cb1-28"><a href="#cb1-28"></a>      <span class="kw">let</span> (p, a) <span class="ot">=</span> u s</span>
-<span id="cb1-29"><a href="#cb1-29"></a>      <span class="co">-- Run the given function over our resulting value to get our next Update</span></span>
-<span id="cb1-30"><a href="#cb1-30"></a>          <span class="dt">Update</span> t <span class="ot">=</span> f a</span>
-<span id="cb1-31"><a href="#cb1-31"></a>      <span class="co">-- Run our new &#39;Update&#39; over the altered state</span></span>
-<span id="cb1-32"><a href="#cb1-32"></a>          (p&#39;, a&#39;) <span class="ot">=</span> t (applyAction p s)</span>
-<span id="cb1-33"><a href="#cb1-33"></a>      <span class="co">-- Combine the actions together and return the result</span></span>
-<span id="cb1-34"><a href="#cb1-34"></a>       <span class="kw">in</span> (p <span class="op">&lt;&gt;</span> p&#39;, a&#39;)</span></code></pre></div>
-<p>We could of course also implement an <code>UpdateT</code> monad transformer, but for the purposes of clarity I find it's easier to understand the concrete <code>Update</code> type. If you like you can take a peek at some other fun implementations <a href="https://github.com/chrispenner/update-monad">here</a>. Hopefully it's relatively clear from the implementation how things fit together. Hopefully you can kind of see the similarities to Reader and Writer; we are always returning and combining our monoidal actions as we continue along, and each action has access to the state, but can't <em>directly</em> modify it (you may only modify it by providing <strong>actions</strong>). It's also worth noting that within any individual step has only the latest <code>state</code> and it's not possible to view any previous actions which may have occurred, just like the Writer monad.</p>
-<p>Now that we've implemented our Update Monad we've got our <code>&gt;&gt;=</code> and <code>return</code>; but how do we actually accomplish anything with it? There's no <code>MonadUpdate</code> type-class provided in the paper, but here's my personal take on how to get some utility out of it, I've narrowed it down to these two methods which seem to encompass the core ideas behind the Update Monad:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="kw">class</span> (<span class="dt">ApplyAction</span> s p, <span class="dt">Monad</span> m) <span class="ot">=&gt;</span></span>
-<span id="cb2-3"><a href="#cb2-3"></a>      <span class="co">-- Because each of our methods only uses p OR m but not both </span></span>
-<span id="cb2-4"><a href="#cb2-4"></a>      <span class="co">-- we use functional dependencies to assert to the type system that </span></span>
-<span id="cb2-5"><a href="#cb2-5"></a>      <span class="co">-- both s and p are determined by &#39;m&#39;; this helps GHC be confident</span></span>
-<span id="cb2-6"><a href="#cb2-6"></a>      <span class="co">-- that we can&#39;t end up in spots where types could be ambiguous.</span></span>
-<span id="cb2-7"><a href="#cb2-7"></a>      <span class="dt">MonadUpdate</span> m s p <span class="op">|</span> m <span class="ot">-&gt;</span> s , m <span class="ot">-&gt;</span> p</span>
-<span id="cb2-8"><a href="#cb2-8"></a>  <span class="kw">where</span></span>
-<span id="cb2-9"><a href="#cb2-9"></a><span class="ot">    putAction ::</span> p <span class="ot">-&gt;</span> m ()</span>
-<span id="cb2-10"><a href="#cb2-10"></a><span class="ot">    getState ::</span> m s</span></code></pre></div>
-<p>You'll notice some similarities here too! <code>putAction</code> matches the signature for <code>tell</code>, and <code>getState</code> matches <code>ask</code>! This class still provides new value though, because unlike Reader and Writer the environment and the actions are related to each other through the <code>ApplyAction</code> class; and unlike <code>get</code> and <code>put</code> from <code>State</code> our <code>putAction</code> and <code>getState</code> operate over <strong>different</strong> types; you can only <code>put</code> <strong>actions</strong>, and you can only <code>get</code> <strong>state</strong>. We can formalize the expected relationship between these methods with these laws I made up (take with a deluge of salt):</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="co">-- Applying the &#39;empty&#39; action to your state shouldn&#39;t change your state</span></span>
-<span id="cb3-2"><a href="#cb3-2"></a>applyAction <span class="fu">mempty</span> <span class="op">==</span> <span class="fu">id</span></span>
-<span id="cb3-3"><a href="#cb3-3"></a></span>
-<span id="cb3-4"><a href="#cb3-4"></a><span class="co">-- Putting an action and then another action should be the same as </span></span>
-<span id="cb3-5"><a href="#cb3-5"></a><span class="co">-- putting the combination of the two actions.</span></span>
-<span id="cb3-6"><a href="#cb3-6"></a><span class="co">-- This law effectively enforces that `bind` is </span></span>
-<span id="cb3-7"><a href="#cb3-7"></a><span class="co">-- employing your monoid as expected</span></span>
-<span id="cb3-8"><a href="#cb3-8"></a>putAction p <span class="op">&gt;&gt;</span> putAction q <span class="op">==</span> putAction (p <span class="ot">`mappend`</span> q)</span>
-<span id="cb3-9"><a href="#cb3-9"></a></span>
-<span id="cb3-10"><a href="#cb3-10"></a><span class="co">-- We expect that when we &#39;put&#39; an action that it gets applied to the state</span></span>
-<span id="cb3-11"><a href="#cb3-11"></a><span class="co">-- and that the change is visible immediately</span></span>
-<span id="cb3-12"><a href="#cb3-12"></a><span class="co">-- This law enforces that your implementation of bind </span></span>
-<span id="cb3-13"><a href="#cb3-13"></a><span class="co">-- is actually applying your monoid to the state using ApplyAction</span></span>
-<span id="cb3-14"><a href="#cb3-14"></a>applyAction p <span class="op">&lt;$&gt;</span> getState <span class="op">==</span> putAction p <span class="op">&gt;&gt;</span> getState</span></code></pre></div>
-<p>Okay! Now of course we have to implement <code>MonadUpdate</code> for our <code>Update</code> monad; easy-peasy:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">Update</span> p s) p s <span class="kw">where</span></span>
-<span id="cb4-2"><a href="#cb4-2"></a>  putAction p <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \_ <span class="ot">-&gt;</span> (p, ())</span>
-<span id="cb4-3"><a href="#cb4-3"></a>  getState <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \s <span class="ot">-&gt;</span> (<span class="fu">mempty</span>, s)</span></code></pre></div>
-<p>All the plumbing is set up! Let's start looking into some actual use-cases! I'll start by fully describing one particular use-case so we get an understanding of how this all works, then we'll experiment by tweaking our monoid or our <code>applyAction</code> function.</p>
+        <p>Today we're going to take a peek at the Update monad! It's a monad
+which was formalized and described in <a
+href="https://danelahman.github.io/papers/types13postproc.pdf">Update
+Monads: Cointerpreting Directed Containers</a> by Danel Ahman and Tarmo
+Uustalu. Most folks probably haven't heard of it before, likely because
+most of what you'd use it for is well encompassed by the Reader, Writer,
+and State monads. The Update Monad can do everything that Reader,
+Writer, and State can do, but as a trade-off tends to be less efficient
+at each of those tasks. It's definitely still worth checking out though;
+not only is it interesting, there are a few things it handles quite
+elegantly that might be a bit awkward to do in other ways.</p>
+<p>Heads up; this probably isn't a great post for absolute beginners,
+you'll want to have a decent understanding of <a
+href="https://wiki.haskell.org/Monoid">monoids</a> and how <a
+href="https://wiki.haskell.org/State_Monad">StateT</a> works before you
+dive in here.</p>
+<p>For readers who've spent a bit of time in Javascript land you may
+notice that the Update Monad is basically a formalization of the <a
+href="https://www.dotnetcurry.com/reactjs/1356/redux-pattern-tutorial">Flux
+architecture</a>, most commonly associated with the Redux library;
+although of course the Update Monad paper came first 😉. Most of the
+concepts carry over in some form. The <code>Store</code> in redux
+corresponds to the state of the Update monad, the <code>Action</code>s
+in Redux correspond directly to our monoidal Actions in the Update
+monad, and the view and dispatcher are left up to the implementor, but
+could be likened to a base monad in a monad transformer stack which
+could render, react, or get user input (e.g. IO).</p>
+<p>The Update monad is very similar to the State monad; and in fact you
+can implement either of them in terms of the other! Each has tasks at
+which it excels; the Update Monad is good at keeping an audit log of
+updates and limiting computations to a fixed set of permissible updates.
+State on the other hand has a simpler interface, less boiler-plate, and
+is MUCH more efficient at most practical tasks. It's no wonder that
+<code>State</code> won out in the end, but the Update monad is still fun
+to look at!</p>
+<h2 id="structure-of-the-update-monad">Structure of the Update
+Monad</h2>
+<p>The Update Monad kinda looks like Reader, Writer and State got into a
+horrific car accident and are now hopelessly entangled! Each computation
+receives the current computation <code>state</code> (like
+<code>Reader</code>) and can result in a monoidal action (like
+<code>Writer</code>). The action is them applied to the state according
+to a helper typeclass which I'll call <code>ApplyAction</code>: it has a
+single method <code>applyAction :: p -&gt; s -&gt; s</code>; which
+applies a given monoidal action <code>p</code> to a state resulting in a
+new state. This edited state is passed on to the next computation (like
+<code>State</code>) and away we go! Here's my implementation of this
+idea for a new data type called <code>Update</code>.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">Monoid</span> p) <span class="ot">=&gt;</span> <span class="dt">ApplyAction</span> p s <span class="kw">where</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ot">  applyAction ::</span> p <span class="ot">-&gt;</span> s <span class="ot">-&gt;</span> s</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Update</span> s p a <span class="ot">=</span> <span class="dt">Update</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runUpdate ::</span> (s <span class="ot">-&gt;</span> (p, a))</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Applicative</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> a <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \_ <span class="ot">-&gt;</span> (<span class="fu">mempty</span>, a)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Update</span> u <span class="op">&lt;*&gt;</span> <span class="dt">Update</span> t <span class="ot">=</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Update</span> <span class="op">$</span> \s</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- and get the monoidal action and the function out</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>     <span class="ot">-&gt;</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      <span class="kw">let</span> (p, f) <span class="ot">=</span> u s</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Run the second &#39;Update&#39; with a state which has been altered by</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- the first action to get the &#39;a&#39; and another action</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>          (p&#39;, a) <span class="ot">=</span> t (applyAction p s)</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Combine the actions together and run the function</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>       <span class="kw">in</span> (p&#39; <span class="op">&lt;&gt;</span> p, f a)</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">Monad</span> (<span class="dt">Update</span> s p) <span class="kw">where</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Update</span> u <span class="op">&gt;&gt;=</span> f <span class="ot">=</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Update</span> <span class="op">$</span> \s</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Run the first &#39;Update&#39; with the initial state </span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- and get the monoidal action and the function out</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>     <span class="ot">-&gt;</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>      <span class="kw">let</span> (p, a) <span class="ot">=</span> u s</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Run the given function over our resulting value to get our next Update</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>          <span class="dt">Update</span> t <span class="ot">=</span> f a</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Run our new &#39;Update&#39; over the altered state</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>          (p&#39;, a&#39;) <span class="ot">=</span> t (applyAction p s)</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Combine the actions together and return the result</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>       <span class="kw">in</span> (p <span class="op">&lt;&gt;</span> p&#39;, a&#39;)</span></code></pre></div>
+<p>We could of course also implement an <code>UpdateT</code> monad
+transformer, but for the purposes of clarity I find it's easier to
+understand the concrete <code>Update</code> type. If you like you can
+take a peek at some other fun implementations <a
+href="https://github.com/chrispenner/update-monad">here</a>. Hopefully
+it's relatively clear from the implementation how things fit together.
+Hopefully you can kind of see the similarities to Reader and Writer; we
+are always returning and combining our monoidal actions as we continue
+along, and each action has access to the state, but can't
+<em>directly</em> modify it (you may only modify it by providing
+<strong>actions</strong>). It's also worth noting that within any
+individual step has only the latest <code>state</code> and it's not
+possible to view any previous actions which may have occurred, just like
+the Writer monad.</p>
+<p>Now that we've implemented our Update Monad we've got our
+<code>&gt;&gt;=</code> and <code>return</code>; but how do we actually
+accomplish anything with it? There's no <code>MonadUpdate</code>
+type-class provided in the paper, but here's my personal take on how to
+get some utility out of it, I've narrowed it down to these two methods
+which seem to encompass the core ideas behind the Update Monad:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">ApplyAction</span> s p, <span class="dt">Monad</span> m) <span class="ot">=&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- Because each of our methods only uses p OR m but not both </span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- we use functional dependencies to assert to the type system that </span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- both s and p are determined by &#39;m&#39;; this helps GHC be confident</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      <span class="co">-- that we can&#39;t end up in spots where types could be ambiguous.</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">MonadUpdate</span> m s p <span class="op">|</span> m <span class="ot">-&gt;</span> s , m <span class="ot">-&gt;</span> p</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="ot">    putAction ::</span> p <span class="ot">-&gt;</span> m ()</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="ot">    getState ::</span> m s</span></code></pre></div>
+<p>You'll notice some similarities here too! <code>putAction</code>
+matches the signature for <code>tell</code>, and <code>getState</code>
+matches <code>ask</code>! This class still provides new value though,
+because unlike Reader and Writer the environment and the actions are
+related to each other through the <code>ApplyAction</code> class; and
+unlike <code>get</code> and <code>put</code> from <code>State</code> our
+<code>putAction</code> and <code>getState</code> operate over
+<strong>different</strong> types; you can only <code>put</code>
+<strong>actions</strong>, and you can only <code>get</code>
+<strong>state</strong>. We can formalize the expected relationship
+between these methods with these laws I made up (take with a deluge of
+salt):</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Applying the &#39;empty&#39; action to your state shouldn&#39;t change your state</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>applyAction <span class="fu">mempty</span> <span class="op">==</span> <span class="fu">id</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Putting an action and then another action should be the same as </span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- putting the combination of the two actions.</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- This law effectively enforces that `bind` is </span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- employing your monoid as expected</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>putAction p <span class="op">&gt;&gt;</span> putAction q <span class="op">==</span> putAction (p <span class="ot">`mappend`</span> q)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- We expect that when we &#39;put&#39; an action that it gets applied to the state</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- and that the change is visible immediately</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- This law enforces that your implementation of bind </span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- is actually applying your monoid to the state using ApplyAction</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>applyAction p <span class="op">&lt;$&gt;</span> getState <span class="op">==</span> putAction p <span class="op">&gt;&gt;</span> getState</span></code></pre></div>
+<p>Okay! Now of course we have to implement <code>MonadUpdate</code> for
+our <code>Update</code> monad; easy-peasy:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">ApplyAction</span> p s) <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">Update</span> p s) p s <span class="kw">where</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  putAction p <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \_ <span class="ot">-&gt;</span> (p, ())</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  getState <span class="ot">=</span> <span class="dt">Update</span> <span class="op">$</span> \s <span class="ot">-&gt;</span> (<span class="fu">mempty</span>, s)</span></code></pre></div>
+<p>All the plumbing is set up! Let's start looking into some actual
+use-cases! I'll start by fully describing one particular use-case so we
+get an understanding of how this all works, then we'll experiment by
+tweaking our monoid or our <code>applyAction</code> function.</p>
 <h2 id="a-concrete-use-case">A Concrete Use-Case</h2>
-<p>Let's pick a use-case which I often see used for demonstrating the State monad so we can see how our Update monad is similar, but slightly different!</p>
-<p>We're going to build a system which allows users to interact with their bank account! We'll have three actions they can perform: <code>Deposit</code>, <code>Withdraw</code>, and <code>CollectInterest</code>. These actions will be applied to a simple state <code>BankAccount Int</code> which keeps track of how many dollars we have in the account!</p>
+<p>Let's pick a use-case which I often see used for demonstrating the
+State monad so we can see how our Update monad is similar, but slightly
+different!</p>
+<p>We're going to build a system which allows users to interact with
+their bank account! We'll have three actions they can perform:
+<code>Deposit</code>, <code>Withdraw</code>, and
+<code>CollectInterest</code>. These actions will be applied to a simple
+state <code>BankAccount Int</code> which keeps track of how many dollars
+we have in the account!</p>
 <p>Let's whip up the data types and operations we'll need:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="co">-- Simple type to keep track our bank balance</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="kw">newtype</span> <span class="dt">BankBalance</span> <span class="ot">=</span></span>
-<span id="cb5-3"><a href="#cb5-3"></a>  <span class="dt">BankBalance</span> <span class="dt">Int</span></span>
-<span id="cb5-4"><a href="#cb5-4"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</span>
-<span id="cb5-5"><a href="#cb5-5"></a></span>
-<span id="cb5-6"><a href="#cb5-6"></a><span class="co">-- The three types of actions we can take on our account</span></span>
-<span id="cb5-7"><a href="#cb5-7"></a><span class="kw">data</span> <span class="dt">AccountAction</span></span>
-<span id="cb5-8"><a href="#cb5-8"></a>  <span class="ot">=</span> <span class="dt">Deposit</span> <span class="dt">Int</span></span>
-<span id="cb5-9"><a href="#cb5-9"></a>  <span class="op">|</span> <span class="dt">Withdraw</span> <span class="dt">Int</span></span>
-<span id="cb5-10"><a href="#cb5-10"></a>  <span class="op">|</span> <span class="dt">ApplyInterest</span></span>
-<span id="cb5-11"><a href="#cb5-11"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</span>
-<span id="cb5-12"><a href="#cb5-12"></a></span>
-<span id="cb5-13"><a href="#cb5-13"></a><span class="co">-- We can apply any of our actions to our bank balance to get a new balance</span></span>
-<span id="cb5-14"><a href="#cb5-14"></a><span class="ot">processTransaction ::</span> <span class="dt">AccountAction</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></span>
-<span id="cb5-15"><a href="#cb5-15"></a>processTransaction (<span class="dt">Deposit</span> n) (<span class="dt">BankBalance</span> b) </span>
-<span id="cb5-16"><a href="#cb5-16"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (b <span class="op">+</span> n)</span>
-<span id="cb5-17"><a href="#cb5-17"></a>processTransaction (<span class="dt">Withdraw</span> n) (<span class="dt">BankBalance</span> b) </span>
-<span id="cb5-18"><a href="#cb5-18"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (b <span class="op">-</span> n)</span>
-<span id="cb5-19"><a href="#cb5-19"></a></span>
-<span id="cb5-20"><a href="#cb5-20"></a><span class="co">-- This is a gross oversimplification...</span></span>
-<span id="cb5-21"><a href="#cb5-21"></a><span class="co">-- I really hope my bank does something smarter than this</span></span>
-<span id="cb5-22"><a href="#cb5-22"></a><span class="co">-- We (kinda sorta) add 10% interest, truncating any cents.</span></span>
-<span id="cb5-23"><a href="#cb5-23"></a><span class="co">-- Who likes pocket-change anyways ¯\_(ツ)_/¯</span></span>
-<span id="cb5-24"><a href="#cb5-24"></a>processTransaction <span class="dt">ApplyInterest</span> (<span class="dt">BankBalance</span> b) </span>
-<span id="cb5-25"><a href="#cb5-25"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (<span class="fu">fromIntegral</span> balance <span class="op">*</span> <span class="fl">1.1</span>)</span></code></pre></div>
-<p>Now we've got our Action type and our State type, let's relate them together using <code>ApplyAction</code>.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> <span class="dt">AccountAction</span> <span class="dt">BankBalance</span> <span class="kw">where</span></span>
-<span id="cb6-2"><a href="#cb6-2"></a>  applyAction <span class="ot">=</span> processTransaction</span></code></pre></div>
-<p>One problem though! <code>AccountAction</code> isn't a monoid! Hrmmm, this is a bit upsetting; it seems to quite clearly represent the domain we want to work with, I'd really rather not muck up our data-type just to make it fit here. Maybe there's something else we can do! In our case, what does it mean to combine two actions? For a bank balance we probably just want to run the first action, then the second one! We'll need a value that acts as an 'empty' value for our monoid's <code>mempty</code> too; for that we can just have some notion of performing no actions!</p>
-<p>There are a few ways to promote our <code>AccountAction</code> type into a monoid with these properties; but one in particular stands out (I can already hear some of you shouting it at your screens). That's right! The <a href="https://en.wikipedia.org/wiki/Free_monoid">Free Monoid</a> A.K.A. the List Monoid! Lists are kind of a special monoid in that they can turn ANY type into a monoid for <strong>free</strong>! We get <code>mappend == (++)</code> and <code>mempty == []</code>. This means that instead of <em>actually</em> combining things we kinda just collect them all, but fear not it still satisfies all the monoid laws correctly. This isn't a post on Free Monoids though, so we'll upgrade our <code>AccountAction</code> to <code>[AccountAction]</code> and move on:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> <span class="kw">where</span></span>
-<span id="cb7-2"><a href="#cb7-2"></a>  applyAction actions balance <span class="ot">=</span></span>
-<span id="cb7-3"><a href="#cb7-3"></a>    <span class="kw">let</span><span class="ot"> allTransactions ::</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></span>
-<span id="cb7-4"><a href="#cb7-4"></a>        allTransactions <span class="ot">=</span> appEndo <span class="op">$</span> <span class="fu">foldMap</span> (<span class="dt">Endo</span> <span class="op">.</span> processTransaction) (<span class="fu">reverse</span> actions)</span>
-<span id="cb7-5"><a href="#cb7-5"></a>     <span class="kw">in</span> allTransactions balance</span></code></pre></div>
-<p>We can keep our <code>processTransaction</code> function and partially apply it to our list of Actions giving us a list of <code>[BankBalance -&gt; BankBalance]</code>; we can then use the <code>Endo</code> monoid to compose all of the functions together! Unfortunately Endo does right-to-left composition, so we'll need to reverse the list first (keeners will note we could use <code>Dual . Endo</code> for the same results). Then we use <code>appEndo</code> to unpack the resulting <code>BankBalance -&gt; BankBalance</code> which we can apply to our balance! Now that we have an instance for <code>ApplyAction</code> we can start writing programs using <code>Update</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">useATM ::</span> <span class="dt">Update</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> ()</span>
-<span id="cb8-2"><a href="#cb8-2"></a>useATM <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb8-3"><a href="#cb8-3"></a>  putAction [<span class="dt">Deposit</span> <span class="dv">20</span>] <span class="co">-- BankBalance 20</span></span>
-<span id="cb8-4"><a href="#cb8-4"></a>  putAction [<span class="dt">Deposit</span> <span class="dv">30</span>] <span class="co">-- BankBalance 50</span></span>
-<span id="cb8-5"><a href="#cb8-5"></a>  putAction [<span class="dt">ApplyInterest</span>] <span class="co">-- BankBalance 55</span></span>
-<span id="cb8-6"><a href="#cb8-6"></a>  putAction [<span class="dt">Withdraw</span> <span class="dv">10</span>] <span class="co">-- BankBalance 45</span></span>
-<span id="cb8-7"><a href="#cb8-7"></a>  getState</span>
-<span id="cb8-8"><a href="#cb8-8"></a></span>
-<span id="cb8-9"><a href="#cb8-9"></a><span class="op">$&gt;</span> runUpdate useATM (<span class="dt">BankBalance</span> <span class="dv">0</span>)</span>
-<span id="cb8-10"><a href="#cb8-10"></a>([<span class="dt">Deposit</span> <span class="dv">20</span>,<span class="dt">Deposit</span> <span class="dv">30</span>,<span class="dt">ApplyInterest</span>,<span class="dt">Withdraw</span> <span class="dv">10</span>],<span class="dt">BankBalance</span> <span class="dv">45</span>)</span></code></pre></div>
-<p>Hrmm, a bit clunky that we have to wrap every action with a list, but we could pretty easily write a helper <code>putAction' :: MonadUpdate m [p] s =&gt; p -&gt; m ()</code> to help with that. By running the program we can see that we've collected the actions in the right order and have 'combined' them all by running <code>mappend</code>. We also see that our bank balance ends up where we'd expect! This seems to be pretty similar to the State Monad, we could write helpers that perform each of those actions over the State pretty easily using <code>modify</code>; but the Update Monad gives us a nice audit log of everything that happened! Not to mention that it limits the available actions to ones that we support; users can't just multiply their bank balance by 100, they have use the approved actions. This means we could verify that actions happened in the correct order, or we could run the same actions over a different starting state and see how it works out!</p>
-<p>The Update Monad also has a few tricks when it comes to testing your programs. Since the only thing that can affect our state is a sequence of actions, we can skip all the monad nonsense and test our business logic by just testing that our <code>applyAction</code> function works properly over different lists of actions! Observe:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="ot">testBankSystem ::</span> <span class="dt">Bool</span></span>
-<span id="cb9-2"><a href="#cb9-2"></a>testBankSystem <span class="ot">=</span></span>
-<span id="cb9-3"><a href="#cb9-3"></a>  applyAction [<span class="dt">Deposit</span> <span class="dv">20</span>, <span class="dt">Deposit</span> <span class="dv">30</span>, <span class="dt">ApplyInterest</span>, <span class="dt">Withdraw</span> <span class="dv">10</span>] (<span class="dt">BankBalance</span> <span class="dv">0</span>) </span>
-<span id="cb9-4"><a href="#cb9-4"></a>    <span class="op">==</span> <span class="dt">BankBalance</span> <span class="dv">45</span></span>
-<span id="cb9-5"><a href="#cb9-5"></a></span>
-<span id="cb9-6"><a href="#cb9-6"></a><span class="op">$&gt;</span> testBankSystem</span>
-<span id="cb9-7"><a href="#cb9-7"></a><span class="dt">True</span></span></code></pre></div>
-<p>Cool stuff! We can write the tests for our business logic without worrying about the impure ways we'll probably be getting those actions (like <code>IO</code>). This separation makes complicated business logic pretty easy to test, and we can write separate tests for the 'glue' code with confidence that the logic of our actions is correct and that our program <strong>CAN'T</strong> edit our state in an invalid way since all updates <strong>must</strong> be performed through the <code>performTransaction</code> function. Note that using an impure base monad like IO could certainly cause the list of actions which are collected to change, but the list of actions which is collected <strong>fully describes</strong> the state changes which take place; and so testing only the application of actions is sufficient for testing state updates.</p>
-<p>There's really only so much we can do with <code>Update</code> alone, but it's pretty easy to write an <code>UpdateT</code> transformer! I'll leave you to check out the implementation <a href="https://github.com/ChrisPenner/update-monad/blob/master/src/UpdateT.hs">here</a> if you like; but this allows us to do things like decide which actions to take based on user input (via <code>IO</code>), use our state to make choices in the middle of our monad, or use other monads to perform more interesting logic!</p>
-<h2 id="customizing-the-update-monad-with-monoids">Customizing the Update Monad with Monoids</h2>
-<p>Okay! We've got one concrete use-case under our belts and have a pretty good understanding of how all this works! let's see what we can tweak to make things a bit more interesting!</p>
-<p>Something that immediately interested me with the update monad is that there are several distinct places to tweak its behaviour without even needing to change which implementation of <code>MonadUpdate</code> we use! We can change the action monoid, or which state we carry, or even our <code>applyAction</code> function! This sort of tweakability leads to all sorts of cool behaviour without too much work, and people can build all sorts of things we didn't initially expect when we wrote the type-classes!</p>
-<p>I won't get super in depth on each of these and encourage you to implement them yourself, but here are a few ideas to start with!</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Simple type to keep track our bank balance</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">BankBalance</span> <span class="ot">=</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">BankBalance</span> <span class="dt">Int</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- The three types of actions we can take on our account</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">AccountAction</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="ot">=</span> <span class="dt">Deposit</span> <span class="dt">Int</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> <span class="dt">Withdraw</span> <span class="dt">Int</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> <span class="dt">ApplyInterest</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Ord</span>, <span class="dt">Show</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- We can apply any of our actions to our bank balance to get a new balance</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="ot">processTransaction ::</span> <span class="dt">AccountAction</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>processTransaction (<span class="dt">Deposit</span> n) (<span class="dt">BankBalance</span> b) </span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (b <span class="op">+</span> n)</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>processTransaction (<span class="dt">Withdraw</span> n) (<span class="dt">BankBalance</span> b) </span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (b <span class="op">-</span> n)</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="co">-- This is a gross oversimplification...</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="co">-- I really hope my bank does something smarter than this</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="co">-- We (kinda sorta) add 10% interest, truncating any cents.</span></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="co">-- Who likes pocket-change anyways ¯\_(ツ)_/¯</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>processTransaction <span class="dt">ApplyInterest</span> (<span class="dt">BankBalance</span> b) </span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">BankBalance</span> (<span class="fu">fromIntegral</span> balance <span class="op">*</span> <span class="fl">1.1</span>)</span></code></pre></div>
+<p>Now we've got our Action type and our State type, let's relate them
+together using <code>ApplyAction</code>.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> <span class="dt">AccountAction</span> <span class="dt">BankBalance</span> <span class="kw">where</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  applyAction <span class="ot">=</span> processTransaction</span></code></pre></div>
+<p>One problem though! <code>AccountAction</code> isn't a monoid! Hrmmm,
+this is a bit upsetting; it seems to quite clearly represent the domain
+we want to work with, I'd really rather not muck up our data-type just
+to make it fit here. Maybe there's something else we can do! In our
+case, what does it mean to combine two actions? For a bank balance we
+probably just want to run the first action, then the second one! We'll
+need a value that acts as an 'empty' value for our monoid's
+<code>mempty</code> too; for that we can just have some notion of
+performing no actions!</p>
+<p>There are a few ways to promote our <code>AccountAction</code> type
+into a monoid with these properties; but one in particular stands out (I
+can already hear some of you shouting it at your screens). That's right!
+The <a href="https://en.wikipedia.org/wiki/Free_monoid">Free Monoid</a>
+A.K.A. the List Monoid! Lists are kind of a special monoid in that they
+can turn ANY type into a monoid for <strong>free</strong>! We get
+<code>mappend == (++)</code> and <code>mempty == []</code>. This means
+that instead of <em>actually</em> combining things we kinda just collect
+them all, but fear not it still satisfies all the monoid laws correctly.
+This isn't a post on Free Monoids though, so we'll upgrade our
+<code>AccountAction</code> to <code>[AccountAction]</code> and move
+on:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> <span class="kw">where</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  applyAction actions balance <span class="ot">=</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span><span class="ot"> allTransactions ::</span> <span class="dt">BankBalance</span> <span class="ot">-&gt;</span> <span class="dt">BankBalance</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        allTransactions <span class="ot">=</span> appEndo <span class="op">$</span> <span class="fu">foldMap</span> (<span class="dt">Endo</span> <span class="op">.</span> processTransaction) (<span class="fu">reverse</span> actions)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>     <span class="kw">in</span> allTransactions balance</span></code></pre></div>
+<p>We can keep our <code>processTransaction</code> function and
+partially apply it to our list of Actions giving us a list of
+<code>[BankBalance -&gt; BankBalance]</code>; we can then use the
+<code>Endo</code> monoid to compose all of the functions together!
+Unfortunately Endo does right-to-left composition, so we'll need to
+reverse the list first (keeners will note we could use
+<code>Dual . Endo</code> for the same results). Then we use
+<code>appEndo</code> to unpack the resulting
+<code>BankBalance -&gt; BankBalance</code> which we can apply to our
+balance! Now that we have an instance for <code>ApplyAction</code> we
+can start writing programs using <code>Update</code>.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">useATM ::</span> <span class="dt">Update</span> [<span class="dt">AccountAction</span>] <span class="dt">BankBalance</span> ()</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>useATM <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  putAction [<span class="dt">Deposit</span> <span class="dv">20</span>] <span class="co">-- BankBalance 20</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  putAction [<span class="dt">Deposit</span> <span class="dv">30</span>] <span class="co">-- BankBalance 50</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  putAction [<span class="dt">ApplyInterest</span>] <span class="co">-- BankBalance 55</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  putAction [<span class="dt">Withdraw</span> <span class="dv">10</span>] <span class="co">-- BankBalance 45</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  getState</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="op">$&gt;</span> runUpdate useATM (<span class="dt">BankBalance</span> <span class="dv">0</span>)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>([<span class="dt">Deposit</span> <span class="dv">20</span>,<span class="dt">Deposit</span> <span class="dv">30</span>,<span class="dt">ApplyInterest</span>,<span class="dt">Withdraw</span> <span class="dv">10</span>],<span class="dt">BankBalance</span> <span class="dv">45</span>)</span></code></pre></div>
+<p>Hrmm, a bit clunky that we have to wrap every action with a list, but
+we could pretty easily write a helper
+<code>putAction' :: MonadUpdate m [p] s =&gt; p -&gt; m ()</code> to
+help with that. By running the program we can see that we've collected
+the actions in the right order and have 'combined' them all by running
+<code>mappend</code>. We also see that our bank balance ends up where
+we'd expect! This seems to be pretty similar to the State Monad, we
+could write helpers that perform each of those actions over the State
+pretty easily using <code>modify</code>; but the Update Monad gives us a
+nice audit log of everything that happened! Not to mention that it
+limits the available actions to ones that we support; users can't just
+multiply their bank balance by 100, they have use the approved actions.
+This means we could verify that actions happened in the correct order,
+or we could run the same actions over a different starting state and see
+how it works out!</p>
+<p>The Update Monad also has a few tricks when it comes to testing your
+programs. Since the only thing that can affect our state is a sequence
+of actions, we can skip all the monad nonsense and test our business
+logic by just testing that our <code>applyAction</code> function works
+properly over different lists of actions! Observe:</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">testBankSystem ::</span> <span class="dt">Bool</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>testBankSystem <span class="ot">=</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  applyAction [<span class="dt">Deposit</span> <span class="dv">20</span>, <span class="dt">Deposit</span> <span class="dv">30</span>, <span class="dt">ApplyInterest</span>, <span class="dt">Withdraw</span> <span class="dv">10</span>] (<span class="dt">BankBalance</span> <span class="dv">0</span>) </span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">==</span> <span class="dt">BankBalance</span> <span class="dv">45</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="op">$&gt;</span> testBankSystem</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="dt">True</span></span></code></pre></div>
+<p>Cool stuff! We can write the tests for our business logic without
+worrying about the impure ways we'll probably be getting those actions
+(like <code>IO</code>). This separation makes complicated business logic
+pretty easy to test, and we can write separate tests for the 'glue' code
+with confidence that the logic of our actions is correct and that our
+program <strong>CAN'T</strong> edit our state in an invalid way since
+all updates <strong>must</strong> be performed through the
+<code>performTransaction</code> function. Note that using an impure base
+monad like IO could certainly cause the list of actions which are
+collected to change, but the list of actions which is collected
+<strong>fully describes</strong> the state changes which take place; and
+so testing only the application of actions is sufficient for testing
+state updates.</p>
+<p>There's really only so much we can do with <code>Update</code> alone,
+but it's pretty easy to write an <code>UpdateT</code> transformer! I'll
+leave you to check out the implementation <a
+href="https://github.com/ChrisPenner/update-monad/blob/master/src/UpdateT.hs">here</a>
+if you like; but this allows us to do things like decide which actions
+to take based on user input (via <code>IO</code>), use our state to make
+choices in the middle of our monad, or use other monads to perform more
+interesting logic!</p>
+<h2 id="customizing-the-update-monad-with-monoids">Customizing the
+Update Monad with Monoids</h2>
+<p>Okay! We've got one concrete use-case under our belts and have a
+pretty good understanding of how all this works! let's see what we can
+tweak to make things a bit more interesting!</p>
+<p>Something that immediately interested me with the update monad is
+that there are several distinct places to tweak its behaviour without
+even needing to change which implementation of <code>MonadUpdate</code>
+we use! We can change the action monoid, or which state we carry, or
+even our <code>applyAction</code> function! This sort of tweakability
+leads to all sorts of cool behaviour without too much work, and people
+can build all sorts of things we didn't initially expect when we wrote
+the type-classes!</p>
+<p>I won't get super in depth on each of these and encourage you to
+implement them yourself, but here are a few ideas to start with!</p>
 <p>Customizations:</p>
 <ul>
 <li><code>Update w () a</code> with <code>applyAction _ () = ()</code>
 <ul>
 <li>A simple implementation of <code>Writer</code>!</li>
-<li>The state doesn't matter; only the monoidal actions are tracked!</li>
+<li>The state doesn't matter; only the monoidal actions are
+tracked!</li>
 </ul></li>
 <li><code>Update () r a</code> with <code>applyAction () r = r</code>
 <ul>
 <li>A simple implementation of <code>Reader</code>!</li>
-<li>There're no sensible updates to do; so your state always stays the same.</li>
+<li>There're no sensible updates to do; so your state always stays the
+same.</li>
 </ul></li>
-<li><code>Update (Last s) s a</code> with <code>applyAction (Last p) s = fromMaybe s p</code>
+<li><code>Update (Last s) s a</code> with
+<code>applyAction (Last p) s = fromMaybe s p</code>
 <ul>
 <li>This is the state monad implemented in Update!</li>
 <li><code>get == getState</code></li>
 <li><code>put == putAction . Last . Just</code></li>
 <li><code>modify f == getState &gt;&gt;= putAction . Last . Just . f</code></li>
 </ul></li>
-<li><code>Update (Dual (Endo s)) s a</code> with <code>applyAction (Dual (Endo p)) s = p s</code>
+<li><code>Update (Dual (Endo s)) s a</code> with
+<code>applyAction (Dual (Endo p)) s = p s</code>
 <ul>
 <li>Another possible implementation of State inside Update!</li>
 <li><code>get == getState</code></li>
 <li><code>put == putAction . Dual . Endo . const</code></li>
 <li><code>modify == putAction . Dual . Endo</code></li>
 </ul></li>
-<li><code>Update Any Bool a</code> with <code>applyAction (Any b) s = b || s</code>
+<li><code>Update Any Bool a</code> with
+<code>applyAction (Any b) s = b || s</code>
 <ul>
-<li>You could implement a short-circuiting approach where future actions don't bother running if any previous action has succeeded! You can flip the logic using <code>All</code> and <code>&amp;&amp;</code>.</li>
+<li>You could implement a short-circuiting approach where future actions
+don't bother running if any previous action has succeeded! You can flip
+the logic using <code>All</code> and <code>&amp;&amp;</code>.</li>
 </ul></li>
 </ul>
 <h2 id="bonus-performance">Bonus: Performance</h2>
-<p>The definition of the Update monad given here is quite simple because it's the easiest to explain, but there are a few problems with it; the most notable is that it ONLY passes along the new monoidal sum; NOT the edited state from step to step. In mathematic terms it's still correct since we can compute an up-to-date version of the state; but we have to compute it from scratch every time we run an action! Clearly not great for performance! Like I said earlier you can actually implement a more efficient version of <code>MonadUpdate</code> using <code>State</code>! We DO still need a dependency on <code>ApplyAction p s</code> though, so keep that in mind. If we have one available we can do something like this:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> p s <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">State</span> (p, s)) p s <span class="kw">where</span></span>
-<span id="cb10-2"><a href="#cb10-2"></a>  putAction p&#39; <span class="ot">=</span> modify (\(p, s) <span class="ot">-&gt;</span> (p <span class="op">&lt;&gt;</span> p&#39;, applyAction p&#39; s))</span>
-<span id="cb10-3"><a href="#cb10-3"></a>  getState <span class="ot">=</span> <span class="fu">snd</span> <span class="op">&lt;$&gt;</span> get</span></code></pre></div>
-<p>Technically we don't even need to keep track of the monoidal sum as we go along; there's no need for it! Unfortunately due to FunctionalDependencies in our MonadUpdate class GHC gets mad if it doesn't show up inside our State Monad <strong>somewhere</strong>. This implementation keeps track of the latest state and just applies updates as it goes along, giving us a more efficient implementation. Note that using <code>put</code> or <code>modify</code> directly will probably cause some unexpected behaviour in your Update Monad, so you may want to wrap your <code>State</code> in a newtype first to prevent anyone from messing with the internals.</p>
-<p>Thanks for reading! I'm not perfect and really just go through all this stuff in my spare time, so if I've missed something (or you enjoyed the post 😄) please let me know! You can find me on <a href="https://twitter.com/chrislpenner">Twitter</a> or <a href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
+<p>The definition of the Update monad given here is quite simple because
+it's the easiest to explain, but there are a few problems with it; the
+most notable is that it ONLY passes along the new monoidal sum; NOT the
+edited state from step to step. In mathematic terms it's still correct
+since we can compute an up-to-date version of the state; but we have to
+compute it from scratch every time we run an action! Clearly not great
+for performance! Like I said earlier you can actually implement a more
+efficient version of <code>MonadUpdate</code> using <code>State</code>!
+We DO still need a dependency on <code>ApplyAction p s</code> though, so
+keep that in mind. If we have one available we can do something like
+this:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ApplyAction</span> p s <span class="ot">=&gt;</span> <span class="dt">MonadUpdate</span> (<span class="dt">State</span> (p, s)) p s <span class="kw">where</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  putAction p&#39; <span class="ot">=</span> modify (\(p, s) <span class="ot">-&gt;</span> (p <span class="op">&lt;&gt;</span> p&#39;, applyAction p&#39; s))</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  getState <span class="ot">=</span> <span class="fu">snd</span> <span class="op">&lt;$&gt;</span> get</span></code></pre></div>
+<p>Technically we don't even need to keep track of the monoidal sum as
+we go along; there's no need for it! Unfortunately due to
+FunctionalDependencies in our MonadUpdate class GHC gets mad if it
+doesn't show up inside our State Monad <strong>somewhere</strong>. This
+implementation keeps track of the latest state and just applies updates
+as it goes along, giving us a more efficient implementation. Note that
+using <code>put</code> or <code>modify</code> directly will probably
+cause some unexpected behaviour in your Update Monad, so you may want to
+wrap your <code>State</code> in a newtype first to prevent anyone from
+messing with the internals.</p>
+<p>Thanks for reading! I'm not perfect and really just go through all
+this stuff in my spare time, so if I've missed something (or you enjoyed
+the post 😄) please let me know! You can find me on <a
+href="https://twitter.com/chrislpenner">Twitter</a> or <a
+href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

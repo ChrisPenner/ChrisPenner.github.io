@@ -12,7 +12,9 @@
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Virtual Record Fields Using Lenses">
-    <meta name="twitter:description" content="Lenses are commonly used for getting and setting fields on records, but they&#39;re actually much more adaptable than that! This post dives into the idea of &#39;virtual fields&#39; using optics.">
+    <meta name="twitter:description" content="Lenses are commonly used for getting and setting fields on records, but
+they&#39;re actually much more adaptable than that! This post dives into the
+idea of &#39;virtual fields&#39; using optics.">
     <meta name="twitter:image" content="http://chrispenner.ca/images/virtual-fields.jpg">
     <title>Virtual Record Fields Using Lenses</title>
     <link
@@ -771,154 +773,263 @@
         </div>
       </div>
       <article class="post">
-        <p>The following blog post is a short excerpt from by book on optics: <a href="https://leanpub.com/optics-by-example/c/virtual-fields">"Optics By Example"</a>. If you learn something from the post you'll likely enjoy the rest of the book too!</p>
-<p>Optics by Example provides a comprehensive example-driven guide to manipulating data with optics, covering Lenses, Traversals, Prisms, Isos, as well as many design patterns and extension libraries.</p>
-<p>As thanks for checking out the blog you can grab a copy on sale with <a href="https://leanpub.com/optics-by-example/c/virtual-fields">this link</a> until the end of 2020.</p>
+        <p>The following blog post is a short excerpt from by book on optics: <a
+href="https://leanpub.com/optics-by-example/c/virtual-fields">"Optics By
+Example"</a>. If you learn something from the post you'll likely enjoy
+the rest of the book too!</p>
+<p>Optics by Example provides a comprehensive example-driven guide to
+manipulating data with optics, covering Lenses, Traversals, Prisms,
+Isos, as well as many design patterns and extension libraries.</p>
+<p>As thanks for checking out the blog you can grab a copy on sale with
+<a href="https://leanpub.com/optics-by-example/c/virtual-fields">this
+link</a> until the end of 2020.</p>
 <hr />
-<p>Lenses are commonly used for getting and setting fields on records, but they're actually much more adaptable than that! This post dives into the idea of "virtual fields" using optics.</p>
+<p>Lenses are commonly used for getting and setting fields on records,
+but they're actually much more adaptable than that! This post dives into
+the idea of "virtual fields" using optics.</p>
 <p>Virtual fields can can provide many benefits:</p>
 <ul>
-<li>They help you adapt to change in your modules and types without breaking backwards-compatibility</li>
-<li>Provide a uniform interface for "smart" getters and setters which maintain data invariants.</li>
+<li>They help you adapt to change in your modules and types without
+breaking backwards-compatibility</li>
+<li>Provide a uniform interface for "smart" getters and setters which
+maintain data invariants.</li>
 <li>Make your code more resilient to refactoring.</li>
 </ul>
 <p>Let's dive in!</p>
 <h2 id="what-is-a-virtual-field">What is a virtual field</h2>
-<p>To establish terms, I'll define a <strong>virtual field</strong> as any piece of data we might be interested in which doesn't exist as a concrete field in a given record definition. In languages like Java or Python these are sometimes called "computed properties" or "managed attributes".</p>
-<p>Oftentimes we'll use virtual fields to present data from concrete fields in a more convenient way, or to maintain certain invariants on the concrete fields. Sometimes virtual fields combine several concrete fields together, other times they're used to avoid introducing breaking changes when refactoring the structure of the record.</p>
-<p>No matter what you use them for, at the end of the day they're really just normal lenses! Let's look at a concrete example.</p>
+<p>To establish terms, I'll define a <strong>virtual field</strong> as
+any piece of data we might be interested in which doesn't exist as a
+concrete field in a given record definition. In languages like Java or
+Python these are sometimes called "computed properties" or "managed
+attributes".</p>
+<p>Oftentimes we'll use virtual fields to present data from concrete
+fields in a more convenient way, or to maintain certain invariants on
+the concrete fields. Sometimes virtual fields combine several concrete
+fields together, other times they're used to avoid introducing breaking
+changes when refactoring the structure of the record.</p>
+<p>No matter what you use them for, at the end of the day they're really
+just normal lenses! Let's look at a concrete example.</p>
 <h2 id="writing-a-virtual-field">Writing a virtual field</h2>
 <p>Let's look at the following type:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
-<span id="cb1-3"><a href="#cb1-3"></a>                ,<span class="ot"> _celsius  ::</span> <span class="dt">Float</span></span>
-<span id="cb1-4"><a href="#cb1-4"></a>                }</span>
-<span id="cb1-5"><a href="#cb1-5"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
-<span id="cb1-6"><a href="#cb1-6"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>                ,<span class="ot"> _celsius  ::</span> <span class="dt">Float</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span></code></pre></div>
 <p>This generates the field lenses:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">location ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">String</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="ot">celsius  ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span></code></pre></div>
-<p>Which we can use to <strong>get</strong>, <strong>set</strong>, or <strong>modify</strong> the temperature in Celsius like so:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
-<span id="cb3-2"><a href="#cb3-2"></a><span class="op">&gt;&gt;&gt;</span> view celsius temp</span>
-<span id="cb3-3"><a href="#cb3-3"></a><span class="fl">7.0</span></span>
-<span id="cb3-4"><a href="#cb3-4"></a></span>
-<span id="cb3-5"><a href="#cb3-5"></a><span class="op">&gt;&gt;&gt;</span> set celsius <span class="fl">13.5</span> temp</span>
-<span id="cb3-6"><a href="#cb3-6"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
-<span id="cb3-7"><a href="#cb3-7"></a></span>
-<span id="cb3-8"><a href="#cb3-8"></a><span class="co">-- Bump the temperature up by 10 degrees Celsius</span></span>
-<span id="cb3-9"><a href="#cb3-9"></a><span class="op">&gt;&gt;&gt;</span> over celsius (<span class="op">+</span><span class="dv">10</span>) temp</span>
-<span id="cb3-10"><a href="#cb3-10"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
-<p>Now what about our American colleagues who'd prefer <strong>Fahrenheit</strong>? It's easy enough to write a function which converts <strong>Celsius</strong> to <strong>Fahrenheit</strong> and call that on the result of <code>celsius</code>, but we'd still need to <strong>set</strong> new temperatures in <strong>Celsius</strong>! How can we avoid this dissonance between units?</p>
-<p>First we'll define our conversion functions back and forth, nothing too interesting there, if I'm honest I just stole the formulas from wikipedia:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">celsiusToFahrenheit ::</span> <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
-<span id="cb4-2"><a href="#cb4-2"></a>celsiusToFahrenheit c <span class="ot">=</span> (c <span class="op">*</span> (<span class="dv">9</span><span class="op">/</span><span class="dv">5</span>)) <span class="op">+</span> <span class="dv">32</span></span>
-<span id="cb4-3"><a href="#cb4-3"></a></span>
-<span id="cb4-4"><a href="#cb4-4"></a><span class="ot">fahrenheitToCelsius ::</span> <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
-<span id="cb4-5"><a href="#cb4-5"></a>fahrenheitToCelsius f <span class="ot">=</span> (f <span class="op">-</span> <span class="dv">32</span>) <span class="op">*</span> (<span class="dv">5</span><span class="op">/</span><span class="dv">9</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ot">location ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">String</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ot">celsius  ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span></code></pre></div>
+<p>Which we can use to <strong>get</strong>, <strong>set</strong>, or
+<strong>modify</strong> the temperature in Celsius like so:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> view celsius temp</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fl">7.0</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> set celsius <span class="fl">13.5</span> temp</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- Bump the temperature up by 10 degrees Celsius</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> over celsius (<span class="op">+</span><span class="dv">10</span>) temp</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
+<p>Now what about our American colleagues who'd prefer
+<strong>Fahrenheit</strong>? It's easy enough to write a function which
+converts <strong>Celsius</strong> to <strong>Fahrenheit</strong> and
+call that on the result of <code>celsius</code>, but we'd still need to
+<strong>set</strong> new temperatures in <strong>Celsius</strong>! How
+can we avoid this dissonance between units?</p>
+<p>First we'll define our conversion functions back and forth, nothing
+too interesting there, if I'm honest I just stole the formulas from
+wikipedia:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">celsiusToFahrenheit ::</span> <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>celsiusToFahrenheit c <span class="ot">=</span> (c <span class="op">*</span> (<span class="dv">9</span><span class="op">/</span><span class="dv">5</span>)) <span class="op">+</span> <span class="dv">32</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ot">fahrenheitToCelsius ::</span> <span class="dt">Float</span> <span class="ot">-&gt;</span> <span class="dt">Float</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>fahrenheitToCelsius f <span class="ot">=</span> (f <span class="op">-</span> <span class="dv">32</span>) <span class="op">*</span> (<span class="dv">5</span><span class="op">/</span><span class="dv">9</span>)</span></code></pre></div>
 <p>Here's <em>one way</em> we could get and set using Fahrenheit:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="co">-- View temp in Berlin in Fahrenheit </span></span>
-<span id="cb5-3"><a href="#cb5-3"></a><span class="op">&gt;&gt;&gt;</span> celsiusToFahrenheit <span class="op">.</span> view celsius temp</span>
-<span id="cb5-4"><a href="#cb5-4"></a><span class="fl">44.6</span></span>
-<span id="cb5-5"><a href="#cb5-5"></a></span>
-<span id="cb5-6"><a href="#cb5-6"></a><span class="co">-- Set temperature to 56.3 Fahrenheit</span></span>
-<span id="cb5-7"><a href="#cb5-7"></a><span class="op">&gt;&gt;&gt;</span> set celsius (fahrenheitToCelsius <span class="fl">56.3</span>) temp</span>
-<span id="cb5-8"><a href="#cb5-8"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
-<span id="cb5-9"><a href="#cb5-9"></a></span>
-<span id="cb5-10"><a href="#cb5-10"></a><span class="co">-- Bump the temp up by 18 degrees Fahrenheit</span></span>
-<span id="cb5-11"><a href="#cb5-11"></a><span class="op">&gt;&gt;&gt;</span> over celsius (fahrenheitToCelsius <span class="op">.</span> (<span class="op">+</span><span class="dv">18</span>) <span class="op">.</span> celsiusToFahrenheit) temp</span>
-<span id="cb5-12"><a href="#cb5-12"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
-<p>The first two aren't <strong>too</strong> bad, but the <code>over</code> example is getting a bit clunky and error prone! It's hard to see what's going on, and since every type is <code>Float</code> it'd be easy to forget or misplace one of our conversions.</p>
-<p>If we instead encode the <strong>Fahrenheit</strong> version of the temperature as a <strong>virtual field</strong> using optics we gain improved usability, cleaner code, and avoid a lot of possible mistakes.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- View temp in Berlin in Fahrenheit </span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> celsiusToFahrenheit <span class="op">.</span> view celsius temp</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fl">44.6</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Set temperature to 56.3 Fahrenheit</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> set celsius (fahrenheitToCelsius <span class="fl">56.3</span>) temp</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Bump the temp up by 18 degrees Fahrenheit</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> over celsius (fahrenheitToCelsius <span class="op">.</span> (<span class="op">+</span><span class="dv">18</span>) <span class="op">.</span> celsiusToFahrenheit) temp</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
+<p>The first two aren't <strong>too</strong> bad, but the
+<code>over</code> example is getting a bit clunky and error prone! It's
+hard to see what's going on, and since every type is <code>Float</code>
+it'd be easy to forget or misplace one of our conversions.</p>
+<p>If we instead encode the <strong>Fahrenheit</strong> version of the
+temperature as a <strong>virtual field</strong> using optics we gain
+improved usability, cleaner code, and avoid a lot of possible
+mistakes.</p>
 <p>Let's see what that looks like.</p>
-<p>We can write a <code>fahrenheit</code> lens in terms of the existing <code>celsius</code> lens! We embed the back-and-forth conversions into the lens itself.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="ot">fahrenheit ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span>
-<span id="cb6-2"><a href="#cb6-2"></a>fahrenheit <span class="ot">=</span> lens getter setter</span>
-<span id="cb6-3"><a href="#cb6-3"></a>  <span class="kw">where</span></span>
-<span id="cb6-4"><a href="#cb6-4"></a>    getter <span class="ot">=</span> celsiusToFahrenheit <span class="op">.</span> view celsius</span>
-<span id="cb6-5"><a href="#cb6-5"></a>    setter temp f <span class="ot">=</span> set celsius (fahrenheitToCelsius f) temp</span></code></pre></div>
+<p>We can write a <code>fahrenheit</code> lens in terms of the existing
+<code>celsius</code> lens! We embed the back-and-forth conversions into
+the lens itself.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ot">fahrenheit ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>fahrenheit <span class="ot">=</span> lens getter setter</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    getter <span class="ot">=</span> celsiusToFahrenheit <span class="op">.</span> view celsius</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    setter temp f <span class="ot">=</span> set celsius (fahrenheitToCelsius f) temp</span></code></pre></div>
 <p>Look how much it cleans up the call sites:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
-<span id="cb7-2"><a href="#cb7-2"></a><span class="op">&gt;&gt;&gt;</span> view fahrenheit temp</span>
-<span id="cb7-3"><a href="#cb7-3"></a><span class="fl">44.6</span></span>
-<span id="cb7-4"><a href="#cb7-4"></a></span>
-<span id="cb7-5"><a href="#cb7-5"></a><span class="op">&gt;&gt;&gt;</span> set fahrenheit <span class="fl">56.3</span> temp</span>
-<span id="cb7-6"><a href="#cb7-6"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
-<span id="cb7-7"><a href="#cb7-7"></a></span>
-<span id="cb7-8"><a href="#cb7-8"></a><span class="op">&gt;&gt;&gt;</span> over fahrenheit (<span class="op">+</span><span class="dv">18</span>) temp</span>
-<span id="cb7-9"><a href="#cb7-9"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
-<p>Much nicer, easier to read, and less error prone! Even though our <code>Temperature</code> record doesn't actually have a concrete field for the temperature in <strong>Fahrenheit</strong> we managed to fake it by using lenses to create a <strong>virtual field</strong>! If we export a smart constructor for our Temperature type and only export the lenses from our Temperature module then the two field lenses are completely indistinguishable.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> temp <span class="ot">=</span> <span class="dt">Temperature</span> <span class="st">&quot;Berlin&quot;</span> <span class="fl">7.0</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> view fahrenheit temp</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fl">44.6</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> set fahrenheit <span class="fl">56.3</span> temp</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">13.5</span>}</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> over fahrenheit (<span class="op">+</span><span class="dv">18</span>) temp</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="dt">Temperature</span> {_location <span class="ot">=</span> <span class="st">&quot;Berlin&quot;</span>, _celsius <span class="ot">=</span> <span class="fl">17.0</span>}</span></code></pre></div>
+<p>Much nicer, easier to read, and less error prone! Even though our
+<code>Temperature</code> record doesn't actually have a concrete field
+for the temperature in <strong>Fahrenheit</strong> we managed to fake it
+by using lenses to create a <strong>virtual field</strong>! If we export
+a smart constructor for our Temperature type and only export the lenses
+from our Temperature module then the two field lenses are completely
+indistinguishable.</p>
 <h2 id="breakage-free-refactoring">Breakage-free refactoring</h2>
-<p>In addition to providing more functionality in a really clean way, another benefit of using lenses instead of field accessors for interacting with our data is that we gain more freedom when refactoring.</p>
-<p>To continue with the Temperature example, let's say as we've developed our wonderful weather app further we've discovered that Kelvin is a much better canonical representation for temperature data. We'd love to swap our <code>_celsius</code> field for a <code>_kelvin</code> field instead and base all our measurements on that.</p>
-<p>We'll consider two possible alternate universes, in the first, this post was never written, so we didn't use lenses to access our fields 😱</p>
-<p>In the second (the one you're living in) I published this post and of course knew well enough to use lenses as the external interface instead.</p>
+<p>In addition to providing more functionality in a really clean way,
+another benefit of using lenses instead of field accessors for
+interacting with our data is that we gain more freedom when
+refactoring.</p>
+<p>To continue with the Temperature example, let's say as we've
+developed our wonderful weather app further we've discovered that Kelvin
+is a much better canonical representation for temperature data. We'd
+love to swap our <code>_celsius</code> field for a <code>_kelvin</code>
+field instead and base all our measurements on that.</p>
+<p>We'll consider two possible alternate universes, in the first, this
+post was never written, so we didn't use lenses to access our fields
+😱</p>
+<p>In the second (the one you're living in) I published this post and of
+course knew well enough to use lenses as the external interface
+instead.</p>
 <h2 id="a-world-without-lenses">A world without lenses</h2>
-<p>In the sad universe without any lenses we had the following code scattered throughout our app:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
-<span id="cb8-2"><a href="#cb8-2"></a>updateTempReading temp <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb8-3"><a href="#cb8-3"></a>  newTempInCelsius <span class="ot">&lt;-</span> readOutdoorTemp</span>
-<span id="cb8-4"><a href="#cb8-4"></a>  <span class="fu">return</span> temp{_celsius<span class="ot">=</span>newTempInCelsius}</span></code></pre></div>
-<p>Then we refactored our <code>Temperature</code> object to the following:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
-<span id="cb9-2"><a href="#cb9-2"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
-<span id="cb9-3"><a href="#cb9-3"></a>                ,<span class="ot"> _kelvin  ::</span> <span class="dt">Float</span></span>
-<span id="cb9-4"><a href="#cb9-4"></a>                }</span>
-<span id="cb9-5"><a href="#cb9-5"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
-<span id="cb9-6"><a href="#cb9-6"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span></code></pre></div>
-<p>Now, unfortunately, every file that used record update syntax now fails to compile. This is because the <code>_celsius</code> field we are depending on with our record-update-syntax no longer exists. If we had instead used positional pattern matching the situation would be even worse:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
-<span id="cb10-2"><a href="#cb10-2"></a>updateTempReading (<span class="dt">Temperature</span> location _) <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb10-3"><a href="#cb10-3"></a>  newTempInCelsius <span class="ot">&lt;-</span> readOutdoorTemp</span>
-<span id="cb10-4"><a href="#cb10-4"></a>  <span class="fu">return</span> (<span class="dt">Temperature</span> location newTempInCelsius)</span></code></pre></div>
-<p>In this case the code <strong>will still happily compile</strong>, but we've switched measurement units this code is now completely incorrect!</p>
-<h2 id="the-glorious-utopian-lenses-universe">The glorious utopian lenses universe</h2>
-<p>Come with me now to the happy universe. In this world we've decided to use lenses as our interface for interacting with <code>Temperature</code>s, meaning we didn't expose the field accessors and thus disallowed fragile record-update syntax. We used the <code>celsius</code> lens to perform the update instead:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
-<span id="cb11-2"><a href="#cb11-2"></a>updateTempReading temp <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb11-3"><a href="#cb11-3"></a>  newTempInCelsius <span class="ot">&lt;-</span> readTemp</span>
-<span id="cb11-4"><a href="#cb11-4"></a>  <span class="fu">return</span> <span class="op">$</span> set celsius newTempInCelsius temp</span></code></pre></div>
-<p>Now when we refactor, we can export a replacement <code>celsius</code> lens in place of the old generated one, and nobody need be aware of our refactoring!</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
-<span id="cb12-2"><a href="#cb12-2"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
-<span id="cb12-3"><a href="#cb12-3"></a>                ,<span class="ot"> _kelvin  ::</span> <span class="dt">Float</span></span>
-<span id="cb12-4"><a href="#cb12-4"></a>                }</span>
-<span id="cb12-5"><a href="#cb12-5"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
-<span id="cb12-6"><a href="#cb12-6"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span>
-<span id="cb12-7"><a href="#cb12-7"></a></span>
-<span id="cb12-8"><a href="#cb12-8"></a><span class="ot">celsius ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span>
-<span id="cb12-9"><a href="#cb12-9"></a>celsius <span class="ot">=</span> lens getter setter</span>
-<span id="cb12-10"><a href="#cb12-10"></a>  <span class="kw">where</span></span>
-<span id="cb12-11"><a href="#cb12-11"></a>    getter <span class="ot">=</span> (<span class="fu">subtract</span> <span class="fl">273.15</span>) <span class="op">.</span> view kelvin</span>
-<span id="cb12-12"><a href="#cb12-12"></a>    setter temp c <span class="ot">=</span> set kelvin (c <span class="op">+</span> <span class="fl">273.15</span>) temp</span></code></pre></div>
-<p>By adding the replacement lens we <strong>avoid</strong> breaking any external users of the type! Even our <code>fahrenheit</code> lens was defined in terms of <code>celsius</code>, so it will continue to work perfectly.</p>
-<p>This is a simple example, but this principle holds for more complex refactorings too. When adopting this style it's important to avoid exporting the data type constructor or field accessors and instead export a "smart constructor" function and the lenses for each field.</p>
-<p>When you're writing more complex virtual fields it's relatively easy to write lenses that don't abide by the <strong>lens laws</strong>. In practice, this is usually perfectly fine. In many cases it's completely fine to break these laws for the sake of pragmatism (especially in application code). In fact the <code>lens</code> library itself exports many law-breaking optics. The important thing is to think about whether the lenses for your type behave in a way that's <em>intuitive</em> to the caller or not, and whether it maintains any invariants your type may have.</p>
+<p>In the sad universe without any lenses we had the following code
+scattered throughout our app:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>updateTempReading temp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  newTempInCelsius <span class="ot">&lt;-</span> readOutdoorTemp</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> temp{_celsius<span class="ot">=</span>newTempInCelsius}</span></code></pre></div>
+<p>Then we refactored our <code>Temperature</code> object to the
+following:</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>                ,<span class="ot"> _kelvin  ::</span> <span class="dt">Float</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span></code></pre></div>
+<p>Now, unfortunately, every file that used record update syntax now
+fails to compile. This is because the <code>_celsius</code> field we are
+depending on with our record-update-syntax no longer exists. If we had
+instead used positional pattern matching the situation would be even
+worse:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>updateTempReading (<span class="dt">Temperature</span> location _) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  newTempInCelsius <span class="ot">&lt;-</span> readOutdoorTemp</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> (<span class="dt">Temperature</span> location newTempInCelsius)</span></code></pre></div>
+<p>In this case the code <strong>will still happily compile</strong>,
+but we've switched measurement units this code is now completely
+incorrect!</p>
+<h2 id="the-glorious-utopian-lenses-universe">The glorious utopian
+lenses universe</h2>
+<p>Come with me now to the happy universe. In this world we've decided
+to use lenses as our interface for interacting with
+<code>Temperature</code>s, meaning we didn't expose the field accessors
+and thus disallowed fragile record-update syntax. We used the
+<code>celsius</code> lens to perform the update instead:</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ot">updateTempReading ::</span> <span class="dt">Temperature</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> <span class="dt">Temperature</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>updateTempReading temp <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  newTempInCelsius <span class="ot">&lt;-</span> readTemp</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> set celsius newTempInCelsius temp</span></code></pre></div>
+<p>Now when we refactor, we can export a replacement
+<code>celsius</code> lens in place of the old generated one, and nobody
+need be aware of our refactoring!</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Temperature</span> <span class="ot">=</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Temperature</span> {<span class="ot"> _location ::</span> <span class="dt">String</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>                ,<span class="ot"> _kelvin  ::</span> <span class="dt">Float</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>makeLenses &#39;<span class="dt">&#39;Temperature</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="ot">celsius ::</span> <span class="dt">Lens&#39;</span> <span class="dt">Temperature</span> <span class="dt">Float</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>celsius <span class="ot">=</span> lens getter setter</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    getter <span class="ot">=</span> (<span class="fu">subtract</span> <span class="fl">273.15</span>) <span class="op">.</span> view kelvin</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    setter temp c <span class="ot">=</span> set kelvin (c <span class="op">+</span> <span class="fl">273.15</span>) temp</span></code></pre></div>
+<p>By adding the replacement lens we <strong>avoid</strong> breaking any
+external users of the type! Even our <code>fahrenheit</code> lens was
+defined in terms of <code>celsius</code>, so it will continue to work
+perfectly.</p>
+<p>This is a simple example, but this principle holds for more complex
+refactorings too. When adopting this style it's important to avoid
+exporting the data type constructor or field accessors and instead
+export a "smart constructor" function and the lenses for each field.</p>
+<p>When you're writing more complex virtual fields it's relatively easy
+to write lenses that don't abide by the <strong>lens laws</strong>. In
+practice, this is usually perfectly fine. In many cases it's completely
+fine to break these laws for the sake of pragmatism (especially in
+application code). In fact the <code>lens</code> library itself exports
+many law-breaking optics. The important thing is to think about whether
+the lenses for your type behave in a way that's <em>intuitive</em> to
+the caller or not, and whether it maintains any invariants your type may
+have.</p>
 <h2 id="exercises">Exercises</h2>
-<p>In <a href="https://leanpub.com/optics-by-example/c/virtual-fields"><strong>Optics By Example</strong></a> I include exercises after each section to help readers sharpen their skills. The book has answers too, but for this blog post you're on your own. Give these a try!</p>
+<p>In <a
+href="https://leanpub.com/optics-by-example/c/virtual-fields"><strong>Optics
+By Example</strong></a> I include exercises after each section to help
+readers sharpen their skills. The book has answers too, but for this
+blog post you're on your own. Give these a try!</p>
 <p>Consider this data type for the following exercises:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="kw">data</span> <span class="dt">User</span> <span class="ot">=</span></span>
-<span id="cb13-2"><a href="#cb13-2"></a>  <span class="dt">User</span> {<span class="ot"> _firstName ::</span> <span class="dt">String</span></span>
-<span id="cb13-3"><a href="#cb13-3"></a>       ,<span class="ot"> _lastName ::</span> <span class="dt">String</span></span>
-<span id="cb13-4"><a href="#cb13-4"></a>       ,<span class="ot"> _username ::</span> <span class="dt">String</span></span>
-<span id="cb13-5"><a href="#cb13-5"></a>       ,<span class="ot"> _email ::</span> <span class="dt">String</span></span>
-<span id="cb13-6"><a href="#cb13-6"></a>       } <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
-<span id="cb13-7"><a href="#cb13-7"></a>makeLenses &#39;<span class="dt">&#39;User</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">User</span> <span class="ot">=</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">User</span> {<span class="ot"> _firstName ::</span> <span class="dt">String</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>       ,<span class="ot"> _lastName ::</span> <span class="dt">String</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>       ,<span class="ot"> _username ::</span> <span class="dt">String</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>       ,<span class="ot"> _email ::</span> <span class="dt">String</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>       } <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>makeLenses &#39;<span class="dt">&#39;User</span></span></code></pre></div>
 <ol>
-<li><p>We've decided we're no longer going to have separate usernames and emails; now the email will be used in place of a username. Your task is to delete the <code>_username</code> field and write a replacement <code>username</code> lens which reads and writes from/to the <code>_email</code> field instead. The change should be unnoticed by those importing the module. Assume we haven't exported the constructor, or any of our field accessors, only the generated lenses</p></li>
-<li><p>Write a lens for the user's <code>fullName</code>. It should append the first and last names when "getting". When "setting" treat everything up to the first space as the first name, and everything following it as the last name.</p></li>
+<li><p>We've decided we're no longer going to have separate usernames
+and emails; now the email will be used in place of a username. Your task
+is to delete the <code>_username</code> field and write a replacement
+<code>username</code> lens which reads and writes from/to the
+<code>_email</code> field instead. The change should be unnoticed by
+those importing the module. Assume we haven't exported the constructor,
+or any of our field accessors, only the generated lenses</p></li>
+<li><p>Write a lens for the user's <code>fullName</code>. It should
+append the first and last names when "getting". When "setting" treat
+everything up to the first space as the first name, and everything
+following it as the last name.</p></li>
 </ol>
 <p>It should behave something like this:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> user <span class="ot">=</span> <span class="dt">User</span> <span class="st">&quot;John&quot;</span> <span class="st">&quot;Cena&quot;</span> <span class="st">&quot;invisible@example.com&quot;</span></span>
-<span id="cb14-2"><a href="#cb14-2"></a><span class="op">&gt;&gt;&gt;</span> view fullName user</span>
-<span id="cb14-3"><a href="#cb14-3"></a><span class="st">&quot;John Cena&quot;</span></span>
-<span id="cb14-4"><a href="#cb14-4"></a><span class="op">&gt;&gt;&gt;</span> set fullName <span class="st">&quot;Doctor of Thuganomics&quot;</span> user</span>
-<span id="cb14-5"><a href="#cb14-5"></a><span class="dt">User</span></span>
-<span id="cb14-6"><a href="#cb14-6"></a>    { _firstName <span class="ot">=</span> <span class="st">&quot;Doctor&quot;</span></span>
-<span id="cb14-7"><a href="#cb14-7"></a>    , _lastName <span class="ot">=</span> <span class="st">&quot;of Thuganomics&quot;</span></span>
-<span id="cb14-8"><a href="#cb14-8"></a>    , _email <span class="ot">=</span> <span class="st">&quot;invisible@example.com&quot;</span></span>
-<span id="cb14-9"><a href="#cb14-9"></a>    }</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">let</span> user <span class="ot">=</span> <span class="dt">User</span> <span class="st">&quot;John&quot;</span> <span class="st">&quot;Cena&quot;</span> <span class="st">&quot;invisible@example.com&quot;</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> view fullName user</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;John Cena&quot;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> set fullName <span class="st">&quot;Doctor of Thuganomics&quot;</span> user</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="dt">User</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    { _firstName <span class="ot">=</span> <span class="st">&quot;Doctor&quot;</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    , _lastName <span class="ot">=</span> <span class="st">&quot;of Thuganomics&quot;</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    , _email <span class="ot">=</span> <span class="st">&quot;invisible@example.com&quot;</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

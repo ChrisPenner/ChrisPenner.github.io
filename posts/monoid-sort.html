@@ -771,44 +771,65 @@
         </div>
       </div>
       <article class="post">
-        <p>As I dive deeper into functional programming I'm beginning to think that monoids can solve most problems. In general monoids work well in combination with other structures and algorithms, for instance <a href="/posts/intro-to-finger-trees">Finger Trees</a>, and folds!</p>
-<p>This post is just yet-another-demonstration of how adaptable monoids can really be by solving a problem most people wouldn't immediately associate with monoids.</p>
+        <p>As I dive deeper into functional programming I'm beginning to think
+that monoids can solve most problems. In general monoids work well in
+combination with other structures and algorithms, for instance <a
+href="/posts/intro-to-finger-trees">Finger Trees</a>, and folds!</p>
+<p>This post is just yet-another-demonstration of how adaptable monoids
+can really be by solving a problem most people wouldn't immediately
+associate with monoids.</p>
 <h2 id="sorting">Sorting</h2>
-<p>We're going to write a wrapper around lists which rather than the traditional monoid for lists (concat) instead sorts the two into each other; not much to talk about really, lets see the code!</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a>    <span class="dt">Sort</span> {</span>
-<span id="cb1-3"><a href="#cb1-3"></a><span class="ot">        getSorted ::</span> [a]</span>
-<span id="cb1-4"><a href="#cb1-4"></a>    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
-<span id="cb1-5"><a href="#cb1-5"></a></span>
-<span id="cb1-6"><a href="#cb1-6"></a></span>
-<span id="cb1-7"><a href="#cb1-7"></a><span class="co">-- So long as the elements can be ordered we can combine two sorted lists using mergeSort</span></span>
-<span id="cb1-8"><a href="#cb1-8"></a><span class="kw">instance</span> (<span class="dt">Ord</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Sort</span> a) <span class="kw">where</span></span>
-<span id="cb1-9"><a href="#cb1-9"></a>  <span class="fu">mempty</span> <span class="ot">=</span> <span class="dt">Sort</span> []</span>
-<span id="cb1-10"><a href="#cb1-10"></a>  <span class="fu">mappend</span> (<span class="dt">Sort</span> a) (<span class="dt">Sort</span> b) <span class="ot">=</span> <span class="dt">Sort</span> <span class="op">$</span> mergeSort a b</span>
-<span id="cb1-11"><a href="#cb1-11"></a></span>
-<span id="cb1-12"><a href="#cb1-12"></a><span class="co">-- simple merge sort implementation</span></span>
-<span id="cb1-13"><a href="#cb1-13"></a><span class="ot">mergeSort ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [a]</span>
-<span id="cb1-14"><a href="#cb1-14"></a>mergeSort [] xs <span class="ot">=</span> xs</span>
-<span id="cb1-15"><a href="#cb1-15"></a>mergeSort xs [] <span class="ot">=</span> xs</span>
-<span id="cb1-16"><a href="#cb1-16"></a>mergeSort (x<span class="op">:</span>xs) (y<span class="op">:</span>ys)</span>
-<span id="cb1-17"><a href="#cb1-17"></a>  <span class="op">|</span> y <span class="op">&lt;</span> x <span class="ot">=</span> y <span class="op">:</span> mergeSort (x <span class="op">:</span> xs) ys</span>
-<span id="cb1-18"><a href="#cb1-18"></a>mergeSort (x<span class="op">:</span>xs) ys <span class="ot">=</span> x <span class="op">:</span> mergeSort xs ys</span>
-<span id="cb1-19"><a href="#cb1-19"></a></span>
-<span id="cb1-20"><a href="#cb1-20"></a><span class="co">-- We&#39;ll keep the &#39;Sort&#39; constructor private and expose this smart constructor instead so we can</span></span>
-<span id="cb1-21"><a href="#cb1-21"></a><span class="co">-- guarantee that every list inside a `Sort` is guaranteed to be sorted.</span></span>
-<span id="cb1-22"><a href="#cb1-22"></a><span class="co">-- We could use a simple sort function for this, but might as well use mergeSort since </span></span>
-<span id="cb1-23"><a href="#cb1-23"></a><span class="co">-- we already wrote it.</span></span>
-<span id="cb1-24"><a href="#cb1-24"></a><span class="ot">toSort ::</span> [a] <span class="ot">-&gt;</span> <span class="dt">Sort</span> a</span>
-<span id="cb1-25"><a href="#cb1-25"></a>toSort <span class="ot">=</span> <span class="fu">foldMap</span> (<span class="dt">Sort</span> <span class="op">.</span> <span class="fu">pure</span>)</span></code></pre></div>
+<p>We're going to write a wrapper around lists which rather than the
+traditional monoid for lists (concat) instead sorts the two into each
+other; not much to talk about really, lets see the code!</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">Sort</span> a <span class="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Sort</span> {</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ot">        getSorted ::</span> [a]</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- So long as the elements can be ordered we can combine two sorted lists using mergeSort</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">Ord</span> a) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Sort</span> a) <span class="kw">where</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mempty</span> <span class="ot">=</span> <span class="dt">Sort</span> []</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mappend</span> (<span class="dt">Sort</span> a) (<span class="dt">Sort</span> b) <span class="ot">=</span> <span class="dt">Sort</span> <span class="op">$</span> mergeSort a b</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- simple merge sort implementation</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="ot">mergeSort ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> [a] <span class="ot">-&gt;</span> [a]</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>mergeSort [] xs <span class="ot">=</span> xs</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>mergeSort xs [] <span class="ot">=</span> xs</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>mergeSort (x<span class="op">:</span>xs) (y<span class="op">:</span>ys)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> y <span class="op">&lt;</span> x <span class="ot">=</span> y <span class="op">:</span> mergeSort (x <span class="op">:</span> xs) ys</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>mergeSort (x<span class="op">:</span>xs) ys <span class="ot">=</span> x <span class="op">:</span> mergeSort xs ys</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co">-- We&#39;ll keep the &#39;Sort&#39; constructor private and expose this smart constructor instead so we can</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="co">-- guarantee that every list inside a `Sort` is guaranteed to be sorted.</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co">-- We could use a simple sort function for this, but might as well use mergeSort since </span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co">-- we already wrote it.</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="ot">toSort ::</span> [a] <span class="ot">-&gt;</span> <span class="dt">Sort</span> a</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>toSort <span class="ot">=</span> <span class="fu">foldMap</span> (<span class="dt">Sort</span> <span class="op">.</span> <span class="fu">pure</span>)</span></code></pre></div>
 <p>Let's try it out:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="op">&gt;</span> toSort [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="ot">`mappend`</span> toSort [<span class="dv">10</span>, <span class="dv">7</span>, <span class="dv">8</span>, <span class="dv">4</span>]</span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="dt">Sort</span> {getSorted <span class="ot">=</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">8</span>,<span class="dv">10</span>]}</span>
-<span id="cb2-3"><a href="#cb2-3"></a></span>
-<span id="cb2-4"><a href="#cb2-4"></a><span class="op">&gt;</span> <span class="fu">foldMap</span> (toSort <span class="op">.</span> <span class="fu">pure</span>) [<span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">8</span>]</span>
-<span id="cb2-5"><a href="#cb2-5"></a><span class="dt">Sort</span> {getSorted <span class="ot">=</span> [<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">8</span>]}</span></code></pre></div>
-<p>Nothing too complicated really! <code>mappend</code> over sorted lists just sorts the combined list; we have the benefit in this case of knowing that any list within a <code>Sort</code> is guaranteed to be sorted already so we can an efficient merge sort algorithm. This doesn't make much difference when we're appending small sets of values together, but in particular cases like FingerTrees where intermediate monoidal sums are cached it can really speed things up!</p>
-<p>Just like that we've got a cool monoid which sorts lists for us, and by combining it with <code>foldMap</code> we can easily sort the values from any foldable structure. One other benefit here is that since we know monoids are associative, if we have a huge list of elements we need sorted we can actually split up the list, sort chunks in parallel and combine them all and we have a guarantee that it'll all work out.</p>
-<p>Anyways, that's about it for this one, nothing to write home about, but I think it's fun to discover new monoids!</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;</span> toSort [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>] <span class="ot">`mappend`</span> toSort [<span class="dv">10</span>, <span class="dv">7</span>, <span class="dv">8</span>, <span class="dv">4</span>]</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Sort</span> {getSorted <span class="ot">=</span> [<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">8</span>,<span class="dv">10</span>]}</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;</span> <span class="fu">foldMap</span> (toSort <span class="op">.</span> <span class="fu">pure</span>) [<span class="dv">5</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">8</span>]</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="dt">Sort</span> {getSorted <span class="ot">=</span> [<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">8</span>]}</span></code></pre></div>
+<p>Nothing too complicated really! <code>mappend</code> over sorted
+lists just sorts the combined list; we have the benefit in this case of
+knowing that any list within a <code>Sort</code> is guaranteed to be
+sorted already so we can an efficient merge sort algorithm. This doesn't
+make much difference when we're appending small sets of values together,
+but in particular cases like FingerTrees where intermediate monoidal
+sums are cached it can really speed things up!</p>
+<p>Just like that we've got a cool monoid which sorts lists for us, and
+by combining it with <code>foldMap</code> we can easily sort the values
+from any foldable structure. One other benefit here is that since we
+know monoids are associative, if we have a huge list of elements we need
+sorted we can actually split up the list, sort chunks in parallel and
+combine them all and we have a guarantee that it'll all work out.</p>
+<p>Anyways, that's about it for this one, nothing to write home about,
+but I think it's fun to discover new monoids!</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

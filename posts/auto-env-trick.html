@@ -773,29 +773,45 @@
         </div>
       </div>
       <article class="post">
-        <p>Firstly, if you haven't heard of <a href="https://github.com/kennethreitz/autoenv">autoenv</a> then I suggest you go check it out now. Basically it allows you to run arbitrary shell scripts any time you enter a directory or any of its children, it's pretty useful.</p>
-<p>You can do all sorts of things with this tool, though most people use it to configure their environment variables (hence the name). I use it for that as well, but I've added a new trick.</p>
-<p>Basically, each time you enter a project it will try to join an existing tmux session for that project, if none exist it will create one.</p>
+        <p>Firstly, if you haven't heard of <a
+href="https://github.com/kennethreitz/autoenv">autoenv</a> then I
+suggest you go check it out now. Basically it allows you to run
+arbitrary shell scripts any time you enter a directory or any of its
+children, it's pretty useful.</p>
+<p>You can do all sorts of things with this tool, though most people use
+it to configure their environment variables (hence the name). I use it
+for that as well, but I've added a new trick.</p>
+<p>Basically, each time you enter a project it will try to join an
+existing tmux session for that project, if none exist it will create
+one.</p>
 <p>Here's what's in each project's '.env' file now:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1"></a><span class="co">#!/bin/sh</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a></span>
-<span id="cb1-3"><a href="#cb1-3"></a><span class="co"># Echo the root folder of the current git repo.</span></span>
-<span id="cb1-4"><a href="#cb1-4"></a><span class="fu">gitroot()</span><span class="kw">{</span></span>
-<span id="cb1-5"><a href="#cb1-5"></a>    <span class="bu">echo</span> <span class="kw">`</span><span class="fu">git</span> rev-parse --show-toplevel<span class="kw">`</span></span>
-<span id="cb1-6"><a href="#cb1-6"></a><span class="kw">}</span></span>
-<span id="cb1-7"><a href="#cb1-7"></a></span>
-<span id="cb1-8"><a href="#cb1-8"></a><span class="co"># Reconnect tmux session</span></span>
-<span id="cb1-9"><a href="#cb1-9"></a><span class="fu">tmuxproj()</span><span class="kw">{</span></span>
-<span id="cb1-10"><a href="#cb1-10"></a><span class="co"># Don&#39;t attach to tmux if already in tmux</span></span>
-<span id="cb1-11"><a href="#cb1-11"></a>    <span class="kw">if</span> ! <span class="kw">{</span><span class="bu"> [</span> <span class="st">&quot;</span><span class="va">$TERM</span><span class="st">&quot;</span> <span class="ot">=</span> <span class="st">&quot;screen&quot;</span><span class="bu"> ]</span> <span class="kw">||</span><span class="bu"> [</span> <span class="ot">-n</span> <span class="st">&quot;</span><span class="va">$TMUX</span><span class="st">&quot;</span><span class="bu"> ]</span>; <span class="kw">}</span> <span class="kw">then</span></span>
-<span id="cb1-12"><a href="#cb1-12"></a>    <span class="co"># Attach to project tmux session if it exists, otherwise create it.</span></span>
-<span id="cb1-13"><a href="#cb1-13"></a>        <span class="ex">tmux</span> attach -t <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span> <span class="kw">||</span> <span class="ex">tmux</span> new -s <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span></span>
-<span id="cb1-14"><a href="#cb1-14"></a>    <span class="kw">fi</span></span>
-<span id="cb1-15"><a href="#cb1-15"></a><span class="kw">}</span></span>
-<span id="cb1-16"><a href="#cb1-16"></a></span>
-<span id="cb1-17"><a href="#cb1-17"></a><span class="co"># inside a project&#39;s .env:</span></span>
-<span id="cb1-18"><a href="#cb1-18"></a><span class="ex">tmuxproj</span></span></code></pre></div>
-<p>I use vim with tmux extensively, and so I often set up a workplace with several tmux windows and splits. Setting all this up and remembering what I was working on every time I context switch can be a bit of a pain, so now I use autoenv to manage it for me. What would usually happen to me is that I'd set up a tmux session with all of this, then forget about it next time I went to work on this project, but now every time I enter a project's directory it automagically puts me back into the session.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#!/bin/sh</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Echo the root folder of the current git repo.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">gitroot()</span><span class="kw">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="kw">`</span><span class="fu">git</span> rev-parse <span class="at">--show-toplevel</span><span class="kw">`</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">}</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Reconnect tmux session</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">tmuxproj()</span><span class="kw">{</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Don&#39;t attach to tmux if already in tmux</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="ot">! </span><span class="kw">{</span> <span class="bu">[</span> <span class="st">&quot;</span><span class="va">$TERM</span><span class="st">&quot;</span> <span class="ot">=</span> <span class="st">&quot;screen&quot;</span> <span class="bu">]</span> <span class="kw">||</span> <span class="bu">[</span> <span class="ot">-n</span> <span class="st">&quot;</span><span class="va">$TMUX</span><span class="st">&quot;</span> <span class="bu">]</span><span class="kw">;</span> <span class="kw">}</span> <span class="cf">then</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Attach to project tmux session if it exists, otherwise create it.</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="ex">tmux</span> attach <span class="at">-t</span> <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span> <span class="kw">||</span> <span class="ex">tmux</span> new <span class="at">-s</span> <span class="kw">`</span><span class="ex">gitroot</span><span class="kw">`</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">fi</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">}</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co"># inside a project&#39;s .env:</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="ex">tmuxproj</span></span></code></pre></div>
+<p>I use vim with tmux extensively, and so I often set up a workplace
+with several tmux windows and splits. Setting all this up and
+remembering what I was working on every time I context switch can be a
+bit of a pain, so now I use autoenv to manage it for me. What would
+usually happen to me is that I'd set up a tmux session with all of this,
+then forget about it next time I went to work on this project, but now
+every time I enter a project's directory it automagically puts me back
+into the session.</p>
 <p>Simple! Now I can't forget!</p>
 
         <p>

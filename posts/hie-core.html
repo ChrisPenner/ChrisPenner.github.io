@@ -768,58 +768,120 @@
         </div>
       </div>
       <article class="post">
-        <p><strong>EDIT</strong>: This project has been renamed to <code>ghcide</code> now; you can find it <a href="https://github.com/digital-asset/ghcide">here</a>!</p>
+        <p><strong>EDIT</strong>: This project has been renamed to
+<code>ghcide</code> now; you can find it <a
+href="https://github.com/digital-asset/ghcide">here</a>!</p>
 <p>Here's a super quick guide on adding hie-core to your workflow!</p>
-<p>Disclaimer; this post depends on the state of the world as of Saturday Morning, Sept. 7th 2019; it's likely changed since then. I'm not a maintainer of any of these libraries, and this is a complicated and confusing process. There's a good chance this won't work for you, but I'm afraid I can't support every possible set up. Use it as a guide-post, but you'll probably need to fix a few problems yourself. Feel free to let me know if things are broken, but I make no guarantees that I can help, sorry! Good luck!</p>
-<p>This is a guide for using it with stack projects, or at least using the stack tool. If your project isn't a stack project, you can probably just run <code>stack init</code> first.</p>
-<p><code>hie-core</code> currently requires a whole suite of tools to run, including <code>hie-bios</code>, <code>hie-core</code>, and <code>haskell-lsp</code>. Each of these need to be installed against the proper GHC version and LTS that you'll be using in your project. This is a bit annoying of course, but the end result is worth it.</p>
-<p>We need separate binaries for every GHC version, so to avoid getting them all confused, we'll install everything in LTS specific sandboxes!</p>
+<p>Disclaimer; this post depends on the state of the world as of
+Saturday Morning, Sept. 7th 2019; it's likely changed since then. I'm
+not a maintainer of any of these libraries, and this is a complicated
+and confusing process. There's a good chance this won't work for you,
+but I'm afraid I can't support every possible set up. Use it as a
+guide-post, but you'll probably need to fix a few problems yourself.
+Feel free to let me know if things are broken, but I make no guarantees
+that I can help, sorry! Good luck!</p>
+<p>This is a guide for using it with stack projects, or at least using
+the stack tool. If your project isn't a stack project, you can probably
+just run <code>stack init</code> first.</p>
+<p><code>hie-core</code> currently requires a whole suite of tools to
+run, including <code>hie-bios</code>, <code>hie-core</code>, and
+<code>haskell-lsp</code>. Each of these need to be installed against the
+proper GHC version and LTS that you'll be using in your project. This is
+a bit annoying of course, but the end result is worth it.</p>
+<p>We need separate binaries for every GHC version, so to avoid getting
+them all confused, we'll install everything in LTS specific
+sandboxes!</p>
 <ul>
-<li>First navigate to the project you want to run <code>hie-core</code> with</li>
-<li>Now <code>stack update</code>; sometimes stack doesn't keep your hackage index up-to-date and most of the packages we'll be using are pretty new.</li>
+<li>First navigate to the project you want to run <code>hie-core</code>
+with</li>
+<li>Now <code>stack update</code>; sometimes stack doesn't keep your
+hackage index up-to-date and most of the packages we'll be using are
+pretty new.</li>
 <li><code>stack build hie-bios hie-core haskell-lsp --copy-compiler-tool</code>
 <ul>
-<li>We need these three executables installed, using <code>stack build</code> doesn't install them globally (which is what we want to avoid conflicts), but <code>--copy-compiler-tool</code> allows us to share binaries with other projects of the same LTS.</li>
-<li>This will probably FAIL the first time you run it, stack will suggest that you add extra-deps to your <code>stack.yaml</code>; go ahead and do that and try again. Repeat this process until success!</li>
+<li>We need these three executables installed, using
+<code>stack build</code> doesn't install them globally (which is what we
+want to avoid conflicts), but <code>--copy-compiler-tool</code> allows
+us to share binaries with other projects of the same LTS.</li>
+<li>This will probably FAIL the first time you run it, stack will
+suggest that you add extra-deps to your <code>stack.yaml</code>; go
+ahead and do that and try again. Repeat this process until success!</li>
 </ul></li>
 </ul>
-<p>If you've got all those running, time to go for a walk, or make a cup of tea. It'll take a while.</p>
-<p>If you're using an LTS OLDER than <code>14.1</code> then <code>haskell-lsp</code> will probably be too old to work with <code>hie-core</code>; you can <strong>try</strong> to fix it by adding the following to your extra-deps:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1"></a><span class="fu">extra-deps</span><span class="kw">:</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a><span class="kw">-</span><span class="at"> haskell-lsp-0.15.0.0</span></span>
-<span id="cb1-3"><a href="#cb1-3"></a><span class="kw">-</span><span class="at"> haskell-lsp-types-0.15.0.0</span></span></code></pre></div>
+<p>If you've got all those running, time to go for a walk, or make a cup
+of tea. It'll take a while.</p>
+<p>If you're using an LTS OLDER than <code>14.1</code> then
+<code>haskell-lsp</code> will probably be too old to work with
+<code>hie-core</code>; you can <strong>try</strong> to fix it by adding
+the following to your extra-deps:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">extra-deps</span><span class="kw">:</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">-</span><span class="at"> haskell-lsp-0.15.0.0</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">-</span><span class="at"> haskell-lsp-types-0.15.0.0</span></span></code></pre></div>
 <p>If that doesn't work, sorry, I really have no idea :'(</p>
-<p>Okay, so now we've got all the tools installed we can start configuring the editor. I can't tell you how to install it for every possible editor, but the key parts to know is that it's a <strong>language server</strong>, so search for integrations for your editor that handle that protocol. Usually "$MyEditorName lsp" is a good google search. Once you find a plugin you need to configure it. Typically there's a spot in the settings to associate file-types with the language server binary. Punch in the Haskell filetype or extensions accordingly, the lsp binary is <code>stack exec hie-core -- --lsp</code>; this'll use the <code>hie-core</code> you install specifically for this LTS, and will add the other dependencies to the path properly. You'll likely need to specify the binary and arguments separately, see the following vim setup for an example.</p>
+<p>Okay, so now we've got all the tools installed we can start
+configuring the editor. I can't tell you how to install it for every
+possible editor, but the key parts to know is that it's a
+<strong>language server</strong>, so search for integrations for your
+editor that handle that protocol. Usually "$MyEditorName lsp" is a good
+google search. Once you find a plugin you need to configure it.
+Typically there's a spot in the settings to associate file-types with
+the language server binary. Punch in the Haskell filetype or extensions
+accordingly, the lsp binary is
+<code>stack exec hie-core -- --lsp</code>; this'll use the
+<code>hie-core</code> you install specifically for this LTS, and will
+add the other dependencies to the path properly. You'll likely need to
+specify the binary and arguments separately, see the following vim setup
+for an example.</p>
 <h2 id="vim-setup">Vim Setup</h2>
-<p>Here's my setup for using <code>hie-core</code> with <a href="https://neovim.io/">Neovim</a> using the amazing <a href="https://github.com/neoclide/coc.nvim">Coc plugin</a>. Note that you'll need to install Neovim from latest HEAD to get proper pop-up support, if you're on a Mac you can do that with <code>brew unlink neovim; brew install --HEAD neovim</code>.</p>
-<p>Follow the instructions in the Coc README for installing that however you like; then run <code>:CocConfig</code> inside neovim to open up the config file.</p>
+<p>Here's my setup for using <code>hie-core</code> with <a
+href="https://neovim.io/">Neovim</a> using the amazing <a
+href="https://github.com/neoclide/coc.nvim">Coc plugin</a>. Note that
+you'll need to install Neovim from latest HEAD to get proper pop-up
+support, if you're on a Mac you can do that with
+<code>brew unlink neovim; brew install --HEAD neovim</code>.</p>
+<p>Follow the instructions in the Coc README for installing that however
+you like; then run <code>:CocConfig</code> inside neovim to open up the
+config file.</p>
 <p>Here's my current config:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1"></a><span class="fu">{</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a><span class="dt">&quot;languageserver&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb2-3"><a href="#cb2-3"></a>  <span class="dt">&quot;haskell&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb2-4"><a href="#cb2-4"></a>    <span class="dt">&quot;command&quot;</span><span class="fu">:</span> <span class="st">&quot;stack&quot;</span><span class="fu">,</span></span>
-<span id="cb2-5"><a href="#cb2-5"></a>    <span class="dt">&quot;args&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;exec&quot;</span><span class="ot">,</span> <span class="st">&quot;hie-core&quot;</span><span class="ot">,</span> <span class="st">&quot;--&quot;</span><span class="ot">,</span> <span class="st">&quot;--lsp&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb2-6"><a href="#cb2-6"></a>    <span class="dt">&quot;rootPatterns&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb2-7"><a href="#cb2-7"></a>      <span class="st">&quot;.stack.yaml&quot;</span><span class="ot">,</span></span>
-<span id="cb2-8"><a href="#cb2-8"></a>      <span class="st">&quot;cabal.config&quot;</span><span class="ot">,</span></span>
-<span id="cb2-9"><a href="#cb2-9"></a>      <span class="st">&quot;package.yaml&quot;</span></span>
-<span id="cb2-10"><a href="#cb2-10"></a>    <span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb2-11"><a href="#cb2-11"></a>    <span class="dt">&quot;filetypes&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb2-12"><a href="#cb2-12"></a>      <span class="st">&quot;hs&quot;</span><span class="ot">,</span></span>
-<span id="cb2-13"><a href="#cb2-13"></a>      <span class="st">&quot;lhs&quot;</span><span class="ot">,</span></span>
-<span id="cb2-14"><a href="#cb2-14"></a>      <span class="st">&quot;haskell&quot;</span></span>
-<span id="cb2-15"><a href="#cb2-15"></a>    <span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb2-16"><a href="#cb2-16"></a>    <span class="dt">&quot;initializationOptions&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb2-17"><a href="#cb2-17"></a>      <span class="dt">&quot;languageServerHaskell&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb2-18"><a href="#cb2-18"></a>      <span class="fu">}</span></span>
-<span id="cb2-19"><a href="#cb2-19"></a>    <span class="fu">}</span></span>
-<span id="cb2-20"><a href="#cb2-20"></a>  <span class="fu">}</span></span>
-<span id="cb2-21"><a href="#cb2-21"></a><span class="fu">}</span></span>
-<span id="cb2-22"><a href="#cb2-22"></a><span class="fu">}</span></span></code></pre></div>
-<p>Also make sure to read the <a href="https://github.com/neoclide/coc.nvim#example-vim-configuration">Sample Vim Configuration</a> for Coc to set up bindings and such.</p>
-<p>After you've done all that, I <strong>hope</strong> it's working for you, if not, something crazy has probably changed and you're probably on your own. Good luck!</p>
-<p>PS; I have a little bash script I use for installing this in every new project in case you want to see how terrible I am at writing BASH. It includes a helper which auto-adds all the necessary extra-deps for you: <a href="https://github.com/ChrisPenner/dotfiles/blob/master/bin/hie-init">My crappy bash script</a></p>
-<p>You'll probably need to run the script more than once as it attempts to add all the needed extra-deps. Hopefully this'll get better as these tools get added to stackage.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="dt">&quot;languageserver&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;haskell&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;command&quot;</span><span class="fu">:</span> <span class="st">&quot;stack&quot;</span><span class="fu">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;args&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;exec&quot;</span><span class="ot">,</span> <span class="st">&quot;hie-core&quot;</span><span class="ot">,</span> <span class="st">&quot;--&quot;</span><span class="ot">,</span> <span class="st">&quot;--lsp&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;rootPatterns&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;.stack.yaml&quot;</span><span class="ot">,</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;cabal.config&quot;</span><span class="ot">,</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;package.yaml&quot;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;filetypes&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;hs&quot;</span><span class="ot">,</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;lhs&quot;</span><span class="ot">,</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;haskell&quot;</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;initializationOptions&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;languageServerHaskell&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>Also make sure to read the <a
+href="https://github.com/neoclide/coc.nvim#example-vim-configuration">Sample
+Vim Configuration</a> for Coc to set up bindings and such.</p>
+<p>After you've done all that, I <strong>hope</strong> it's working for
+you, if not, something crazy has probably changed and you're probably on
+your own. Good luck!</p>
+<p>PS; I have a little bash script I use for installing this in every
+new project in case you want to see how terrible I am at writing BASH.
+It includes a helper which auto-adds all the necessary extra-deps for
+you: <a
+href="https://github.com/ChrisPenner/dotfiles/blob/master/bin/hie-init">My
+crappy bash script</a></p>
+<p>You'll probably need to run the script more than once as it attempts
+to add all the needed extra-deps. Hopefully this'll get better as these
+tools get added to stackage.</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

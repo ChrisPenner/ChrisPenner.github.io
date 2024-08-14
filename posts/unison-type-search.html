@@ -11,11 +11,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
-    <meta name="twitter:title" content="Typesafe Versioned APIs">
-    <meta name="twitter:description" content="Exploring writing multiple versions of your application in a typesafe
-way using data-kinds and functional dependencies">
-    <meta name="twitter:image" content="http://chrispenner.ca/images/typesafe-api-versioning/numbers.jpg">
-    <title>Typesafe Versioned APIs</title>
+    <meta name="twitter:title" content="Building Type Search for Unison">
+    <meta name="twitter:description" content="Building an efficient and scalable type search for Unison">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/type-based-search/type-based-search.png">
+    <title>Building Type Search for Unison</title>
     <link
       rel="alternate"
       type="application/atom+xml"
@@ -751,15 +750,15 @@ way using data-kinds and functional dependencies">
       <div class="wrapper">
         <div class="masthead">
           <h1 class="title">
-            Typesafe Versioned APIs
+            Building Type Search for Unison
           </h1>
           <br />
 
-          <img class="post-image" src="/images/typesafe-api-versioning/numbers.jpg" />
+          <img class="post-image" src="/images/type-based-search/type-based-search.png" />
           <br />
           <span class="byline">by Chris Penner</span>
           <br />
-          <span class="date">Aug 4, 2018</span>
+          <span class="date">Aug 14, 2024</span>
           <br />
           <div class="metadata">
             <br />
@@ -767,415 +766,278 @@ way using data-kinds and functional dependencies">
               Tags<br />
               <a class="tag" href="/tag/programming">programming</a>
               <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/unison">unison</a>
             </span>
           </div>
         </div>
       </div>
       <article class="post">
-        <p>Today we're going to look at the idea of using Haskell's type system
-to <strong>specialize our app implementation according to type-level
-flags</strong>. More specifically we're going to look at a fun way to
-write a monadic action which alters its behaviour based on which
-<strong>version</strong> of a system it's embedded in, simultaneously
-gaining ground on <a
-href="https://en.wikipedia.org/wiki/Expression_problem">the expression
-problem</a> and giving us compile-time guarantees that we haven't
-accidentally mixed up code from different versions of our app!</p>
-<p>The concrete example we'll be looking at is a simple web handler
-which returns a JSON representation of a User; we'll start with a single
-possible representation of the user, but will the evolve our system to
-be able to return a different JSON schema depending on which
-<strong>version</strong> of the API the user has selected.</p>
-<p>Disclaimer; the system I present probably isn't a great idea in a
-large production app, but is a fun experiment to learn more about higher
-kinded types and functional dependencies so we're going to do it
-anyways. Let's dive right in!</p>
-<h2 id="starting-app">Starting App</h2>
-<p>Let's build a quick starting app so we have something to work with;
-I'll elide all the web and http related bits, we'll have a simple
-handler that fetches a user and our <code>main</code> will run the
-handler and print things out.</p>
-<div class="sourceCode" id="cb1"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- You&#39;ll need to have the &#39;mtl&#39; and &#39;aeson&#39; packages in your project</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE NamedFieldPuns #-}</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE GeneralizedNewtypeDeriving #-}</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Monad.IO.Class</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Aeson</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- User -----------------------------------</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">User</span> <span class="ot">=</span> <span class="dt">User</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> name ::</span> <span class="dt">String</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Show</span>)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span>) <span class="kw">where</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  toJSON (<span class="dt">User</span> {name}) <span class="ot">=</span> object [<span class="st">&quot;name&quot;</span> <span class="op">.=</span> name]</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="co">-- App Monad --------------------------------</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">AppM</span> a <span class="ot">=</span> <span class="dt">AppM</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runApp ::</span> <span class="dt">IO</span> a</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>)</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co">-- User Service --------------------------------</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>      <span class="dt">MonadUserService</span> m</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="ot">  getUser ::</span> m <span class="dt">User</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dt">AppM</span> <span class="kw">where</span></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  getUser <span class="ot">=</span> <span class="fu">return</span> (<span class="dt">User</span> <span class="st">&quot;Bob Johnson&quot;</span>)</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="co">-- App -----------------------------------------</span></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="ot">userHandler ::</span> (<span class="dt">MonadUserService</span> m) <span class="ot">=&gt;</span> m <span class="dt">Value</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>userHandler <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>  user <span class="ot">&lt;-</span> getUser</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> toJSON user</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="ot">app ::</span> (<span class="dt">MonadIO</span> m, <span class="dt">MonadUserService</span> m) <span class="ot">=&gt;</span> m ()</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>app <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>  userJSON <span class="ot">&lt;-</span> userHandler</span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>  liftIO <span class="op">$</span> <span class="fu">print</span> userJSON</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> runApp app</span></code></pre></div>
-<p>Hopefully that's not too cryptic 😅</p>
-<p>We've defined a simple user object and wrote an Aeson
-<code>ToJSON</code> instance for it so we can serialize it. Then we
-wrote a newtype wrapper around <code>IO</code> which we can use to
-implement various instances on; note that we use
-<code>GeneralizedNewtypeDeriving</code> to get our <code>Monad</code>
-and <code>MonadIO</code> instances for free.</p>
-<p>Next we define our interface for a User Service as the
-<code>MonadUserService</code> typeclass; this has a single member:
-<code>getUser</code> which defines how to get a user within a given
-monad. In our case we'll write the simplest possible implementation for
-our service and just return a static "Bob Johnson" user.</p>
-<p>Next up we have our handler which gets a user, serializes, then
-returns it. Lastly we've got an <code>app</code> which calls the user
-then prints it, and a <code>main</code> which runs the app.</p>
-<p>Brilliant, we're all set up; let's run it and see what we get!</p>
-<div class="sourceCode" id="cb2"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;</span> main</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Object</span> (fromList [(<span class="st">&quot;name&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob Johnson&quot;</span>)])</span></code></pre></div>
-<h2 id="chapter-2-wherein-our-api-evolves">Chapter 2; wherein our API
-evolves</h2>
-<p>They said we'd never succeed, but damn them all! In spite all of our
-investor's criticisms our app is doing wonderfully! We have a whole 7 of
-users and are making tens of dollars! Some users at large have requested
-the ability to get a user's first and last name separately; but other
-users have legacy systems built against our v1 API! Clearly it would be
-far too much work to duplicate our entire user handler and make
-alterations for our v2 API, let's see if we can
-<strong>parameterize</strong> our app over our <strong>API
-version</strong> and <strong>defer</strong> the choice of app version
-(and implementation) until the last possible minute!</p>
-<p>Like most Haskell refactors we can just start building what we want
-and let the compiler guide the way; let's change our <code>User</code>
-data type to reflect the needs of our users:</p>
-<div class="sourceCode" id="cb3"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- First attempt</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">User</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="ot">=</span> <span class="dt">UserV1</span> {<span class="ot"> name ::</span> <span class="dt">String</span> }</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> <span class="dt">UserV2</span> {<span class="ot"> firstName ::</span> <span class="dt">String</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>           ,<span class="ot"> lastName ::</span> <span class="dt">String</span> }</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="dt">Show</span>)</span></code></pre></div>
-<p>This reflects the choice in our app that the user type could be
-either of the two shapes; but there's a few problems with this approach.
-First and foremost is that this means that at EVERY stage in the app
-where we use a <code>User</code> we need to pattern match over the
-constructors and handle EVERY one; regardless of which version we happen
-to be working with. Not only is this not what we wanted, but as we add
-more versions later on the number of possible code paths we need to
-handle explodes! One way we can avoid this chaos is to let the type
-system know that our data is <strong>versioned</strong>. Enter
-<code>GADT</code>s!</p>
-<h2 id="gadts-with-phantom-types">GADT's with Phantom types</h2>
-<p>Take a gander at this:</p>
-<div class="sourceCode" id="cb4"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE GADTs #-}</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE DataKinds #-}</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE KindSignatures #-}</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">GHC.TypeLits</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">User</span> (<span class="ot">v ::</span> <span class="dt">Nat</span>) <span class="kw">where</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">UserV1</span><span class="ot"> ::</span> {<span class="ot"> name ::</span> <span class="dt">String</span>} <span class="ot">-&gt;</span> <span class="dt">User</span> <span class="dv">1</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">UserV2</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="ot">    ::</span> {<span class="ot"> firstName ::</span> <span class="dt">String</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>       ,<span class="ot"> lastName ::</span> <span class="dt">String</span>}</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="ot">-&gt;</span> <span class="dt">User</span> <span class="dv">2</span></span></code></pre></div>
-<p>If you haven't worked with <code>GADT</code>s before this may all
-look a bit strange, let's break it down a bit:</p>
-<p>First off; in order to even talk about <code>GADT</code>s we need the
-<code>GADTs</code> language extension; this unlocks the
-<code>data ... where</code> syntax! There's a bit more to it, but the
-basic idea is that this allows us to effectively specify our data
-constructors like we would normal functions in haskell. This means we
-can specify constaints on our parameters, and in our case we can
-specialize the types of the resulting value based on which particular
-constructor was used. So if someone uses the <code>UserV1</code>
-constructor they MUST get a <code>User 1</code>, and similarly with
-<code>UserV2</code>. The compiler remembers this info and in our case
-can actually tell that if we have a function which accepts a
-<code>User 1</code> that we only need to match over the
-<code>UserV1</code> constructor since any values of <code>User 1</code>
-MUST have been constructed using <code>UserV1</code>.</p>
-<p>Maybe I'm getting ahead of myself; how is it we can suddenly have
-numbers like <code>1</code> and <code>2</code> in our types? The answer
-lies within the <code>(v :: Nat)</code> annotation. This is a
-<strong>Kind Signature</strong>, and as such naturally requires the
-<code>KindSignatures</code> extension. Others have written more
-exhaustively on the subject, but the basic idea is that <code>Nat</code>
-is a kind, i.e. a 'type' for types. This means that the <code>v</code>
-parameter can't take on just any type, but only types that are part of
-the <code>Nat</code> kind, which corresponds to the natural (aka
-non-negative) integers. This is handy, because it means people can't
-create a user with a version number of <code>String</code> or
-<code>()</code> or something silly like that. Lastly we need the
-<code>DataKinds</code> extension to allow us to use Data Constructors in
-our types; once that's enabled we can import <code>GHC.TypeLits</code>
-and use integer literals in our types and GHC will figure it all
-out.</p>
-<p>The <code>v</code> paramter of our user is also something called a
-"phantom type". It's a type parameter on a data type that doesn't
-actually have an associated value in the right hand side of the data
-definition. These sorts of things are useful for adding additional
-information at the type level.</p>
-<p>Step one done! We've successfully parameterized our datatype over a
-version number at the type level! At this point your compiler is
-probably bugging you about the fact that the <code>User</code>
-constructor no longer exists; we originally implemented the
-<code>ToJSON</code> class for the base User type, but now User needs an
-additional type parameter. This is good! It means we can implement a
-different instance for each version of user we have; which is basically
-what we wanted to do in the first place!</p>
-<p>Let's alter our <code>ToJSON</code> instance so it has a single name
-parameter for v1 and a separate first and last name for v2!</p>
-<div class="sourceCode" id="cb5"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE FlexibleInstances #-}</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span> <span class="dv">1</span>) <span class="kw">where</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  toJSON (<span class="dt">UserV1</span> {name}) <span class="ot">=</span> object [<span class="st">&quot;name&quot;</span> <span class="op">.=</span> name]</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">ToJSON</span> (<span class="dt">User</span> <span class="dv">2</span>) <span class="kw">where</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  toJSON (<span class="dt">UserV2</span> {firstName, lastName}) <span class="ot">=</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    object [<span class="st">&quot;firstName&quot;</span> <span class="op">.=</span> firstName, <span class="st">&quot;lastName&quot;</span> <span class="op">.=</span> lastName]</span></code></pre></div>
-<p>Here we're specifying <strong>different instances</strong> of
-<code>ToJSON</code> for the different members of our <code>User</code>
-datatype. Note that, as promised, the compiler KNOWS that only the
-matching constructor needs to be matched on and that a
-<code>UserV1</code> won't show up in an instance for
-<code>User 2</code>. We'll need <code>FlexibleInstances</code> turned on
-so GHC can handle complex types like <code>User 1</code> in an instance
-definition.</p>
-<p>Next it's time to fix up our <code>MonadUserService</code> class, we
-know that <code>getUser</code> needs to return a user, but which user
-type should it return? We can imagine someone implementing a
-<code>MonadUserService</code> for <code>User 1</code> and also for
-<code>User 2</code>, so it would be nice if instances could specify
-which version they want to work with. To accomplish that we can add an
-additional parameter to the class:</p>
-<div class="sourceCode" id="cb6"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE MultiParamTypeClasses #-}</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>      <span class="dt">MonadUserService</span> v m</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="ot">  getUser ::</span> m (<span class="dt">User</span> v)</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">1</span> <span class="dt">AppM</span> <span class="kw">where</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  getUser <span class="ot">=</span> <span class="fu">return</span> (<span class="dt">UserV1</span> <span class="st">&quot;Bob Johnson&quot;</span>)</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">2</span> <span class="dt">AppM</span> <span class="kw">where</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  getUser <span class="ot">=</span> <span class="fu">return</span> (<span class="dt">UserV2</span> <span class="st">&quot;Bob&quot;</span> <span class="st">&quot;Johnson&quot;</span>)</span></code></pre></div>
-<p>Just like <code>ToJSON</code> we can now implement the typeclass
-instance differently for each version of our user. We'll need
-<code>MultiParamTypeClasses</code> to add the <code>v</code> parameter
-to our typeclass.</p>
-<h2 id="generalizing-the-handler-and-app-over-version">Generalizing the
-handler and app over version</h2>
-<p>We're moving along nicely! Next we need our <code>userHandler</code>
-and <code>app</code> to know about version numbers, however this layer
-of our app doesn't really care which exact version of user it's working
-with, mostly it just cares that certain instances exist for that user.
-Ideally we can write versions of these that work for either of our user
-versions all at once.</p>
-<p>The first step is to introduce our new paramterized typeclasses:</p>
-<div class="sourceCode" id="cb7"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE FlexibleContexts #-}</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ot">userHandler ::</span> (<span class="dt">ToJSON</span> (<span class="dt">User</span> v), <span class="dt">MonadUserService</span> v m) <span class="ot">=&gt;</span> m <span class="dt">Value</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>userHandler <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  user <span class="ot">&lt;-</span> getUser</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> toJSON user</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="ot">app ::</span> (<span class="dt">ToJSON</span> (<span class="dt">User</span> v), <span class="dt">MonadIO</span> m, <span class="dt">MonadUserService</span> v m) <span class="ot">=&gt;</span> m ()</span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>app <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  userJSON <span class="ot">&lt;-</span> userHandler</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  liftIO <span class="op">$</span> <span class="fu">print</span> userJSON</span></code></pre></div>
-<p>Now we run into a bit of a problem;</p>
-<pre><code>    • Could not deduce (MonadUserService v0 m)
-      from the context: (MonadIO m, MonadUserService v m)
-        bound by the type signature for:
-                   app :: forall (m :: * -&gt; *) (v :: Nat).
-                          (MonadIO m, MonadUserService v m) =&gt;
-                          m ()
-        at /Users/cpenner/dev/typesafe-versioning/src/Before2.hs:54:8-48
-      The type variable ‘v0’ is ambiguous
-    • In the ambiguity check for ‘app’
-      To defer the ambiguity check to use sites, enable AllowAmbiguousTypes
-      In the type signature:
-        app :: (MonadIO m, MonadUserService v m) =&gt; m ()</code></pre>
-<p>It's telling us it can't tell which user version we want it to use!
-So there are a few ways we can fix this; one way would be to specify the
-specific type that we'd like <code>v</code> to be each time it's used;
-we can enable <code>AllowAmbiguousTypes</code>,
-<code>TypeApplications</code> and <code>ScopedTypeVariables</code> to
-try that; but this ends up being pretty verbose and isn't the nicest to
-work with. We won't dive into that possibility, but I'd recommend you
-give it a try though if you like a challenge!</p>
-<p>The other option we have is to clear up the disambiguity by giving
-the type system another way to determine what <code>v</code> should be;
-in our case the monad <code>m</code> is pervasive throughout our app, so
-if we can somehow infer <code>v</code> from <code>m</code> then we can
-save ourselves a lot of trouble. We're already associating the two
-within the typeclass definition
-<code>class (Monad m) =&gt; MonadUserService v m</code>; however the
-type system recognizes that there could be an instance for several
-different values of <code>v</code>; and of course we've implemented
-exactly that!</p>
-<p>The way to fix this is to tell the type system that there's
-<strong>one-and-only-one</strong> <code>v</code> for each <code>m</code>
-using <strong>FunctionalDependencies</strong>; and then find a way to
-encode the <code>v</code> inside the <code>m</code> so we can still run
-the different versions of our app.</p>
-<p>Lets add a new extension and alter our typeclass appropriately:</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> <span class="dt">MonadUserService</span> v m <span class="op">|</span> m <span class="ot">-&gt;</span> v</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ot">  getUser ::</span> m (<span class="dt">User</span> v)</span></code></pre></div>
-<p>We've added a the <code>| m -&gt; v</code> annotation which reads
-something like "... where <code>m</code> determines <code>v</code>".
-Adding this annotation allows us to avoid the
-<code>Ambiguous Type</code> errors because we've told the type system
-that for any given <code>m</code> there's only one <code>v</code>; so if
-it knows <code>m</code>, (which in our case it does) then it can safely
-determine exactly which <code>v</code> to use.</p>
-<p>Now you'll probably see something like this:</p>
-<pre><code>Functional dependencies conflict between instance declarations:
-    instance MonadUserService 1 AppM
-    -- Defined at ...
-    instance MonadUserService 2 AppM
-    -- Defined at ...</code></pre>
-<p>We told the type system there'd only be a single <code>v</code> for
-every <code>m</code>; then immediately gave it two instances for
-<code>AppM</code>; GHC caught us lying! That's okay, GHC will forgive us
-if we can somehow make the two <code>m</code>'s different! We can do
-this by adding a phantom type to the <code>AppM</code> monad which
-simply denotes which version we're working with; let's try editing our
-<code>AppM</code> monad like this:</p>
-<div class="sourceCode" id="cb11"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">AppM</span> (<span class="ot">v ::</span> <span class="dt">Nat</span>) a <span class="ot">=</span> <span class="dt">AppM</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runApp ::</span> <span class="dt">IO</span> a</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>)</span></code></pre></div>
-<p>We've added the <code>(v :: Nat)</code> type argument here, it
-doesn't show up any where in our data, meaning it's a <strong>Phantom
-Type</strong> which is just there to help use denote something at the
-type level, in this case we denote which user version we're currently
-working with. Now we can add that additional info to our
-<code>MonadUserService</code> instances:</p>
-<div class="sourceCode" id="cb12"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">1</span> (<span class="dt">AppM</span> <span class="dv">1</span>) <span class="kw">where</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  getUser <span class="ot">=</span> <span class="fu">return</span> (<span class="dt">UserV1</span> <span class="st">&quot;Bob Johnson&quot;</span>)</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadUserService</span> <span class="dv">2</span> (<span class="dt">AppM</span> <span class="dv">2</span>) <span class="kw">where</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  getUser <span class="ot">=</span> <span class="fu">return</span> (<span class="dt">UserV2</span> <span class="st">&quot;Bob&quot;</span> <span class="st">&quot;Johnson&quot;</span>)</span></code></pre></div>
-<p>It seems a bit redundant, but it gets us where we're going!</p>
-<p>Not done yet! We still need to tell GHC which version of our
-<code>app</code> we want to run! You can use
-<code>TypeApplications</code> for this if you like, but the easier way
-is to just specify with a type annotation:</p>
-<div class="sourceCode" id="cb13"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ())</span></code></pre></div>
-<p>Try running the different versions and see what you get!</p>
-<div class="sourceCode" id="cb14"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ())</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="dt">Object</span> (fromList [(<span class="st">&quot;name&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob Johnson&quot;</span>)])</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;</span> runApp (<span class="ot">app ::</span> <span class="dt">AppM</span> <span class="dv">2</span> ())</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="dt">Object</span> (fromList [(<span class="st">&quot;lastName&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Johnson&quot;</span>),(<span class="st">&quot;firstName&quot;</span>,<span class="dt">String</span> <span class="st">&quot;Bob&quot;</span>)])</span></code></pre></div>
-<p>That should do it! We can quickly and easily switch between versions
-of our app by changing the type annotation; if we like we could even
-write some aliases to help out:</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ot">appV1 ::</span> <span class="dt">AppM</span> <span class="dv">1</span> ()</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>appV1 <span class="ot">=</span> app</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="ot">appV2 ::</span> <span class="dt">AppM</span> <span class="dv">2</span> ()</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>appV2 <span class="ot">=</span> app</span></code></pre></div>
-<p>Nice! Now we can write our app in such a way that it's
-<strong>generic</strong> and <strong>polymorphic</strong> over the
-<strong>version</strong> of user when that part of the app doesn't care
-which version it is, but we can still <strong>specialize</strong> to a
-specific user version when needed by using specific typeclasses or by
-pattern matching on the User constructor. The type system will guarantee
-that we never accidentally switch between user versions in the middle of
-our app; and we can defer the choice of version until the last possible
-second (at the top level call site). Sounds like a win to me!</p>
-<p>Hope you learned something!</p>
-<h2 id="bonus-section-asserting-version-compatibility">Bonus Section:
-Asserting Version Compatibility</h2>
-<p>If you take this pattern even further you might end up with multiple
-versions in your app; something like this:</p>
-<div class="sourceCode" id="cb16"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="dt">AppM</span> (<span class="ot">userVersion ::</span> <span class="dt">Nat</span>) (<span class="ot">postVersion ::</span> <span class="dt">Nat</span>) a <span class="ot">=</span> <span class="dt">AppM</span></span></code></pre></div>
-<p>This works fine of course, but as the number of version parameters
-grows it gets tough to keep track of which versions are compatible with
-each other, maybe <code>userVersion == 2</code> is only compatible with
-a <code>postVersion &gt;= 3</code>? Here's a fun trick using
-<code>ConstraintKinds</code> and <code>TypeFamilies</code> to let us
-easily assert that our app is never run with incompatible versions:</p>
-<div class="sourceCode" id="cb17"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE TypeOperators #-}</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE TypeFamilies #-}</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE UndecidableInstances #-}</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Kind</span></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="kw">family</span> <span class="dt">Compatible</span> (<span class="ot">userVersion ::</span> <span class="dt">Nat</span>) (<span class="ot">postVersion ::</span> <span class="dt">Nat</span>)<span class="ot"> ::</span> <span class="dt">Constraint</span> <span class="kw">where</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Compatible</span> <span class="dv">1</span> <span class="dv">1</span> <span class="ot">=</span> ()</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Compatible</span> <span class="dv">2</span> <span class="dv">3</span> <span class="ot">=</span> ()</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Compatible</span> <span class="dv">2</span> <span class="dv">4</span> <span class="ot">=</span> ()</span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Compatible</span> a b <span class="ot">=</span> <span class="dt">TypeError</span> (<span class="dt">Text</span> <span class="st">&quot;userVersion &quot;</span> <span class="op">:&lt;&gt;:</span> <span class="dt">ShowType</span> a </span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>                         <span class="op">:&lt;&gt;:</span> <span class="dt">Text</span> <span class="st">&quot; is not compatible with postVersion &quot;</span> <span class="op">:&lt;&gt;:</span> <span class="dt">ShowType</span> b)</span></code></pre></div>
-<p>You may need to dig into this a bit on your own to understand it
-fully, but the basic idea is that it's a function over types which when
-given two versions will either result in an empty constraint (i.e.
-<code>()</code>) which will allow compilation to continue, or will
-result in a failing <code>TypeError</code> and will print a nice error
-message to the user. You can use it like this:</p>
-<div class="sourceCode" id="cb18"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ot">runAppWithCheck ::</span> <span class="dt">Compatible</span> userVersion postVersion <span class="ot">=&gt;</span> <span class="dt">AppM</span> userVersion postVersion a <span class="ot">-&gt;</span> <span class="dt">IO</span> a</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- We only really need the additional type information, under the hood we can just call `runApp`</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>runAppWithCheck <span class="ot">=</span> runApp</span></code></pre></div>
-<p>Now if you try to run your app with incompatible versions you'll get
-a nice error something like:</p>
-<pre><code>error:
-    • userVersion 2 is not compatible with postVersion 1
-    • In the expression: runAppWithCheck (app :: AppM 2 1 ())
-      In an equation for ‘main’:
-          main = runAppWithCheck (app :: AppM 2 1 ())
-   |
-   | main = runAppWithCheck (app :: AppM 2 1 ())</code></pre>
-<p>Good stuff! You can even use <code>DataKinds</code> to add a little
-structure to your version numbers so you can't accidentally mix up your
-userVersions with your postVersions, but I'll leave that for you to
-figure out 😉</p>
+        <p>Hello! Today we'll be looking into type-based search, what it is, how
+it helps, and how to build one for the <a
+href="https://www.unison-lang.org/">Unison programming language</a> at
+production scale.</p>
+<h2 id="motivating-type-directed-search">Motivating type-directed
+search</h2>
+<p>If you've never used a type-directed code search like <a
+href="https://hoogle.haskell.org/">Hoogle</a> it's tough to fully
+understand how useful it can be. Before starting on my journey to learn
+Haskell I had never even thought to ask for a tool like it, now I reach
+for it every day.</p>
+<p>Many languages offer some form of code search, or at the very least a
+package search. This allows users to find code which is relevant for the
+task they're trying to accomplish. Typically you'd use these searches by
+querying for a natural language phrase describing what you want, e.g.
+<code>"Markdown Parser"</code>.</p>
+<p>This works great for finding entire packages, but searching at the
+package level is often far too rough-grained for the problem at hand. If
+I just want to very quickly remember the name of the function which
+lifts a <code>Char</code> into a <code>Text</code>, I already know it's
+probably in the <code>Text</code> package, but I can save some time
+digging through the package by asking a search precisely for definitions
+of this type. Natural languages are quite imprecise, so a more
+specialized query-by-type language allows us to get better results
+faster.</p>
+<p>If I search using google for "javascript function to group elements
+of a list using a predicate" I find many different functions which do
+<em>some</em> form of grouping, but none of them quite match the shape I
+had in mind, and I need to read through blogs, stack-overflow answers,
+and package documentation to determine whether the provided functions
+actually do what I'd like them to.</p>
+<p>In Haskell I can instead express that question using a type! If I
+enter the type <code>[a] -&gt; (a -&gt; Bool) -&gt; ([a], [a])</code>
+into Hoogle I get a list of functions which match that type exactly,
+there are few other operations with a matching signature, but I can
+quickly open those definitions on Hackage and determine that
+<code>partition</code> is exactly what I was looking for.</p>
+<p>Hopefully this helps to convince you on the utility of a
+type-directed search, though it does raise a question: if type-directed
+search is so <strong>useful</strong>, why isn't it more
+<strong>ubiquitous</strong>?</p>
+<p>Here are a few possible reasons this could be:</p>
+<ul>
+<li>Some languages lack a sufficiently sophisticated type-system with
+which to express useful queries</li>
+<li>Some languages don't have a centralized package repository</li>
+<li>Indexing every function ever written in your language can be
+computationally expensive</li>
+<li>It's not immediately obvious how to implement such a system</li>
+</ul>
+<p>Read on and I'll do what my best to help with the latter
+limitation.</p>
+<h2 id="establishing-our-goals">Establishing our goals</h2>
+<p>Before we start building anything, we should nail-down what our
+search problem actually is.</p>
+<p>Here are a few goals we had for the Unison type-directed search:</p>
+<ul>
+<li>It should be able to find functions based on a partial
+type-signature</li>
+<li>The names given to type variables shouldn't matter.</li>
+<li>The ordering of arguments to a function shouldn't matter.</li>
+<li>It should be fast</li>
+<li>It should should scale</li>
+<li>It should be <em>good</em>...</li>
+</ul>
+<p>The last criterion is a bit subjective of course, but you know it
+when you see it.</p>
+<h2 id="the-method">The method</h2>
+<p>It's easy to imagine search methods which match <em>some</em> of the
+required characteristics. E.g. we can imagine iterating through every
+definition and running the typechecker to see if the query unifies with
+the definition's signature, but this would be <strong>far</strong> too
+slow, and wouldn't allow partial matches or mismatched argument
+orders.</p>
+<p>Alternatively we could perform a plain-text search over rendered type
+signatures, but this would be very imprecise and would break our
+requirement that type variable names are unimportant.</p>
+<p>Investigating prior art, Neil Mitchell's excellent Hoogle uses a
+linear scan over a set of pre-built function-fingerprints for whittling
+down potential matches. The level of speed accomplished with this method
+is quite impressive!</p>
+<p>In our case, Unison Share, the code-hosting platform and package
+manager for Unison is backed by a Postgres database where all the code
+is stored. I investigated a few different Postgres index variants and
+landed on a GIN (Generalized inverted index).</p>
+<p>If you're unfamiliar with GIN indexes the gist of it is that it
+allows us to quickly find rows which are associated with any given
+combination of search tokens. They're typically useful when implementing
+full-text searches, for instance we may choose to index a text document
+like the following:</p>
+<pre><code>postgres=# select to_tsvector(&#39;And what is the use of a book without pictures or conversations?&#39;);
+                      to_tsvector
+-------------------------------------------------------
+ &#39;book&#39;:8 &#39;convers&#39;:12 &#39;pictur&#39;:10 &#39;use&#39;:5 &#39;without&#39;:9
+(1 row)</code></pre>
+<p>The generated lexemes represent a fingerprint of the text file which
+can be used to quickly and efficiently determine a subset of stored
+documents which can then be filtered using other more precise methods.
+So for instance we could search for <code>book &amp; pictur</code> to
+very efficiently find all documents which contain at least one word that
+tokenizes as <code>book</code> AND any word that tokenizes as
+<code>pictur</code>.</p>
+<p>I won't go too in-depth here on how GIN indexes work as you can
+consult the excellent <a
+href="https://www.postgresql.org/docs/current/gin.html">Postgres
+documentation</a> if you'd like a deeper dive into that area.</p>
+<p>Although our problem isn't exactly full-text-search, we can leverage
+GIN into something similar to search type signatures by a set of
+attributes.</p>
+<p>The attributes we want to search for can be distilled from our
+requirements; we need to know which types are mentioned in the
+signature, and we need some way to <em>normalize</em> type variables and
+argument position.</p>
+<p>Let's come up with a way to <em>tokenize</em> type signatures into
+the attributes we care about.</p>
+<h2 id="computing-tokens-for-type-signature-search">Computing Tokens for
+type signature search</h2>
+<h3 id="mentions-of-concrete-types">Mentions of concrete types</h3>
+<p>If the user metnions a concrete type in their query, we'll need to
+find all type signatures which mention it.</p>
+<p>Consider the following signature:
+<code>Text.take : Nat -&gt; Text -&gt; Text</code></p>
+<p>We can boil down the info here into the following data:</p>
+<ul>
+<li>A type called <code>Nat</code> is mentioned <em>once</em>, and it
+does <em>NOT</em> appear in the return type of the function.</li>
+<li>A type called <code>Text</code> is mentioned <em>twice</em>, and it
+<em>does</em> appear in the return type of the function.</li>
+</ul>
+<p>There really aren't any rules on how to represent lexemes in a GIN
+index, it's really just a set of string tokens. Earlier we saw how
+Postgres used an English language tokenizer to distill down the essence
+of a block of text into a set of tokens; we can just as easily devise
+our own token format for the information we care about.</p>
+<p>Here's the format I went with for our search tokens:
+<code>&lt;token-kind&gt;,&lt;number-of-occurrences&gt;,&lt;name|hash|variable-id&gt;</code></p>
+<p>So for the mentions of <code>Nat</code> in <code>Text.take</code>'s
+signature we can build the token: <code>mn,1,Nat.</code>. It starts with
+the token's kind (<code>mn</code> for Mention by Name), which prevents
+conflicts between tokens even though they'll all be stored in the same
+<code>tsvector</code> column. Next I include the number of times it's
+mentioned in the signature followed by it's fully qualified name with
+the path <em>reversed</em>.</p>
+<p>In this case <code>Nat</code> is a single segment, but if the type
+were named <code>data.JSON.Array</code> it would be encoded as
+<code>Array.JSON.data.</code>,</p>
+<p>Why? Postgres allows us to do <em>prefix</em> matches over tokens in
+GIN indexes. This allows us to search for matches for any valid suffix
+of the query's path, e.g. <code>mn,1,Array.*</code>,
+<code>mn,1,Array.JSON.*</code> or <code>mn,1,Array.JSON.data.*</code>
+would all match a single mention of this type.</p>
+<p>Users don't always know <strong>all</strong> of the arguments of a
+function they're looking for, so we'd love for partial type matches to
+still return results. This also helps us to start searching for and
+displaying potentially relevant results while the user is still typing
+out their query.</p>
+<p>For instance <code>Nat -&gt; Text</code> should still find
+<code>Text.take</code>, so to facilitate that, when we have more than a
+single mention we make a separate token for each of the
+<code>1..n</code> mentions. E.g. in
+<code>Text.take : Nat -&gt; Text -&gt; Text</code> we'd store both
+<code>mn,1,Text</code> AND <code>mn,2,Text</code> in our set of
+tokens.</p>
+<p>We can't perform arithmetic in our GIN lookup, so this method is a
+workaround which allows us to find any type where the number of mentions
+is greater than or equal to the number of mentions in the query.</p>
+<h3 id="type-mentions-by-hash">Type mentions by hash</h3>
+<p>This is Unison after all, so if there's a specific type you care
+about but you don't care what the particular package has named that
+type, or if there's even a specific <strong>version</strong> of a type
+you care about, you can search for it by hash: E.g.
+<code>#abcdef -&gt; #ghijk</code>. This will tokenize into
+<code>mh,1,#abcdef</code> and <code>mh,1,#ghijk</code>. Similar to name
+mentions this allows us to search using only a prefix of the actual
+hash.</p>
+<h3 id="handling-return-types">Handling return types</h3>
+<p>Although we don't care about the order of <em>arguments</em> to a
+given function, the return-type <em>is</em> a very high value piece of
+information. We can add additional tokens to track every type which is
+mentioned in the return type of a function by simply adding an
+additional token with an <code>r</code> in the 'mentions' place, e.g.
+<code>mn,r,Text</code></p>
+<p>We'll use this later to improve the scoring of returned results, and
+may in the future allow performing more advanced searches like "Show me
+all functions which produce a value of this type", a.k.a. functions
+which return that type but don't accept it as an argument, or perhaps
+"Show me all handlers of this ability", which corresponds to all
+functions which accept that ability as an argument but <em>don't</em>
+return it, e.g. <code>'mn,1,Stream' &amp; (! 'mn,r,Stream')</code>.</p>
+<p>A note on higher-kinded types and abilities like
+<code>Map Text Nat</code> and <code>a -&gt; {Exception} b</code>, we
+simply treat each of these as its own concrete type mention. The system
+could be expanded to include more token types for each of these, but one
+has to be wary of an explosion in the number of generated tokens and in
+initial testing the search seems to work quite well despite no special
+treatment.</p>
+<h3 id="mentions-of-type-variables">Mentions of type variables</h3>
+<p>Concrete types are covered, but what about type variables? Consider
+the type signature: <code>const: b -&gt; a -&gt; b</code>.</p>
+<p>This type contains <code>a</code> and <code>b</code> which are
+<em>type variables</em>. The names of type variables are not important
+on their own, you can rename any type variable to anything you like as
+long as you consider its scope and rename all the mentions of the same
+variable within its scope.</p>
+<p>To normalize the names of type variables I assign each variable a
+numerical ID instead. In this example we may choose to assign
+<code>b</code> the number <code>1</code> and <code>a</code> the number
+<code>2</code>. However, we have to be careful because we <em>also</em>
+want to be indifferent with regard to argument order. A search for
+<code>a -&gt; b -&gt; b</code> should still find <code>const</code>! if
+we assigned <code>a</code> to <code>1</code> and <code>b</code> to
+<code>2</code> according to the order of their appearance we wouldn't
+have a match.</p>
+<p>To fix this issue we can simply sort the type variables according to
+their number of <em>occurrences</em>, so in this example <code>a</code>
+has fewer occurrences than <code>b</code>, so it gets the lower variable
+ID.</p>
+<p>This means that both <code>a -&gt; b -&gt; b</code> and
+<code>b -&gt; a -&gt; b</code> will tokenize to the same set of tokens:
+<code>v,1,1</code> for <code>a</code>, and <code>v,1,2</code>,
+<code>v,2,2</code>, and <code>v,r,2</code> for <code>b</code>.</p>
+<h2 id="parsing-the-search-query">Parsing the search query</h2>
+<p>We could require that all queries are properly formed
+type-signatures, but that's quite restrictive and we'd much rather allow
+the user to be a bit <em>sloppy</em> in their search.</p>
+<p>To that end I wrote a custom version of our type-parser that is
+extremely lax in what it accepts, it will attempt to determine the arity
+and return type of the query, but will also happily accept just a list
+of type names. Searching for <code>Nat Text Text</code> and
+<code>Nat -&gt; Text -&gt; Text</code> are both valid queries, but the
+latter will return better results since we have information about both
+the arity of the desired function and the return type. Once we've parsed
+the query we can convert it into the same set of tokens we generated
+from the type signatures in the codebase.</p>
+<h2 id="performing-the-search">Performing the search</h2>
+<p>After we've indexed all the code in our system (in Unison this takes
+only a few minutes) we can start searching!</p>
+<p>For Unison's search I've opted to require that each occurrence in the
+query MUST be present in each match, however for better partial
+type-signature support I do include results which are missing specified
+return types, but will rank them lower than results with matching return
+types in the results.</p>
+<p>Other criteria used to score matches include: * Types with an arity
+closer to the user's query are ranked higher * How complex the type
+signature is, types with more tokens are ranked lower. * We give a
+slight boost to some core projects, e.g. Unison's standard library
+<code>base</code> will show up higher in search results if they match. *
+You can include a text search along with your type search to further
+filter results, e.g. <code>map (a -&gt; b) -&gt; [a] -&gt; [b]</code>
+will prefer finding definitions with <code>map</code> somewhere in the
+name. * Queries can include a specific user or project to search within
+to further filter results, e.g. <code>@unison/cloud Remote</code></p>
+<h2 id="summary">Summary</h2>
+<p>I hope that helps shed some light on how it all works, and perhaps
+will help others in implementing their own type-directed-search down the
+road!</p>
+<p>Now all that's left is to go <a
+href="https://share.unison-lang.org/">try out a search or two</a> :)</p>
+<p>If you're interested in digging deeper, Unison Share, and by-proxy
+the entire type-directed search implementation, is all Open-Source, so
+go check it out! It's changing and improving all the time, but <a
+href="https://github.com/unisoncomputing/share-api/blob/6ee875db4ac35156733a0f2c9349bc528736243f/src/Share/Postgres/Search/DefinitionSearch/Queries.hs">this
+module</a> would be a good place to start digging.</p>
+<p>Let us know in the <a href="https://unison-lang.org/discord">Unison
+Discord</a> if you've got any suggested improvements or run into any
+bugs. Cheers!</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider
@@ -1196,8 +1058,8 @@ figure out 😉</p>
           <a
             href="https://twitter.com/share"
             class="twitter-share-button"
-            data-url="https://chrispenner.ca/posts/typesafe-api-versioning"
-            data-text="Check out: Typesafe Versioned APIs - "
+            data-url="https://chrispenner.ca/posts/unison-type-search"
+            data-text="Check out: Building Type Search for Unison - "
             data-via="chrislpenner"
             >Tweet</a
           >
@@ -1236,7 +1098,7 @@ figure out 😉</p>
           </script>
           <div
             class="fb-like"
-            data-href="https://chrispenner.ca/typesafe-api-versioning"
+            data-href="https://chrispenner.ca/unison-type-search"
             data-layout="button"
             data-action="like"
             data-show-faces="true"

@@ -770,83 +770,143 @@
         </div>
       </div>
       <article class="post">
-        <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a book on practical lenses and optics</a> later this month I thought it would be fun to do a few of this year's Advent of Code puzzles using as many obscure optics features as possible!</p>
-<p>To be clear, the goal is to be obscure, strange and excessive towards the goal of using as many optics as possible in a given solution, even if it's awkward, silly, or just plain overkill. These are NOT idiomatic Haskell solutions, nor are they intended to be. Maybe we'll both learn something along the way. Let's have some fun!</p>
-<p>You can find today's puzzle <a href="https://adventofcode.com/2019/day/4">here</a>.</p>
+        <p>Since I'm releasing <a href="https://leanpub.com/optics-by-example">a
+book on practical lenses and optics</a> later this month I thought it
+would be fun to do a few of this year's Advent of Code puzzles using as
+many obscure optics features as possible!</p>
+<p>To be clear, the goal is to be obscure, strange and excessive towards
+the goal of using as many optics as possible in a given solution, even
+if it's awkward, silly, or just plain overkill. These are NOT idiomatic
+Haskell solutions, nor are they intended to be. Maybe we'll both learn
+something along the way. Let's have some fun!</p>
+<p>You can find today's puzzle <a
+href="https://adventofcode.com/2019/day/4">here</a>.</p>
 <hr />
-<p>Hey folks! Today's is a nice clean one! The goal is to find all the numbers within a given range which pass a series of predicates! The conditions each number has to match include:</p>
+<p>Hey folks! Today's is a nice clean one! The goal is to find all the
+numbers within a given range which pass a series of predicates! The
+conditions each number has to match include:</p>
 <ul>
-<li>Should be within the range; my range is <code>307237-769058</code></li>
-<li>Should be six digits long; my range includes only 6 digit numbers, so we're all set here</li>
-<li>Two adjacent digits in the number should be the same (e.g. '223456')</li>
-<li>The digits should be in monotonically increasing order (e.g. increase or stay the same from left to right)</li>
+<li>Should be within the range; my range is
+<code>307237-769058</code></li>
+<li>Should be six digits long; my range includes only 6 digit numbers,
+so we're all set here</li>
+<li>Two adjacent digits in the number should be the same (e.g.
+'223456')</li>
+<li>The digits should be in monotonically increasing order (e.g.
+increase or stay the same from left to right)</li>
 </ul>
 <p>And that's it!</p>
-<p>In normal Haskell we'd make a list of all possibilities, then either chain a series of <code>filter</code> statements or use <code>do-notation</code> with guards to narrow it down. Luckily, folds have filters too!</p>
-<p>First things first, since our checks have us analyzing the actual discrete digits we'll convert our Int to a String so we can talk about them as characters:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
-<span id="cb1-2"><a href="#cb1-2"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show)</span>
-<span id="cb1-3"><a href="#cb1-3"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
-<span id="cb1-4"><a href="#cb1-4"></a></span>
-<span id="cb1-5"><a href="#cb1-5"></a><span class="op">&gt;&gt;&gt;</span> main</span>
-<span id="cb1-6"><a href="#cb1-6"></a>[<span class="st">&quot;307237&quot;</span>,<span class="st">&quot;307238&quot;</span>,<span class="st">&quot;307239&quot;</span>,<span class="st">&quot;307240&quot;</span>,<span class="st">&quot;307241&quot;</span>,<span class="st">&quot;307242&quot;</span>,<span class="st">&quot;307243&quot;</span>,<span class="st">&quot;307244&quot;</span>,<span class="st">&quot;307245&quot;</span>,</span>
-<span id="cb1-7"><a href="#cb1-7"></a><span class="st">&quot;307246&quot;</span>, <span class="op">...</span>]</span></code></pre></div>
-<p><code>_Show</code> is the same prism we've used for parsing in the previous examples, but <code>re</code> flips it in reverse and generates a <code>Getter</code> which calls <code>show</code>! This is equivalent to <code>to show</code>, but will get you an extra 20 optics points...</p>
-<p>Now let's start adding filters! We'll start by checking that the digits are all ascending. I could write some convoluted fold which does this, but the quick and dirty way is simply to sort the digits lexicographically and see if the ordering changed at all:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb2-2"><a href="#cb2-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
-<span id="cb2-3"><a href="#cb2-3"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
-<span id="cb2-4"><a href="#cb2-4"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
-<span id="cb2-5"><a href="#cb2-5"></a>                   )</span>
-<span id="cb2-6"><a href="#cb2-6"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
-<span id="cb2-7"><a href="#cb2-7"></a></span>
-<span id="cb2-8"><a href="#cb2-8"></a><span class="op">&gt;&gt;&gt;</span> main</span>
-<span id="cb2-9"><a href="#cb2-9"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
-<p><code>filtered</code> removes any focuses from the fold which don't match the predicate.</p>
-<p>We can already see this filters out a ton of possibilities. Not done yet though; we need to ensure there's at least one double consecutive digit. I'll reach for my favourite hammer: <code>lens-regex-pcre</code>:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb3-2"><a href="#cb3-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
-<span id="cb3-3"><a href="#cb3-3"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
-<span id="cb3-4"><a href="#cb3-4"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
-<span id="cb3-5"><a href="#cb3-5"></a>                    <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
-<span id="cb3-6"><a href="#cb3-6"></a>                   )</span>
-<span id="cb3-7"><a href="#cb3-7"></a></span>
-<span id="cb3-8"><a href="#cb3-8"></a></span>
-<span id="cb3-9"><a href="#cb3-9"></a><span class="op">&gt;&gt;&gt;</span> main </span>
-<span id="cb3-10"><a href="#cb3-10"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
-<p>Unfortunately we don't really see much difference in the first few options, but trust me, it did something. Let's see how it works:</p>
-<p>I'm using <code>filteredBy</code> here instead of <code>filtered</code>, <code>filteredBy</code> is brand new in <code>lens &gt;= 4.18</code>, so make sure you've got the latest version if you want to try this out. It's like <code>filtered</code>, but takes a Fold instead of a predicate. <code>filteredBy</code> will run the fold on the current element, and will filter out any focuses for which the fold yields no results.</p>
-<p>The fold I'm passing in converts the String to a <code>Text</code> using <code>packed</code>, then runs a regex which matches any digit, then requires at least one more of that digit to be next in the string. Since <code>regex</code> only yields matches, if no matches are found the candidate will be filtered out.</p>
-<p>That's all the criteria! Now we've got a list of all of them, but all we really need is the count of them, so we'll switch from <code>toListOf</code> to <code>lengthOf</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb4-2"><a href="#cb4-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
-<span id="cb4-3"><a href="#cb4-3"></a>        <span class="op">&amp;</span> lengthOf ( traversed <span class="op">.</span> re _Show</span>
-<span id="cb4-4"><a href="#cb4-4"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
-<span id="cb4-5"><a href="#cb4-5"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
-<span id="cb4-6"><a href="#cb4-6"></a>                   )</span>
-<span id="cb4-7"><a href="#cb4-7"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
-<span id="cb4-8"><a href="#cb4-8"></a></span>
-<span id="cb4-9"><a href="#cb4-9"></a><span class="op">&gt;&gt;&gt;</span> main</span>
-<span id="cb4-10"><a href="#cb4-10"></a><span class="dv">889</span></span></code></pre></div>
+<p>In normal Haskell we'd make a list of all possibilities, then either
+chain a series of <code>filter</code> statements or use
+<code>do-notation</code> with guards to narrow it down. Luckily, folds
+have filters too!</p>
+<p>First things first, since our checks have us analyzing the actual
+discrete digits we'll convert our Int to a String so we can talk about
+them as characters:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>[<span class="st">&quot;307237&quot;</span>,<span class="st">&quot;307238&quot;</span>,<span class="st">&quot;307239&quot;</span>,<span class="st">&quot;307240&quot;</span>,<span class="st">&quot;307241&quot;</span>,<span class="st">&quot;307242&quot;</span>,<span class="st">&quot;307243&quot;</span>,<span class="st">&quot;307244&quot;</span>,<span class="st">&quot;307245&quot;</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;307246&quot;</span>, <span class="op">...</span>]</span></code></pre></div>
+<p><code>_Show</code> is the same prism we've used for parsing in the
+previous examples, but <code>re</code> flips it in reverse and generates
+a <code>Getter</code> which calls <code>show</code>! This is equivalent
+to <code>to show</code>, but will get you an extra 20 optics
+points...</p>
+<p>Now let's start adding filters! We'll start by checking that the
+digits are all ascending. I could write some convoluted fold which does
+this, but the quick and dirty way is simply to sort the digits
+lexicographically and see if the ordering changed at all:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>                   )</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
+<p><code>filtered</code> removes any focuses from the fold which don't
+match the predicate.</p>
+<p>We can already see this filters out a ton of possibilities. Not done
+yet though; we need to ensure there's at least one double consecutive
+digit. I'll reach for my favourite hammer:
+<code>lens-regex-pcre</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> toListOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>                    <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>                    <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>                   )</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> main </span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>[<span class="st">&quot;333333&quot;</span>,<span class="st">&quot;333334&quot;</span>,<span class="st">&quot;333335&quot;</span>,<span class="st">&quot;333336&quot;</span>,<span class="st">&quot;333337&quot;</span>,<span class="st">&quot;333338&quot;</span>,<span class="op">...</span>]</span></code></pre></div>
+<p>Unfortunately we don't really see much difference in the first few
+options, but trust me, it did something. Let's see how it works:</p>
+<p>I'm using <code>filteredBy</code> here instead of
+<code>filtered</code>, <code>filteredBy</code> is brand new in
+<code>lens &gt;= 4.18</code>, so make sure you've got the latest version
+if you want to try this out. It's like <code>filtered</code>, but takes
+a Fold instead of a predicate. <code>filteredBy</code> will run the fold
+on the current element, and will filter out any focuses for which the
+fold yields no results.</p>
+<p>The fold I'm passing in converts the String to a <code>Text</code>
+using <code>packed</code>, then runs a regex which matches any digit,
+then requires at least one more of that digit to be next in the string.
+Since <code>regex</code> only yields matches, if no matches are found
+the candidate will be filtered out.</p>
+<p>That's all the criteria! Now we've got a list of all of them, but all
+we really need is the count of them, so we'll switch from
+<code>toListOf</code> to <code>lengthOf</code>:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> lengthOf ( traversed <span class="op">.</span> re _Show</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|])</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>                   )</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="dv">889</span></span></code></pre></div>
 <p>That's the right answer, not bad!</p>
 <h2 id="part-2">Part 2</h2>
 <p>Part 2 only adds one more condition:</p>
 <ul>
-<li>The number must have a group of exactly 2 consecutive numbers, e.g. <code>333</code> is no good, but <code>33322</code> is fine.</li>
+<li>The number must have a group of exactly 2 consecutive numbers, e.g.
+<code>333</code> is no good, but <code>33322</code> is fine.</li>
 </ul>
-<p>Currently we're just checking that it has at least two consecutive numbers, but we'll need to be smarter to check for groups of exactly 2. Luckily, it's not too tricky.</p>
-<p>The <code>regex</code> traversal finds ALL non-overlapping matches within a given piece of text, and the <code>+</code> modifier is greedy, so we know that for a given string <code>33322</code> our current pattern will find the matches: <code>["333", "22"]</code>. After that it's easy enough to just check that we have at least one match of length 2!</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb5-2"><a href="#cb5-2"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
-<span id="cb5-3"><a href="#cb5-3"></a>        <span class="op">&amp;</span> lengthOf (traversed <span class="op">.</span> re _Show</span>
-<span id="cb5-4"><a href="#cb5-4"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
-<span id="cb5-5"><a href="#cb5-5"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|] <span class="op">.</span> match <span class="op">.</span> to T.length <span class="op">.</span> only <span class="dv">2</span>)</span>
-<span id="cb5-6"><a href="#cb5-6"></a>                   )</span>
-<span id="cb5-7"><a href="#cb5-7"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
-<span id="cb5-8"><a href="#cb5-8"></a></span>
-<span id="cb5-9"><a href="#cb5-9"></a><span class="op">&gt;&gt;&gt;</span> main</span>
-<span id="cb5-10"><a href="#cb5-10"></a><span class="dv">589</span></span></code></pre></div>
-<p>I just get the match text, get its length, then use <code>only 2</code> to filter down to only lengths of 2. <code>filteredBy</code> will detect whether any of the matches make it through the whole fold and kick out any numbers that don't have a group of exactly 2 consecutive numbers.</p>
+<p>Currently we're just checking that it has at least two consecutive
+numbers, but we'll need to be smarter to check for groups of exactly 2.
+Luckily, it's not too tricky.</p>
+<p>The <code>regex</code> traversal finds ALL non-overlapping matches
+within a given piece of text, and the <code>+</code> modifier is greedy,
+so we know that for a given string <code>33322</code> our current
+pattern will find the matches: <code>["333", "22"]</code>. After that
+it's easy enough to just check that we have at least one match of length
+2!</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> ([<span class="dv">307237</span><span class="op">..</span><span class="dv">769058</span>]<span class="ot"> ::</span> [<span class="dt">Int</span>])</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> lengthOf (traversed <span class="op">.</span> re _Show</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>                   <span class="op">.</span> filtered (\s <span class="ot">-&gt;</span> s <span class="op">==</span> <span class="fu">sort</span> s)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>                   <span class="op">.</span> filteredBy (packed <span class="op">.</span> [regex|(\d)\1+|] <span class="op">.</span> match <span class="op">.</span> to T.length <span class="op">.</span> only <span class="dv">2</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>                   )</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span> <span class="fu">print</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> main</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="dv">589</span></span></code></pre></div>
+<p>I just get the match text, get its length, then use
+<code>only 2</code> to filter down to only lengths of 2.
+<code>filteredBy</code> will detect whether any of the matches make it
+through the whole fold and kick out any numbers that don't have a group
+of exactly 2 consecutive numbers.</p>
 <p>That's it for today! Hopefully tomorrow's is just as optical! 🤞</p>
 
         <p>

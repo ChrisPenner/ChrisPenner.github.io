@@ -12,7 +12,8 @@
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Mocking Effects using Constraints and Phantom Data Kinds">
-    <meta name="twitter:description" content="We learn a method to mock multiple effects when writing tests without an exponential explosion of instances.">
+    <meta name="twitter:description" content="We learn a method to mock multiple effects when writing tests without an
+exponential explosion of instances.">
     <meta name="twitter:image" content="http://chrispenner.ca/images/mock-effects-with-data-kinds/phantom.jpg">
     <title>Mocking Effects using Constraints and Phantom Data Kinds</title>
     <link
@@ -772,272 +773,429 @@
         </div>
       </div>
       <article class="post">
-        <p>This ended up being a pretty long post; if you're pretty comfortable with monad constraints and testing in Haskell you may want to jump down to the Phantom Data Kinds section and get to the interesting stuff!</p>
-<h2 id="refresher-on-granular-classes">Refresher on granular classes</h2>
-<p>I've been seeing a lot of talk on the <a href="https://reddit.com/r/haskell">Haskell subreddit</a> about how to properly test Haskell applications; particular how to test actions which require effects. I've seen a lot of confusion/concern about writing your own monad transformers in tests. This post is my attempt to clear up some confusion and misconceptions and show off my particular ideas for testing using <code>mtl-style</code> constraints. The ideas contained here can also help you with writing multiple 'interpreters' for your monad stacks without needing a <code>newtype</code> for each permutation of possible implementations.</p>
-<p>First things first, what do I mean by <code>mtl-style</code> constraints? I'd recommend you consult <a href="https://chrispenner.ca/posts/monadio-considered-harmful">MonadIO Considered Harmful</a>, it's a post I wrote on the topic almost exactly a year ago. Here's the spark-notes version:</p>
+        <p>This ended up being a pretty long post; if you're pretty comfortable
+with monad constraints and testing in Haskell you may want to jump down
+to the Phantom Data Kinds section and get to the interesting stuff!</p>
+<h2 id="refresher-on-granular-classes">Refresher on granular
+classes</h2>
+<p>I've been seeing a lot of talk on the <a
+href="https://reddit.com/r/haskell">Haskell subreddit</a> about how to
+properly test Haskell applications; particular how to test actions which
+require effects. I've seen a lot of confusion/concern about writing your
+own monad transformers in tests. This post is my attempt to clear up
+some confusion and misconceptions and show off my particular ideas for
+testing using <code>mtl-style</code> constraints. The ideas contained
+here can also help you with writing multiple 'interpreters' for your
+monad stacks without needing a <code>newtype</code> for each permutation
+of possible implementations.</p>
+<p>First things first, what do I mean by <code>mtl-style</code>
+constraints? I'd recommend you consult <a
+href="https://chrispenner.ca/posts/monadio-considered-harmful">MonadIO
+Considered Harmful</a>, it's a post I wrote on the topic almost exactly
+a year ago. Here's the spark-notes version:</p>
 <ul>
-<li>Monads with semantics attached should define a <code>Monad*</code> type-class for interacting with those constraints (E.g. <code>MonadState</code>, <code>MonadReader</code>)</li>
-<li>Actions which require effects should use type-class constraints instead of using concrete monads (E.g. <code>myAction :: MonadReader AppEnv m =&gt; m ()</code> rather than <code>myAction :: AppM ()</code>)</li>
-<li>Your app should break up 'big' monad classes into smaller ones with clearer semantics and intent. (E.g. Break down <code>MonadIO</code> into <code>MonadHttp</code> and <code>MonadFilesystem</code>, etc.)</li>
+<li>Monads with semantics attached should define a <code>Monad*</code>
+type-class for interacting with those constraints (E.g.
+<code>MonadState</code>, <code>MonadReader</code>)</li>
+<li>Actions which require effects should use type-class constraints
+instead of using concrete monads (E.g.
+<code>myAction :: MonadReader AppEnv m =&gt; m ()</code> rather than
+<code>myAction :: AppM ()</code>)</li>
+<li>Your app should break up 'big' monad classes into smaller ones with
+clearer semantics and intent. (E.g. Break down <code>MonadIO</code> into
+<code>MonadHttp</code> and <code>MonadFilesystem</code>, etc.)</li>
 </ul>
-<p>Okay, so assuming we're all on board with writing our code polymorphically using Monad Constraints, what's the problem? Well, the reason we're doing it polymorphically is so we can specialize the monad to <strong>different implementations</strong> if we want! This is one way to implement the <a href="https://en.wikipedia.org/wiki/Dependency_injection"><strong>dependency injection</strong></a> pattern in Haskell; and lets us substitute out the implementation of our monadic effects with 'dummy' or 'mock' versions in tests.</p>
-<p>The trick is that we run into a lot of annoying repetition and boiler-plate which gets out of control as we scale up the number of effects we use. To show the problem let's assume we have some action that does something, and needs the following three constraints which you can assume are type-classes we've defined using the 'granular mtl' style:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">myAction ::</span> (<span class="dt">MonadFileSystem</span> m, <span class="dt">MonadDB</span> m, <span class="dt">MonadLogger</span> m) <span class="ot">=&gt;</span> m ()</span></code></pre></div>
-<p>Now, assume we've already implemented <code>MonadFileSystem</code>, <code>MonadDB</code>, and <code>MonadLogger</code> for our application's main monad, but when we test it we probably don't want to hit our real DB or file-system so we should probably mock those out. We'll need a new monad type to implement instances against:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">data</span> <span class="dt">TestState</span> <span class="ot">=</span> <span class="dt">TestState</span> </span>
-<span id="cb2-2"><a href="#cb2-2"></a>    {<span class="ot"> fakeFilesystem ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
-<span id="cb2-3"><a href="#cb2-3"></a>    ,<span class="ot"> fakeDB ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
-<span id="cb2-4"><a href="#cb2-4"></a>    ,<span class="ot"> logs ::</span> [<span class="dt">String</span>]</span>
-<span id="cb2-5"><a href="#cb2-5"></a>    }</span>
-<span id="cb2-6"><a href="#cb2-6"></a></span>
-<span id="cb2-7"><a href="#cb2-7"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span> (<span class="dt">State</span> <span class="dt">TestState</span> a)</span>
-<span id="cb2-8"><a href="#cb2-8"></a></span>
-<span id="cb2-9"><a href="#cb2-9"></a><span class="kw">instance</span> <span class="dt">MonadFileSystem</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
-<span id="cb2-10"><a href="#cb2-10"></a><span class="co">-- ...</span></span>
-<span id="cb2-11"><a href="#cb2-11"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
-<span id="cb2-12"><a href="#cb2-12"></a><span class="co">-- ...</span></span>
-<span id="cb2-13"><a href="#cb2-13"></a><span class="kw">instance</span> <span class="dt">MonadLogger</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
-<span id="cb2-14"><a href="#cb2-14"></a><span class="co">-- ...</span></span></code></pre></div>
-<p>I'm not getting into many details yet and have elided the implementations here for brevity, but hopefully that shows how you could implement those interfaces in terms of some pure monad stack like <code>State</code> in order to more easily write tests. BUT! What if for a new test we want the file-system to behave differently and fail on every request to read a file? We could add a boolean into the state that dictates this behaviour, but that will definitely complicate the implementation of our instance, we could add a newtype wrapper which has a different <code>MonadFileSystem</code> instance, but we'd need to regain all our instances for the other type-classes again! We can use <code>GeneralizedNewtypeDeriving</code> to help, but say we now want multiple behaviours for our MonadDB instance! Things get out of control really quickly, this post investigates a (slightly) cleaner way to go about this.</p>
+<p>Okay, so assuming we're all on board with writing our code
+polymorphically using Monad Constraints, what's the problem? Well, the
+reason we're doing it polymorphically is so we can specialize the monad
+to <strong>different implementations</strong> if we want! This is one
+way to implement the <a
+href="https://en.wikipedia.org/wiki/Dependency_injection"><strong>dependency
+injection</strong></a> pattern in Haskell; and lets us substitute out
+the implementation of our monadic effects with 'dummy' or 'mock'
+versions in tests.</p>
+<p>The trick is that we run into a lot of annoying repetition and
+boiler-plate which gets out of control as we scale up the number of
+effects we use. To show the problem let's assume we have some action
+that does something, and needs the following three constraints which you
+can assume are type-classes we've defined using the 'granular mtl'
+style:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myAction ::</span> (<span class="dt">MonadFileSystem</span> m, <span class="dt">MonadDB</span> m, <span class="dt">MonadLogger</span> m) <span class="ot">=&gt;</span> m ()</span></code></pre></div>
+<p>Now, assume we've already implemented <code>MonadFileSystem</code>,
+<code>MonadDB</code>, and <code>MonadLogger</code> for our application's
+main monad, but when we test it we probably don't want to hit our real
+DB or file-system so we should probably mock those out. We'll need a new
+monad type to implement instances against:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">TestState</span> <span class="ot">=</span> <span class="dt">TestState</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> fakeFilesystem ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> fakeDB ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> logs ::</span> [<span class="dt">String</span>]</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span> (<span class="dt">State</span> <span class="dt">TestState</span> a)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadFileSystem</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadLogger</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span></code></pre></div>
+<p>I'm not getting into many details yet and have elided the
+implementations here for brevity, but hopefully that shows how you could
+implement those interfaces in terms of some pure monad stack like
+<code>State</code> in order to more easily write tests. BUT! What if for
+a new test we want the file-system to behave differently and fail on
+every request to read a file? We could add a boolean into the state that
+dictates this behaviour, but that will definitely complicate the
+implementation of our instance, we could add a newtype wrapper which has
+a different <code>MonadFileSystem</code> instance, but we'd need to
+regain all our instances for the other type-classes again! We can use
+<code>GeneralizedNewtypeDeriving</code> to help, but say we now want
+multiple behaviours for our MonadDB instance! Things get out of control
+really quickly, this post investigates a (slightly) cleaner way to go
+about this.</p>
 <p>Our goals are as follows:</p>
 <ul>
-<li>I want to write exactly 1 instance definition per type-class behaviour I want</li>
-<li>Adding a new effect or behaviour shouldn't require any newtypes.</li>
-<li>I should be able to easily choose a set of behaviours for each of my effects each time I run a test.</li>
+<li>I want to write exactly 1 instance definition per type-class
+behaviour I want</li>
+<li>Adding a new effect or behaviour shouldn't require any
+newtypes.</li>
+<li>I should be able to easily choose a set of behaviours for each of my
+effects each time I run a test.</li>
 </ul>
 <p>That's a tall order! Let's dig in and see if we can manage it!</p>
 <h2 id="case-study">Case Study</h2>
-<p>This topic is tough to explain without concrete examples, so bear with me while we set some things up. Let's start by looking at how someone may have written a really simple app and some functions for working with their database.</p>
+<p>This topic is tough to explain without concrete examples, so bear
+with me while we set some things up. Let's start by looking at how
+someone may have written a really simple app and some functions for
+working with their database.</p>
 <p>Here's our base monad type:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="ot">{-# LANGUAGE GeneralizedNewtypeDeriving #-}</span></span>
-<span id="cb3-2"><a href="#cb3-2"></a></span>
-<span id="cb3-3"><a href="#cb3-3"></a><span class="kw">import</span> <span class="dt">Control.Monad.Except</span></span>
-<span id="cb3-4"><a href="#cb3-4"></a><span class="kw">import</span> <span class="dt">Control.Monad.IO.Class</span></span>
-<span id="cb3-5"><a href="#cb3-5"></a></span>
-<span id="cb3-6"><a href="#cb3-6"></a><span class="kw">data</span> <span class="dt">DBError</span> <span class="ot">=</span></span>
-<span id="cb3-7"><a href="#cb3-7"></a>  <span class="dt">DBError</span> <span class="dt">String</span></span>
-<span id="cb3-8"><a href="#cb3-8"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Show</span>)</span>
-<span id="cb3-9"><a href="#cb3-9"></a></span>
-<span id="cb3-10"><a href="#cb3-10"></a><span class="co">-- Our application can access the database via IO and possibly throw DB errors.</span></span>
-<span id="cb3-11"><a href="#cb3-11"></a><span class="kw">newtype</span> <span class="dt">AppM</span> a <span class="ot">=</span> <span class="dt">AppM</span></span>
-<span id="cb3-12"><a href="#cb3-12"></a>  {<span class="ot"> runAppM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> <span class="dt">IO</span> a</span>
-<span id="cb3-13"><a href="#cb3-13"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>, <span class="dt">MonadError</span> <span class="dt">DBError</span>)</span></code></pre></div>
-<p>We've abstracted over our database actions already with the following type-class:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="ot">{-# LANGUAGE MultiParamTypeClasses #-}</span></span>
-<span id="cb4-2"><a href="#cb4-2"></a><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></span>
-<span id="cb4-3"><a href="#cb4-3"></a><span class="kw">type</span> <span class="dt">Key</span> <span class="ot">=</span> <span class="dt">String</span></span>
-<span id="cb4-4"><a href="#cb4-4"></a></span>
-<span id="cb4-5"><a href="#cb4-5"></a><span class="co">-- Our database associates string keys to some value type.</span></span>
-<span id="cb4-6"><a href="#cb4-6"></a><span class="co">-- The specific value we can fetch is dependent on the monad</span></span>
-<span id="cb4-7"><a href="#cb4-7"></a><span class="co">-- (but we&#39;ll just use strings for simplicity in our case)</span></span>
-<span id="cb4-8"><a href="#cb4-8"></a><span class="kw">class</span> (<span class="dt">MonadError</span> <span class="dt">DBError</span> m) <span class="ot">=&gt;</span> <span class="dt">MonadDB</span> m v <span class="op">|</span> m <span class="ot">-&gt;</span> v <span class="kw">where</span></span>
-<span id="cb4-9"><a href="#cb4-9"></a><span class="ot">  getEntity ::</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> m v</span>
-<span id="cb4-10"><a href="#cb4-10"></a><span class="ot">  storeEntity ::</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> v <span class="ot">-&gt;</span> m ()</span>
-<span id="cb4-11"><a href="#cb4-11"></a></span>
-<span id="cb4-12"><a href="#cb4-12"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">AppM</span> <span class="dt">String</span> <span class="kw">where</span></span>
-<span id="cb4-13"><a href="#cb4-13"></a><span class="co">-- ...</span></span>
-<span id="cb4-14"><a href="#cb4-14"></a><span class="co">-- Assume we&#39;ve written some instance for interacting with our DB via IO, </span></span>
-<span id="cb4-15"><a href="#cb4-15"></a><span class="co">-- which returns any errors via ExceptT.</span></span></code></pre></div>
-<p>Cool! This looks pretty normal, we have a primary app monad and we can get and store strings in our database via IO using it!</p>
-<p>Now that we've got our basic DB interface let's say we want to write a more complex action using it:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="co">-- given a database key and a monad which can interact with a database containing strings</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="co">-- we can look up the value, uppercase it, then write it back.</span></span>
-<span id="cb5-3"><a href="#cb5-3"></a><span class="ot">upperCase ::</span> (<span class="dt">MonadDB</span> m <span class="dt">String</span>) <span class="ot">=&gt;</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> m ()</span>
-<span id="cb5-4"><a href="#cb5-4"></a>upperCase key <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb5-5"><a href="#cb5-5"></a>  thing <span class="ot">&lt;-</span> getEntity key</span>
-<span id="cb5-6"><a href="#cb5-6"></a>  storeEntity key (<span class="fu">fmap</span> <span class="fu">toUpper</span> thing)</span></code></pre></div>
-<p>It's a pretty simple action, but we should probably add some unit tests! Let's set it up using our AppM instance!</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="co">-- Spec.hs</span></span>
-<span id="cb6-2"><a href="#cb6-2"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb6-3"><a href="#cb6-3"></a>main <span class="ot">=</span></span>
-<span id="cb6-4"><a href="#cb6-4"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb6-5"><a href="#cb6-5"></a>    describe <span class="st">&quot;upperCase&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb6-6"><a href="#cb6-6"></a>      it <span class="st">&quot;uppercases the value stored at the given key in the DB&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb6-7"><a href="#cb6-7"></a>        result <span class="ot">&lt;-</span></span>
-<span id="cb6-8"><a href="#cb6-8"></a>          <span class="co">-- we unpack AppM, run the exceptT, then lift it into the IO part of our spec</span></span>
-<span id="cb6-9"><a href="#cb6-9"></a>          liftIO <span class="op">.</span> runExceptT <span class="op">.</span> runAppM <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb6-10"><a href="#cb6-10"></a>            storeEntity <span class="st">&quot;my-key&quot;</span> <span class="st">&quot;value&quot;</span></span>
-<span id="cb6-11"><a href="#cb6-11"></a>            upperCase <span class="st">&quot;my-key&quot;</span></span>
-<span id="cb6-12"><a href="#cb6-12"></a>            getEntity <span class="st">&quot;my-key&quot;</span></span>
-<span id="cb6-13"><a href="#cb6-13"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;VALUE&quot;</span></span></code></pre></div>
-<p>Well, this should work, but we're using <code>IO</code> directly in tests; not only is this going to be slow; but it means we need to have a database running somewhere, and that the tests might pass or fail depending on the initial state of that database! Clearly that's not ideal! We really only want to test the semantics of <code>upperCase</code> and how it <strong>glues together</strong> the interface of our database; we don't really care which database it's operating over.</p>
-<p>Our <code>uppercase</code> action is polymorphic over the monad it uses, so that means we can write a new instance for <code>MonadDB</code> and get it to use that in the tests instead!</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1"></a><span class="kw">import</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></span>
-<span id="cb7-2"><a href="#cb7-2"></a></span>
-<span id="cb7-3"><a href="#cb7-3"></a><span class="co">-- We&#39;ll use a Map as our database implementation, storing it in a state monad</span></span>
-<span id="cb7-4"><a href="#cb7-4"></a><span class="co">-- We also add ExceptT so we can see if our DB failed to look something up!</span></span>
-<span id="cb7-5"><a href="#cb7-5"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span></span>
-<span id="cb7-6"><a href="#cb7-6"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span>)) a</span>
-<span id="cb7-7"><a href="#cb7-7"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
-<span id="cb7-8"><a href="#cb7-8"></a>             , <span class="dt">Applicative</span></span>
-<span id="cb7-9"><a href="#cb7-9"></a>             , <span class="dt">Monad</span></span>
-<span id="cb7-10"><a href="#cb7-10"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
-<span id="cb7-11"><a href="#cb7-11"></a>             , <span class="dt">MonadState</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span>)</span>
-<span id="cb7-12"><a href="#cb7-12"></a>             )</span>
-<span id="cb7-13"><a href="#cb7-13"></a></span>
-<span id="cb7-14"><a href="#cb7-14"></a><span class="co">-- We&#39;ll implement an instance of MonadDB for our TestM monad.</span></span>
-<span id="cb7-15"><a href="#cb7-15"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="dt">String</span> <span class="kw">where</span></span>
-<span id="cb7-16"><a href="#cb7-16"></a>  getEntity key <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb7-17"><a href="#cb7-17"></a>    db <span class="ot">&lt;-</span> get</span>
-<span id="cb7-18"><a href="#cb7-18"></a>    <span class="kw">case</span> M.lookup key db <span class="kw">of</span></span>
-<span id="cb7-19"><a href="#cb7-19"></a>      <span class="dt">Nothing</span> <span class="ot">-&gt;</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;didn&#39;t find &quot;</span> <span class="op">++</span> key <span class="op">++</span> <span class="st">&quot; in db&quot;</span></span>
-<span id="cb7-20"><a href="#cb7-20"></a>      <span class="dt">Just</span> v <span class="ot">-&gt;</span> <span class="fu">return</span> v</span>
-<span id="cb7-21"><a href="#cb7-21"></a>  storeEntity key value <span class="ot">=</span> modify (M.insert key value)</span>
-<span id="cb7-22"><a href="#cb7-22"></a></span>
-<span id="cb7-23"><a href="#cb7-23"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
-<span id="cb7-24"><a href="#cb7-24"></a>runTestM&#39; db (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState db <span class="op">.</span> runExceptT <span class="op">$</span> m</span></code></pre></div>
-<p>Now we have a completely <strong>pure</strong> way of modeling our DB, which we can seed with initial data, and we can even inspect the final state if we like! This makes writing tests <em>so</em> much easier. We can re-write the <code>upperCase</code> test using <code>State</code> instead of <code>IO</code>! This means we have fewer dependencies, fewer unknowns, and can more directly test the behaviour of the action which we actually care about.</p>
-<p>Here's the re-written spec, the test itself is the same, but we no longer run it in IO:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb8-2"><a href="#cb8-2"></a>main <span class="ot">=</span></span>
-<span id="cb8-3"><a href="#cb8-3"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb8-4"><a href="#cb8-4"></a>    describe <span class="st">&quot;upperCase&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb8-5"><a href="#cb8-5"></a>      it <span class="st">&quot;uppercases the value stored at the given key in the DB&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb8-6"><a href="#cb8-6"></a>        <span class="kw">let</span> result <span class="ot">=</span></span>
-<span id="cb8-7"><a href="#cb8-7"></a>              runTestM&#39; <span class="fu">mempty</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb8-8"><a href="#cb8-8"></a>                storeEntity <span class="st">&quot;my-key&quot;</span> <span class="st">&quot;value&quot;</span></span>
-<span id="cb8-9"><a href="#cb8-9"></a>                upperCase <span class="st">&quot;my-key&quot;</span></span>
-<span id="cb8-10"><a href="#cb8-10"></a>                getEntity <span class="st">&quot;my-key&quot;</span></span>
-<span id="cb8-11"><a href="#cb8-11"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;VALUE&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE GeneralizedNewtypeDeriving #-}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Monad.Except</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Monad.IO.Class</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">DBError</span> <span class="ot">=</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">DBError</span> <span class="dt">String</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="dt">Eq</span>, <span class="dt">Show</span>)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Our application can access the database via IO and possibly throw DB errors.</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">AppM</span> a <span class="ot">=</span> <span class="dt">AppM</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runAppM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> <span class="dt">IO</span> a</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Functor</span>, <span class="dt">Applicative</span>, <span class="dt">Monad</span>, <span class="dt">MonadIO</span>, <span class="dt">MonadError</span> <span class="dt">DBError</span>)</span></code></pre></div>
+<p>We've abstracted over our database actions already with the following
+type-class:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE MultiParamTypeClasses #-}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE FunctionalDependencies #-}</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Key</span> <span class="ot">=</span> <span class="dt">String</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Our database associates string keys to some value type.</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- The specific value we can fetch is dependent on the monad</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- (but we&#39;ll just use strings for simplicity in our case)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> (<span class="dt">MonadError</span> <span class="dt">DBError</span> m) <span class="ot">=&gt;</span> <span class="dt">MonadDB</span> m v <span class="op">|</span> m <span class="ot">-&gt;</span> v <span class="kw">where</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="ot">  getEntity ::</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> m v</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="ot">  storeEntity ::</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> v <span class="ot">-&gt;</span> m ()</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">AppM</span> <span class="dt">String</span> <span class="kw">where</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- Assume we&#39;ve written some instance for interacting with our DB via IO, </span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="co">-- which returns any errors via ExceptT.</span></span></code></pre></div>
+<p>Cool! This looks pretty normal, we have a primary app monad and we
+can get and store strings in our database via IO using it!</p>
+<p>Now that we've got our basic DB interface let's say we want to write
+a more complex action using it:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- given a database key and a monad which can interact with a database containing strings</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- we can look up the value, uppercase it, then write it back.</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ot">upperCase ::</span> (<span class="dt">MonadDB</span> m <span class="dt">String</span>) <span class="ot">=&gt;</span> <span class="dt">Key</span> <span class="ot">-&gt;</span> m ()</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>upperCase key <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  thing <span class="ot">&lt;-</span> getEntity key</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  storeEntity key (<span class="fu">fmap</span> <span class="fu">toUpper</span> thing)</span></code></pre></div>
+<p>It's a pretty simple action, but we should probably add some unit
+tests! Let's set it up using our AppM instance!</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Spec.hs</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    describe <span class="st">&quot;upperCase&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>      it <span class="st">&quot;uppercases the value stored at the given key in the DB&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        result <span class="ot">&lt;-</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>          <span class="co">-- we unpack AppM, run the exceptT, then lift it into the IO part of our spec</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>          liftIO <span class="op">.</span> runExceptT <span class="op">.</span> runAppM <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>            storeEntity <span class="st">&quot;my-key&quot;</span> <span class="st">&quot;value&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>            upperCase <span class="st">&quot;my-key&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>            getEntity <span class="st">&quot;my-key&quot;</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;VALUE&quot;</span></span></code></pre></div>
+<p>Well, this should work, but we're using <code>IO</code> directly in
+tests; not only is this going to be slow; but it means we need to have a
+database running somewhere, and that the tests might pass or fail
+depending on the initial state of that database! Clearly that's not
+ideal! We really only want to test the semantics of
+<code>upperCase</code> and how it <strong>glues together</strong> the
+interface of our database; we don't really care which database it's
+operating over.</p>
+<p>Our <code>uppercase</code> action is polymorphic over the monad it
+uses, so that means we can write a new instance for <code>MonadDB</code>
+and get it to use that in the tests instead!</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Map</span> <span class="kw">as</span> <span class="dt">M</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- We&#39;ll use a Map as our database implementation, storing it in a state monad</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- We also add ExceptT so we can see if our DB failed to look something up!</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span>)) a</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Applicative</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Monad</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadState</span> (<span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- We&#39;ll implement an instance of MonadDB for our TestM monad.</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="dt">String</span> <span class="kw">where</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  getEntity key <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    db <span class="ot">&lt;-</span> get</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">case</span> M.lookup key db <span class="kw">of</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>      <span class="dt">Nothing</span> <span class="ot">-&gt;</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;didn&#39;t find &quot;</span> <span class="op">++</span> key <span class="op">++</span> <span class="st">&quot; in db&quot;</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>      <span class="dt">Just</span> v <span class="ot">-&gt;</span> <span class="fu">return</span> v</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>  storeEntity key value <span class="ot">=</span> modify (M.insert key value)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">M.Map</span> <span class="dt">String</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>runTestM&#39; db (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState db <span class="op">.</span> runExceptT <span class="op">$</span> m</span></code></pre></div>
+<p>Now we have a completely <strong>pure</strong> way of modeling our
+DB, which we can seed with initial data, and we can even inspect the
+final state if we like! This makes writing tests <em>so</em> much
+easier. We can re-write the <code>upperCase</code> test using
+<code>State</code> instead of <code>IO</code>! This means we have fewer
+dependencies, fewer unknowns, and can more directly test the behaviour
+of the action which we actually care about.</p>
+<p>Here's the re-written spec, the test itself is the same, but we no
+longer run it in IO:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    describe <span class="st">&quot;upperCase&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>      it <span class="st">&quot;uppercases the value stored at the given key in the DB&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> result <span class="ot">=</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>              runTestM&#39; <span class="fu">mempty</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>                storeEntity <span class="st">&quot;my-key&quot;</span> <span class="st">&quot;value&quot;</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>                upperCase <span class="st">&quot;my-key&quot;</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>                getEntity <span class="st">&quot;my-key&quot;</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;VALUE&quot;</span></span></code></pre></div>
 <p>Nifty!</p>
-<h2 id="parameterizing-test-implementations">Parameterizing test implementations</h2>
-<p>The thing about <strong>test</strong>s is that you often want to <strong>test</strong> unique and interesting behaviour! This means we'll probably want multiple implementations of our mocked services which each behave differently. Let's say that we want to test what happens if our DB fails on every single call? We <strong>could</strong> implement a whole new <code>TestM</code> monad with a new instance for <code>MonadDB</code> which errors on every call, and this would work fine, but in the real world we'll probably be mocking out a half-dozen services or more! That means we'll need a half dozen instances for each and every <code>TestM</code> we build! I don't feel like working overtime, so let's see if we can knock down the boilerplate by an order of magnitude. It's getting tough to talk about this abstractly so let's expand our example to include at least one other mocked service. We'll add some capability to our AppM to handle input and output from the console!</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">class</span> <span class="dt">MonadCli</span> m <span class="kw">where</span></span>
-<span id="cb9-2"><a href="#cb9-2"></a>  <span class="co">-- &#39;print&#39; something to output</span></span>
-<span id="cb9-3"><a href="#cb9-3"></a><span class="ot">  say ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> m ()</span>
-<span id="cb9-4"><a href="#cb9-4"></a>  <span class="co">-- get a string from the user input</span></span>
-<span id="cb9-5"><a href="#cb9-5"></a><span class="ot">  listen ::</span> m <span class="dt">String</span></span>
-<span id="cb9-6"><a href="#cb9-6"></a></span>
-<span id="cb9-7"><a href="#cb9-7"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> <span class="dt">AppM</span> <span class="kw">where</span></span>
-<span id="cb9-8"><a href="#cb9-8"></a>  say <span class="ot">=</span> liftIO <span class="op">.</span> <span class="fu">print</span></span>
-<span id="cb9-9"><a href="#cb9-9"></a>  listen <span class="ot">=</span> liftIO <span class="fu">getLine</span></span></code></pre></div>
+<h2 id="parameterizing-test-implementations">Parameterizing test
+implementations</h2>
+<p>The thing about <strong>test</strong>s is that you often want to
+<strong>test</strong> unique and interesting behaviour! This means we'll
+probably want multiple implementations of our mocked services which each
+behave differently. Let's say that we want to test what happens if our
+DB fails on every single call? We <strong>could</strong> implement a
+whole new <code>TestM</code> monad with a new instance for
+<code>MonadDB</code> which errors on every call, and this would work
+fine, but in the real world we'll probably be mocking out a half-dozen
+services or more! That means we'll need a half dozen instances for each
+and every <code>TestM</code> we build! I don't feel like working
+overtime, so let's see if we can knock down the boilerplate by an order
+of magnitude. It's getting tough to talk about this abstractly so let's
+expand our example to include at least one other mocked service. We'll
+add some capability to our AppM to handle input and output from the
+console!</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="dt">MonadCli</span> m <span class="kw">where</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- &#39;print&#39; something to output</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ot">  say ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> m ()</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- get a string from the user input</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ot">  listen ::</span> m <span class="dt">String</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> <span class="dt">AppM</span> <span class="kw">where</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  say <span class="ot">=</span> liftIO <span class="op">.</span> <span class="fu">print</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  listen <span class="ot">=</span> liftIO <span class="fu">getLine</span></span></code></pre></div>
 <p>Now we can get something from the user and store it in the DB!</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">storeName ::</span> (<span class="dt">MonadDB</span> m <span class="dt">String</span>, <span class="dt">MonadCli</span> m) <span class="ot">=&gt;</span> m ()</span>
-<span id="cb10-2"><a href="#cb10-2"></a>storeName <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb10-3"><a href="#cb10-3"></a>  say <span class="st">&quot;What&#39;s your name?&quot;</span></span>
-<span id="cb10-4"><a href="#cb10-4"></a>  name <span class="ot">&lt;-</span> listen</span>
-<span id="cb10-5"><a href="#cb10-5"></a>  storeEntity <span class="st">&quot;name&quot;</span> name</span></code></pre></div>
-<p>Let's jump into testing it! To do so we'll need to make <code>TestM</code> an instance of <code>MonadCli</code> too! Now that we have multiple concerns going on I'm going to use a shared state and add some lenses to make working with everything a bit easier. It's a bit of set-up up-front, but from now on adding additional functionality should be pretty straight-forward!</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="ot">{-# LANGUAGE TemplateHaskell #-}</span></span>
-<span id="cb11-2"><a href="#cb11-2"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
-<span id="cb11-3"><a href="#cb11-3"></a></span>
-<span id="cb11-4"><a href="#cb11-4"></a><span class="co">-- We&#39;ll store all our mock data in this data type</span></span>
-<span id="cb11-5"><a href="#cb11-5"></a><span class="kw">data</span> <span class="dt">TestState</span> <span class="ot">=</span> <span class="dt">TestState</span></span>
-<span id="cb11-6"><a href="#cb11-6"></a>  {<span class="ot"> _cliInput ::</span> [<span class="dt">String</span>]</span>
-<span id="cb11-7"><a href="#cb11-7"></a>  ,<span class="ot"> _cliOutput ::</span> [<span class="dt">String</span>]</span>
-<span id="cb11-8"><a href="#cb11-8"></a>  ,<span class="ot"> _db ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
-<span id="cb11-9"><a href="#cb11-9"></a>  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
-<span id="cb11-10"><a href="#cb11-10"></a></span>
-<span id="cb11-11"><a href="#cb11-11"></a>makeLenses &#39;<span class="dt">&#39;TestState</span></span>
-<span id="cb11-12"><a href="#cb11-12"></a></span>
-<span id="cb11-13"><a href="#cb11-13"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span></span>
-<span id="cb11-14"><a href="#cb11-14"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> <span class="dt">TestState</span>) a</span>
-<span id="cb11-15"><a href="#cb11-15"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
-<span id="cb11-16"><a href="#cb11-16"></a>             , <span class="dt">Applicative</span></span>
-<span id="cb11-17"><a href="#cb11-17"></a>             , <span class="dt">Monad</span></span>
-<span id="cb11-18"><a href="#cb11-18"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
-<span id="cb11-19"><a href="#cb11-19"></a>             , <span class="dt">MonadState</span> <span class="dt">TestState</span></span>
-<span id="cb11-20"><a href="#cb11-20"></a>             )</span>
-<span id="cb11-21"><a href="#cb11-21"></a></span>
-<span id="cb11-22"><a href="#cb11-22"></a></span>
-<span id="cb11-23"><a href="#cb11-23"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">TestState</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
-<span id="cb11-24"><a href="#cb11-24"></a>runTestM&#39; startState (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState startState <span class="op">.</span> runExceptT <span class="op">$</span> m</span>
-<span id="cb11-25"><a href="#cb11-25"></a></span>
-<span id="cb11-26"><a href="#cb11-26"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="dt">String</span> <span class="kw">where</span></span>
-<span id="cb11-27"><a href="#cb11-27"></a><span class="co">-- Implementation here&#39;s not important, assume we do pretty much the same thing as earlier</span></span>
-<span id="cb11-28"><a href="#cb11-28"></a></span>
-<span id="cb11-29"><a href="#cb11-29"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
-<span id="cb11-30"><a href="#cb11-30"></a>  <span class="co">-- We&#39;ll just record things we say in our list of output</span></span>
-<span id="cb11-31"><a href="#cb11-31"></a>  say msg <span class="ot">=</span> cliOutput <span class="op">%=</span> (<span class="op">++</span> [msg])</span>
-<span id="cb11-32"><a href="#cb11-32"></a>  <span class="co">-- We&#39;ll pull input from our state as long as we have some.</span></span>
-<span id="cb11-33"><a href="#cb11-33"></a>  listen <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb11-34"><a href="#cb11-34"></a>    inputs <span class="ot">&lt;-</span> use cliInput</span>
-<span id="cb11-35"><a href="#cb11-35"></a>    <span class="kw">case</span> inputs <span class="kw">of</span></span>
-<span id="cb11-36"><a href="#cb11-36"></a>      [] <span class="ot">-&gt;</span> <span class="fu">return</span> <span class="st">&quot;NO MORE INPUT&quot;</span></span>
-<span id="cb11-37"><a href="#cb11-37"></a>      (msg<span class="op">:</span>rest) <span class="ot">-&gt;</span> cliInput <span class="op">.=</span> rest <span class="op">&gt;&gt;</span> <span class="fu">return</span> msg</span>
-<span id="cb11-38"><a href="#cb11-38"></a></span>
-<span id="cb11-39"><a href="#cb11-39"></a><span class="ot">emptyState ::</span> <span class="dt">TestState</span></span>
-<span id="cb11-40"><a href="#cb11-40"></a>emptyState <span class="ot">=</span> <span class="dt">TestState</span> {_cliInput <span class="ot">=</span> <span class="fu">mempty</span>, _cliOutput <span class="ot">=</span> <span class="fu">mempty</span>, _db <span class="ot">=</span> <span class="fu">mempty</span>}</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">storeName ::</span> (<span class="dt">MonadDB</span> m <span class="dt">String</span>, <span class="dt">MonadCli</span> m) <span class="ot">=&gt;</span> m ()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>storeName <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  say <span class="st">&quot;What&#39;s your name?&quot;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  name <span class="ot">&lt;-</span> listen</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  storeEntity <span class="st">&quot;name&quot;</span> name</span></code></pre></div>
+<p>Let's jump into testing it! To do so we'll need to make
+<code>TestM</code> an instance of <code>MonadCli</code> too! Now that we
+have multiple concerns going on I'm going to use a shared state and add
+some lenses to make working with everything a bit easier. It's a bit of
+set-up up-front, but from now on adding additional functionality should
+be pretty straight-forward!</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE TemplateHaskell #-}</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- We&#39;ll store all our mock data in this data type</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">TestState</span> <span class="ot">=</span> <span class="dt">TestState</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> _cliInput ::</span> [<span class="dt">String</span>]</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> _cliOutput ::</span> [<span class="dt">String</span>]</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> _db ::</span> <span class="dt">Map</span> <span class="dt">String</span> <span class="dt">String</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>makeLenses &#39;<span class="dt">&#39;TestState</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">TestM</span> a <span class="ot">=</span> <span class="dt">TestM</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> <span class="dt">TestState</span>) a</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Applicative</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Monad</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadState</span> <span class="dt">TestState</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">TestState</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>runTestM&#39; startState (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState startState <span class="op">.</span> runExceptT <span class="op">$</span> m</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> <span class="dt">TestM</span> <span class="dt">String</span> <span class="kw">where</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a><span class="co">-- Implementation here&#39;s not important, assume we do pretty much the same thing as earlier</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> <span class="dt">TestM</span> <span class="kw">where</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- We&#39;ll just record things we say in our list of output</span></span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>  say msg <span class="ot">=</span> cliOutput <span class="op">%=</span> (<span class="op">++</span> [msg])</span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>  <span class="co">-- We&#39;ll pull input from our state as long as we have some.</span></span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>  listen <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>    inputs <span class="ot">&lt;-</span> use cliInput</span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    <span class="kw">case</span> inputs <span class="kw">of</span></span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>      [] <span class="ot">-&gt;</span> <span class="fu">return</span> <span class="st">&quot;NO MORE INPUT&quot;</span></span>
+<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>      (msg<span class="op">:</span>rest) <span class="ot">-&gt;</span> cliInput <span class="op">.=</span> rest <span class="op">&gt;&gt;</span> <span class="fu">return</span> msg</span>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a><span class="ot">emptyState ::</span> <span class="dt">TestState</span></span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>emptyState <span class="ot">=</span> <span class="dt">TestState</span> {_cliInput <span class="ot">=</span> <span class="fu">mempty</span>, _cliOutput <span class="ot">=</span> <span class="fu">mempty</span>, _db <span class="ot">=</span> <span class="fu">mempty</span>}</span></code></pre></div>
 <p>Now we can test our <code>storeName</code> function!</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb12-2"><a href="#cb12-2"></a>main <span class="ot">=</span></span>
-<span id="cb12-3"><a href="#cb12-3"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb12-4"><a href="#cb12-4"></a>    describe <span class="st">&quot;storeName&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb12-5"><a href="#cb12-5"></a>      it <span class="st">&quot;stores a name from user input&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb12-6"><a href="#cb12-6"></a>        <span class="kw">let</span> result <span class="ot">=</span></span>
-<span id="cb12-7"><a href="#cb12-7"></a>              <span class="co">-- We&#39;ll seed a name as our cli input</span></span>
-<span id="cb12-8"><a href="#cb12-8"></a>              runTestM&#39; (emptyState <span class="op">&amp;</span> cliInput <span class="op">.~</span> [<span class="st">&quot;Steven&quot;</span>]) <span class="op">$</span></span>
-<span id="cb12-9"><a href="#cb12-9"></a>              <span class="co">-- Running storeName should store the cli input </span></span>
-<span id="cb12-10"><a href="#cb12-10"></a>              <span class="co">-- in the DB under the &quot;name&quot; key!</span></span>
-<span id="cb12-11"><a href="#cb12-11"></a>              storeName <span class="op">&gt;&gt;</span> getEntity <span class="st">&quot;name&quot;</span></span>
-<span id="cb12-12"><a href="#cb12-12"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;Steven&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  hspec <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    describe <span class="st">&quot;storeName&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>      it <span class="st">&quot;stores a name from user input&quot;</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> result <span class="ot">=</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>              <span class="co">-- We&#39;ll seed a name as our cli input</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>              runTestM&#39; (emptyState <span class="op">&amp;</span> cliInput <span class="op">.~</span> [<span class="st">&quot;Steven&quot;</span>]) <span class="op">$</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>              <span class="co">-- Running storeName should store the cli input </span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>              <span class="co">-- in the DB under the &quot;name&quot; key!</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>              storeName <span class="op">&gt;&gt;</span> getEntity <span class="st">&quot;name&quot;</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        result <span class="ot">`shouldBe`</span> <span class="dt">Right</span> <span class="st">&quot;Steven&quot;</span></span></code></pre></div>
 <p>Hopefully that comes out green!</p>
-<p>Great! So, like I said before we'd like to customize our implementations of some of our mocked out services, let's say we want the DB to fail on every call! One option would be to wrap <code>TestM</code> in a newtype and use <code>deriving MonadCli</code> with <code>GeneralizedNewtypeDeriving</code> to get back our implementation of <code>MonadCli</code> then write a NEW instance for <code>MonadDB</code> which fails on every call. If we have to do this for every customized behaviour for each of our services though this results in an <code>(n*k)</code> number of newtypes! We need a different newtype for EACH pairing of every possible set of behaviours we can imagine! Let's solve this problem the way we solve all problems in Haskell: Add more type parameters!</p>
+<p>Great! So, like I said before we'd like to customize our
+implementations of some of our mocked out services, let's say we want
+the DB to fail on every call! One option would be to wrap
+<code>TestM</code> in a newtype and use <code>deriving MonadCli</code>
+with <code>GeneralizedNewtypeDeriving</code> to get back our
+implementation of <code>MonadCli</code> then write a NEW instance for
+<code>MonadDB</code> which fails on every call. If we have to do this
+for every customized behaviour for each of our services though this
+results in an <code>(n*k)</code> number of newtypes! We need a different
+newtype for EACH pairing of every possible set of behaviours we can
+imagine! Let's solve this problem the way we solve all problems in
+Haskell: Add more type parameters!</p>
 <h2 id="phantom-data-kinds">Phantom Data Kinds</h2>
-<p>Let's parameterize <code>TestM</code> with slots which represent possible implementations of each service. To help users know how it works and also prevent incorrect usage we'll qualify the parameters using <code>DataKinds</code>!</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">{-# LANGUAGE DataKinds #-}</span></span>
-<span id="cb13-2"><a href="#cb13-2"></a><span class="ot">{-# LANGUAGE KindSignatures #-}</span></span>
-<span id="cb13-3"><a href="#cb13-3"></a></span>
-<span id="cb13-4"><a href="#cb13-4"></a><span class="kw">data</span> <span class="dt">DBImpl</span></span>
-<span id="cb13-5"><a href="#cb13-5"></a>  <span class="ot">=</span> <span class="dt">DBUseMap</span></span>
-<span id="cb13-6"><a href="#cb13-6"></a>  <span class="op">|</span> <span class="dt">DBOnFire</span></span>
-<span id="cb13-7"><a href="#cb13-7"></a></span>
-<span id="cb13-8"><a href="#cb13-8"></a><span class="kw">data</span> <span class="dt">CliImpl</span></span>
-<span id="cb13-9"><a href="#cb13-9"></a>  <span class="ot">=</span> <span class="dt">CliUseList</span></span>
-<span id="cb13-10"><a href="#cb13-10"></a>  <span class="op">|</span> <span class="dt">CliStatic</span></span>
-<span id="cb13-11"><a href="#cb13-11"></a></span>
-<span id="cb13-12"><a href="#cb13-12"></a><span class="kw">newtype</span> <span class="dt">TestM</span> (<span class="ot">db ::</span> <span class="dt">DBImpl</span>) (<span class="ot">cli ::</span> <span class="dt">CliImpl</span>) a <span class="ot">=</span> <span class="dt">TestM</span></span>
-<span id="cb13-13"><a href="#cb13-13"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> <span class="dt">TestState</span>) a</span>
-<span id="cb13-14"><a href="#cb13-14"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
-<span id="cb13-15"><a href="#cb13-15"></a>             , <span class="dt">Applicative</span></span>
-<span id="cb13-16"><a href="#cb13-16"></a>             , <span class="dt">Monad</span></span>
-<span id="cb13-17"><a href="#cb13-17"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
-<span id="cb13-18"><a href="#cb13-18"></a>             , <span class="dt">MonadState</span> <span class="dt">TestState</span></span>
-<span id="cb13-19"><a href="#cb13-19"></a>             )</span>
-<span id="cb13-20"><a href="#cb13-20"></a></span>
-<span id="cb13-21"><a href="#cb13-21"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">TestState</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> db cli a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
-<span id="cb13-22"><a href="#cb13-22"></a>runTestM&#39; startState (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState startState <span class="op">.</span> runExceptT <span class="op">$</span> m</span></code></pre></div>
-<p>Notice that we don't actually need to use these params inside the definition of the <code>TestM</code> newtype; they're just there as annotations for the compiler, I call these 👻 Phantom Data Kinds 👻. Now let's update the instance we've defined already to handle the type params, as well as add some new instances!</p>
-<p>The instance signatures are the most important part here; but read the rest if you like 🤷‍♂️</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> (<span class="dt">TestM</span> <span class="dt">DBUseMap</span> cli) <span class="dt">String</span> <span class="kw">where</span></span>
-<span id="cb14-2"><a href="#cb14-2"></a>  getEntity key <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb14-3"><a href="#cb14-3"></a>    db&#39; <span class="ot">&lt;-</span> use db</span>
-<span id="cb14-4"><a href="#cb14-4"></a>    <span class="kw">case</span> M.lookup key db&#39; <span class="kw">of</span></span>
-<span id="cb14-5"><a href="#cb14-5"></a>      <span class="dt">Nothing</span> <span class="ot">-&gt;</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;didn&#39;t find &quot;</span> <span class="op">++</span> key <span class="op">++</span> <span class="st">&quot; in db&quot;</span></span>
-<span id="cb14-6"><a href="#cb14-6"></a>      <span class="dt">Just</span> v <span class="ot">-&gt;</span> <span class="fu">return</span> v</span>
-<span id="cb14-7"><a href="#cb14-7"></a>  storeEntity key value <span class="ot">=</span> db <span class="op">%=</span> M.insert key value</span>
-<span id="cb14-8"><a href="#cb14-8"></a></span>
-<span id="cb14-9"><a href="#cb14-9"></a><span class="co">-- This DB mock tests how actions react if every call to the DB fails</span></span>
-<span id="cb14-10"><a href="#cb14-10"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> (<span class="dt">TestM</span> <span class="dt">DBOnFire</span> cli) <span class="dt">String</span> <span class="kw">where</span></span>
-<span id="cb14-11"><a href="#cb14-11"></a>  getEntity _ <span class="ot">=</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;🔥 DB is on FIRE! 🔥&quot;</span></span>
-<span id="cb14-12"><a href="#cb14-12"></a>  storeEntity _ _ <span class="ot">=</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;🔥 DB is on FIRE! 🔥&quot;</span></span>
-<span id="cb14-13"><a href="#cb14-13"></a></span>
-<span id="cb14-14"><a href="#cb14-14"></a><span class="co">-- A simple cli mock which pulls input from a list and </span></span>
-<span id="cb14-15"><a href="#cb14-15"></a><span class="co">-- stores printed strings in state for later inspection</span></span>
-<span id="cb14-16"><a href="#cb14-16"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> (<span class="dt">TestM</span> db <span class="dt">CliUseList</span>) <span class="kw">where</span></span>
-<span id="cb14-17"><a href="#cb14-17"></a>  say msg <span class="ot">=</span> cliOutput <span class="op">%=</span> (msg <span class="op">:</span>)</span>
-<span id="cb14-18"><a href="#cb14-18"></a>  listen <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb14-19"><a href="#cb14-19"></a>    inputs <span class="ot">&lt;-</span> use cliInput</span>
-<span id="cb14-20"><a href="#cb14-20"></a>    <span class="kw">case</span> inputs <span class="kw">of</span></span>
-<span id="cb14-21"><a href="#cb14-21"></a>      [] <span class="ot">-&gt;</span> <span class="fu">return</span> <span class="st">&quot;NO MORE INPUT&quot;</span></span>
-<span id="cb14-22"><a href="#cb14-22"></a>      (msg<span class="op">:</span>rest) <span class="ot">-&gt;</span> cliInput <span class="op">.=</span> rest <span class="op">&gt;&gt;</span> <span class="fu">return</span> msg</span>
-<span id="cb14-23"><a href="#cb14-23"></a></span>
-<span id="cb14-24"><a href="#cb14-24"></a><span class="co">-- A simple cli mock which always returns the same thing</span></span>
-<span id="cb14-25"><a href="#cb14-25"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> (<span class="dt">TestM</span> db <span class="dt">CliStatic</span>) <span class="kw">where</span></span>
-<span id="cb14-26"><a href="#cb14-26"></a>  say _ <span class="ot">=</span> <span class="fu">return</span> ()</span>
-<span id="cb14-27"><a href="#cb14-27"></a>  listen <span class="ot">=</span> <span class="fu">return</span> <span class="st">&quot;INPUT&quot;</span></span></code></pre></div>
-<p>The cool thing about this is that each instance can choose an instance based on one parameter while leaving the type variable in the other slots unspecified! So for our MonadDB implementation we can have a different implementation for each value of the <code>db :: DBImpl</code> type param while not caring at all what's in the <code>cli :: CliImpl</code> parameter! This means that we only need to implement each behaviour once, and we can mix and match implementations for different services at will! We <em>do</em> need to make sure that there's some way to actually implement that behaviour against our <code>TestM</code>; but for the vast majority of cases you can just carve out a spot in the <code>State</code> to keep track of what you need for your mock. Using lenses means that adding something new won't affect existing implementations.</p>
-<p>Whoops; just about forgot, we need a way to pick which behaviour we want when we're actually running our tests! <code>TypeApplications</code> are a huge help here! We use <code>TypeApplications</code> to pick which <code>DBImpl</code> and <code>CliImpl</code> we want so that GHC doesn't get mad at us about ambiguous type variables. Use them like this:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="ot">{-# LANGUAGE TypeApplications #-}</span></span>
-<span id="cb15-2"><a href="#cb15-2"></a></span>
-<span id="cb15-3"><a href="#cb15-3"></a>runTestM&#39; <span class="op">@</span><span class="dt">DBUseMap</span> <span class="op">@</span><span class="dt">CliUseList</span></span>
-<span id="cb15-4"><a href="#cb15-4"></a>            (emptyState <span class="op">&amp;</span> cliInput <span class="op">.~</span> [<span class="st">&quot;Steven&quot;</span>]) <span class="op">$</span></span>
-<span id="cb15-5"><a href="#cb15-5"></a>            storeName <span class="op">&gt;&gt;</span> getEntity <span class="st">&quot;name&quot;</span></span></code></pre></div>
-<p>Now you can pretty easily keep a separate module where you define <code>TestM</code> and all of its behaviours and instances, then just use Type Applications to specialize your test monad when you run it to get the behaviour you want!</p>
-<p>And that wraps up our dive into testing using <code>mtl-style</code> constraints! Thanks for joining me!</p>
-<p>Special thanks to Sandy Maguire A.K.A. isovector for proofreading and helping me vet my ideas!</p>
-<p>If you have questions or comments hit me up on <a href="https://twitter.com/chrislpenner">Twitter</a> or <a href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
+<p>Let's parameterize <code>TestM</code> with slots which represent
+possible implementations of each service. To help users know how it
+works and also prevent incorrect usage we'll qualify the parameters
+using <code>DataKinds</code>!</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE DataKinds #-}</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE KindSignatures #-}</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">DBImpl</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="ot">=</span> <span class="dt">DBUseMap</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> <span class="dt">DBOnFire</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">CliImpl</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="ot">=</span> <span class="dt">CliUseList</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="op">|</span> <span class="dt">CliStatic</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">TestM</span> (<span class="ot">db ::</span> <span class="dt">DBImpl</span>) (<span class="ot">cli ::</span> <span class="dt">CliImpl</span>) a <span class="ot">=</span> <span class="dt">TestM</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> runTestM ::</span> <span class="dt">ExceptT</span> <span class="dt">DBError</span> (<span class="dt">State</span> <span class="dt">TestState</span>) a</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>  } <span class="kw">deriving</span> ( <span class="dt">Functor</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Applicative</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">Monad</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadError</span> <span class="dt">DBError</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>             , <span class="dt">MonadState</span> <span class="dt">TestState</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a><span class="ot">runTestM&#39; ::</span> <span class="dt">TestState</span> <span class="ot">-&gt;</span> <span class="dt">TestM</span> db cli a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">DBError</span> a</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>runTestM&#39; startState (<span class="dt">TestM</span> m) <span class="ot">=</span> <span class="fu">flip</span> evalState startState <span class="op">.</span> runExceptT <span class="op">$</span> m</span></code></pre></div>
+<p>Notice that we don't actually need to use these params inside the
+definition of the <code>TestM</code> newtype; they're just there as
+annotations for the compiler, I call these 👻 Phantom Data Kinds 👻. Now
+let's update the instance we've defined already to handle the type
+params, as well as add some new instances!</p>
+<p>The instance signatures are the most important part here; but read
+the rest if you like 🤷‍♂️</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> (<span class="dt">TestM</span> <span class="dt">DBUseMap</span> cli) <span class="dt">String</span> <span class="kw">where</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  getEntity key <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    db&#39; <span class="ot">&lt;-</span> use db</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">case</span> M.lookup key db&#39; <span class="kw">of</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>      <span class="dt">Nothing</span> <span class="ot">-&gt;</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;didn&#39;t find &quot;</span> <span class="op">++</span> key <span class="op">++</span> <span class="st">&quot; in db&quot;</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">Just</span> v <span class="ot">-&gt;</span> <span class="fu">return</span> v</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  storeEntity key value <span class="ot">=</span> db <span class="op">%=</span> M.insert key value</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- This DB mock tests how actions react if every call to the DB fails</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadDB</span> (<span class="dt">TestM</span> <span class="dt">DBOnFire</span> cli) <span class="dt">String</span> <span class="kw">where</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  getEntity _ <span class="ot">=</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;🔥 DB is on FIRE! 🔥&quot;</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  storeEntity _ _ <span class="ot">=</span> throwError <span class="op">.</span> <span class="dt">DBError</span> <span class="op">$</span> <span class="st">&quot;🔥 DB is on FIRE! 🔥&quot;</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- A simple cli mock which pulls input from a list and </span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="co">-- stores printed strings in state for later inspection</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> (<span class="dt">TestM</span> db <span class="dt">CliUseList</span>) <span class="kw">where</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  say msg <span class="ot">=</span> cliOutput <span class="op">%=</span> (msg <span class="op">:</span>)</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  listen <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    inputs <span class="ot">&lt;-</span> use cliInput</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">case</span> inputs <span class="kw">of</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>      [] <span class="ot">-&gt;</span> <span class="fu">return</span> <span class="st">&quot;NO MORE INPUT&quot;</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>      (msg<span class="op">:</span>rest) <span class="ot">-&gt;</span> cliInput <span class="op">.=</span> rest <span class="op">&gt;&gt;</span> <span class="fu">return</span> msg</span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- A simple cli mock which always returns the same thing</span></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">MonadCli</span> (<span class="dt">TestM</span> db <span class="dt">CliStatic</span>) <span class="kw">where</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>  say _ <span class="ot">=</span> <span class="fu">return</span> ()</span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>  listen <span class="ot">=</span> <span class="fu">return</span> <span class="st">&quot;INPUT&quot;</span></span></code></pre></div>
+<p>The cool thing about this is that each instance can choose an
+instance based on one parameter while leaving the type variable in the
+other slots unspecified! So for our MonadDB implementation we can have a
+different implementation for each value of the <code>db :: DBImpl</code>
+type param while not caring at all what's in the
+<code>cli :: CliImpl</code> parameter! This means that we only need to
+implement each behaviour once, and we can mix and match implementations
+for different services at will! We <em>do</em> need to make sure that
+there's some way to actually implement that behaviour against our
+<code>TestM</code>; but for the vast majority of cases you can just
+carve out a spot in the <code>State</code> to keep track of what you
+need for your mock. Using lenses means that adding something new won't
+affect existing implementations.</p>
+<p>Whoops; just about forgot, we need a way to pick which behaviour we
+want when we're actually running our tests!
+<code>TypeApplications</code> are a huge help here! We use
+<code>TypeApplications</code> to pick which <code>DBImpl</code> and
+<code>CliImpl</code> we want so that GHC doesn't get mad at us about
+ambiguous type variables. Use them like this:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE TypeApplications #-}</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>runTestM&#39; <span class="op">@</span><span class="dt">DBUseMap</span> <span class="op">@</span><span class="dt">CliUseList</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>            (emptyState <span class="op">&amp;</span> cliInput <span class="op">.~</span> [<span class="st">&quot;Steven&quot;</span>]) <span class="op">$</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>            storeName <span class="op">&gt;&gt;</span> getEntity <span class="st">&quot;name&quot;</span></span></code></pre></div>
+<p>Now you can pretty easily keep a separate module where you define
+<code>TestM</code> and all of its behaviours and instances, then just
+use Type Applications to specialize your test monad when you run it to
+get the behaviour you want!</p>
+<p>And that wraps up our dive into testing using <code>mtl-style</code>
+constraints! Thanks for joining me!</p>
+<p>Special thanks to Sandy Maguire A.K.A. isovector for proofreading and
+helping me vet my ideas!</p>
+<p>If you have questions or comments hit me up on <a
+href="https://twitter.com/chrislpenner">Twitter</a> or <a
+href="https://www.reddit.com/user/ChrisPenner">Reddit</a>!</p>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider

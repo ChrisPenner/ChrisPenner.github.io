@@ -12,7 +12,8 @@
     <meta name="twitter:site" content="@chrislpenner">
     <meta name="twitter:creator" content="@chrislpenner">
     <meta name="twitter:title" content="Higher Kinded Option Parsing">
-    <meta name="twitter:description" content="Collecting options for your application from multiple sources using Higher Kinded Data">
+    <meta name="twitter:description" content="Collecting options for your application from multiple sources using
+Higher Kinded Data">
     <meta name="twitter:image" content="http://chrispenner.ca/images/hkd-option-parsing/tools.jpg">
     <title>Higher Kinded Option Parsing</title>
     <link
@@ -770,270 +771,510 @@
         </div>
       </div>
       <article class="post">
-        <p>Higher Kinded Data Types (HKDTs) have piqued my interest lately. They seem to have a lot of potential applications, however the ergonomics still aren't so great in most of these cases. Today we'll look at one case where I think the end result ends up quite nice! Let's parse some options!</p>
-<p>First the problem; if you've worked on a non-trivial production app you've probably come across what I'll call the <strong>Configuration Conundrum</strong>. Specifically, this is when an app collects configuration values from <em>many sources</em>. Maybe it parses some options from CLI flags, some from Environment Variables, yet more come from a configuration file in JSON or YAML or TOML or or even worse it may pull from SEVERAL files. Working with these is a mess, option priority gets tricky, providing useful error messages gets even harder, and the code for managing all these sources is confusing, complicated, and spread out. Though we may not solve ALL these problems today, we'll build an approach that's modular and extensible enough that you can mix and match bits and pieces to get whatever you need.</p>
-<p>Here's an example of some messy code which pulls options from the environment or from a JSON value file:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
-<span id="cb1-2"><a href="#cb1-2"></a>getOptions <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb1-3"><a href="#cb1-3"></a>    configJson <span class="ot">&lt;-</span> readConfigFile</span>
-<span id="cb1-4"><a href="#cb1-4"></a>    mServerHostEnv <span class="ot">&lt;-</span> readServerHostEnv</span>
-<span id="cb1-5"><a href="#cb1-5"></a>    mNumThreadsEnv <span class="ot">&lt;-</span> readNumThreadsEnv</span>
-<span id="cb1-6"><a href="#cb1-6"></a>    <span class="kw">let</span> mServerHostJson <span class="ot">=</span> configJson <span class="op">^?</span> key <span class="st">&quot;server_host&quot;</span> <span class="op">.</span> _String <span class="op">.</span> unpacked</span>
-<span id="cb1-7"><a href="#cb1-7"></a>    <span class="kw">let</span> mNumThreadsJson <span class="ot">=</span> configJson <span class="op">^?</span> key <span class="st">&quot;num_threads&quot;</span> <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
-<span id="cb1-8"><a href="#cb1-8"></a>    <span class="fu">return</span> <span class="op">$</span> <span class="dt">Options</span> <span class="op">&lt;$&gt;</span> fromMaybe serverHostDef (mServerHostEnv <span class="op">&lt;|&gt;</span> mServerHostJson)</span>
-<span id="cb1-9"><a href="#cb1-9"></a>                     <span class="op">&lt;*&gt;</span> fromMaybe numThreadsDef (mNumThreadsEnv <span class="op">&lt;|&gt;</span> mNumThreadsJson)</span></code></pre></div>
+        <p>Higher Kinded Data Types (HKDTs) have piqued my interest lately. They
+seem to have a lot of potential applications, however the ergonomics
+still aren't so great in most of these cases. Today we'll look at one
+case where I think the end result ends up quite nice! Let's parse some
+options!</p>
+<p>First the problem; if you've worked on a non-trivial production app
+you've probably come across what I'll call the <strong>Configuration
+Conundrum</strong>. Specifically, this is when an app collects
+configuration values from <em>many sources</em>. Maybe it parses some
+options from CLI flags, some from Environment Variables, yet more come
+from a configuration file in JSON or YAML or TOML or or even worse it
+may pull from SEVERAL files. Working with these is a mess, option
+priority gets tricky, providing useful error messages gets even harder,
+and the code for managing all these sources is confusing, complicated,
+and spread out. Though we may not solve ALL these problems today, we'll
+build an approach that's modular and extensible enough that you can mix
+and match bits and pieces to get whatever you need.</p>
+<p>Here's an example of some messy code which pulls options from the
+environment or from a JSON value file:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    configJson <span class="ot">&lt;-</span> readConfigFile</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    mServerHostEnv <span class="ot">&lt;-</span> readServerHostEnv</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    mNumThreadsEnv <span class="ot">&lt;-</span> readNumThreadsEnv</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> mServerHostJson <span class="ot">=</span> configJson <span class="op">^?</span> key <span class="st">&quot;server_host&quot;</span> <span class="op">.</span> _String <span class="op">.</span> unpacked</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> mNumThreadsJson <span class="ot">=</span> configJson <span class="op">^?</span> key <span class="st">&quot;num_threads&quot;</span> <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span> <span class="op">$</span> <span class="dt">Options</span> <span class="op">&lt;$&gt;</span> fromMaybe serverHostDef (mServerHostEnv <span class="op">&lt;|&gt;</span> mServerHostJson)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>                     <span class="op">&lt;*&gt;</span> fromMaybe numThreadsDef (mNumThreadsEnv <span class="op">&lt;|&gt;</span> mNumThreadsJson)</span></code></pre></div>
 <p>Here's a peek at how our configuration parsing code will end up:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
-<span id="cb2-2"><a href="#cb2-2"></a>getOptions <span class="ot">=</span></span>
-<span id="cb2-3"><a href="#cb2-3"></a>  withDefaults defaultOpts <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
-<p>This is slightly disingenuous as some of the logic is abstracted away behind the scenes in the second example; but the point here is that the logic CAN be abstracted, whereas it's very difficult to abstract over the steps in the first example without creating a bunch of intermediate types.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  withDefaults defaultOpts <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
+<p>This is slightly disingenuous as some of the logic is abstracted away
+behind the scenes in the second example; but the point here is that the
+logic CAN be abstracted, whereas it's very difficult to abstract over
+the steps in the first example without creating a bunch of intermediate
+types.</p>
 <h2 id="kinds-of-options">Kinds of Options</h2>
-<p>If you're unfamiliar with HKDTs (higher kinded data types); it's a very simple idea with some mind bending implications. Many data types are parameterized by a value type (e.g. <code>[a]</code> is a list is parameterized by the types of values it contains); however HKDTs are parameterized by some <strong>wrapper</strong> type (typically a functor, but not always) around the data of the record. Easiest to just show an example and see it in practice. Let's define a very simple type to contain all the options our app needs:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1"></a><span class="kw">data</span> <span class="dt">Options_</span> f <span class="ot">=</span></span>
-<span id="cb3-2"><a href="#cb3-2"></a>    <span class="dt">Options_</span></span>
-<span id="cb3-3"><a href="#cb3-3"></a>    {<span class="ot"> serverHost ::</span> f <span class="dt">String</span></span>
-<span id="cb3-4"><a href="#cb3-4"></a>    ,<span class="ot"> numThreads ::</span> f <span class="dt">Int</span></span>
-<span id="cb3-5"><a href="#cb3-5"></a>    ,<span class="ot"> verbosity  ::</span> f <span class="dt">Int</span></span>
-<span id="cb3-6"><a href="#cb3-6"></a>    }</span></code></pre></div>
-<p>Notice that each field is <em>wrapped</em> in <code>f</code>. I use a <code>_</code> suffix as a convention to denote that it's a HKDT. <code>f</code> could be anything at all of the kind <code>Type -&gt; Type</code>; e.g. <code>Maybe</code>, <code>IO</code>, <code>Either String</code>, or even strange constructions like <code>Compose Maybe (Join (Biff (,) IO Reader))</code> ! You'll discover the implications as we go along, so don't worry if you don't get it yet. For our first example we'll describe how to get options from Environment Variables!</p>
-<h2 id="getting-environment-variables">Getting Environment Variables</h2>
-<p>Applications will often set configuration values using Environment Variables; it's an easy way to implicitly pass information into programs and is nice for sensitive data like secrets. We can describe the options in our HKDT in terms of Environment Variables which may or may not exist. First we'll need a way to lookup an option for a given key, and a way to convert it into the type we expect. You may want to use something more sophisticated in your app; but for the blog post I'll just lean on the <code>Read</code> typeclass to make a small helper.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1"></a><span class="kw">import</span> <span class="dt">System.Environment</span> (lookupEnv, setEnv)</span>
-<span id="cb4-2"><a href="#cb4-2"></a><span class="kw">import</span> <span class="dt">Text.Read</span> (readMaybe)</span>
-<span id="cb4-3"><a href="#cb4-3"></a></span>
-<span id="cb4-4"><a href="#cb4-4"></a><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Maybe</span> a)</span>
-<span id="cb4-5"><a href="#cb4-5"></a>readEnv envKey <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb4-6"><a href="#cb4-6"></a>    lookupEnv envKey <span class="op">&gt;&gt;=</span> <span class="fu">pure</span> <span class="op">.</span> \<span class="kw">case</span></span>
-<span id="cb4-7"><a href="#cb4-7"></a>        <span class="dt">Just</span> x <span class="ot">-&gt;</span> readMaybe x</span>
-<span id="cb4-8"><a href="#cb4-8"></a>        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span></code></pre></div>
-<p>This function looks up the given key in the environment, returning a <code>Nothing</code> if it doesn't exist or fails to parse. We'll talk about more civilized error handling later on, don't worry ;)</p>
-<p>Now we can describe how to get each option in our type using this construct:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1"></a><span class="co">-- This doesn&#39;t work!</span></span>
-<span id="cb5-2"><a href="#cb5-2"></a><span class="ot">envOpts ::</span> <span class="dt">Options_</span> <span class="op">??</span></span>
-<span id="cb5-3"><a href="#cb5-3"></a>envOpts <span class="ot">=</span></span>
-<span id="cb5-4"><a href="#cb5-4"></a>    <span class="dt">OptionsF</span></span>
-<span id="cb5-5"><a href="#cb5-5"></a>    { serverHost <span class="ot">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></span>
-<span id="cb5-6"><a href="#cb5-6"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
-<span id="cb5-7"><a href="#cb5-7"></a>    , verbosity  <span class="ot">=</span> <span class="fu">pure</span> <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></span>
-<span id="cb5-8"><a href="#cb5-8"></a>    }</span></code></pre></div>
-<p>Close; but if you'll note earlier, each field should contain field's underlying type wrapped in some <code>f</code>. Here we've got <code>IO (Maybe a)</code>, we can't assign <code>f</code> to <code>IO (Maybe _)</code> so we need to compose the two Functors somehow. We can employ <code>Compose</code> here to collect both <code>IO</code> and <code>Maybe</code> into a single Higher Kinded Type to serve as our <code>f</code>. Try the following instead:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">import</span> <span class="dt">Data.Functor.Compose</span> (<span class="dt">Compose</span>(..))</span>
-<span id="cb6-2"><a href="#cb6-2"></a></span>
-<span id="cb6-3"><a href="#cb6-3"></a><span class="co">-- Add a Compose to our helper</span></span>
-<span id="cb6-4"><a href="#cb6-4"></a><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) a</span>
-<span id="cb6-5"><a href="#cb6-5"></a>readEnv envKey <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb6-6"><a href="#cb6-6"></a>    <span class="op">...</span></span>
-<span id="cb6-7"><a href="#cb6-7"></a></span>
-<span id="cb6-8"><a href="#cb6-8"></a><span class="ot">envOpts ::</span> <span class="dt">Options_</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</span>
-<span id="cb6-9"><a href="#cb6-9"></a>envOpts <span class="ot">=</span></span>
-<span id="cb6-10"><a href="#cb6-10"></a>    <span class="dt">OptionsF</span></span>
-<span id="cb6-11"><a href="#cb6-11"></a>    { serverHost <span class="ot">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></span>
-<span id="cb6-12"><a href="#cb6-12"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
-<span id="cb6-13"><a href="#cb6-13"></a>    , verbosity  <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">$</span> <span class="fu">pure</span> <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></span>
-<span id="cb6-14"><a href="#cb6-14"></a>    }</span></code></pre></div>
-<p>I personally find it more readable to write <code>Compose</code> as infix like this, but some disagree. Very cool; we've got a version of our record where each field contains an action which gets and parses the right value from the environment! It's clear at a glance that we haven't forgotten to check any fields (if you have <code>-Wall</code> enabled you'd get a warning about missing fields)! We've effectively turned the traditional <code>Options &lt;$&gt; ... &lt;*&gt; ...</code> design <strong>inside out</strong>. It's much more declarative this way, and now that it's all collected as structured data it'll be easier for us to work with from now on too!</p>
+<p>If you're unfamiliar with HKDTs (higher kinded data types); it's a
+very simple idea with some mind bending implications. Many data types
+are parameterized by a value type (e.g. <code>[a]</code> is a list is
+parameterized by the types of values it contains); however HKDTs are
+parameterized by some <strong>wrapper</strong> type (typically a
+functor, but not always) around the data of the record. Easiest to just
+show an example and see it in practice. Let's define a very simple type
+to contain all the options our app needs:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Options_</span> f <span class="ot">=</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> serverHost ::</span> f <span class="dt">String</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> numThreads ::</span> f <span class="dt">Int</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> verbosity  ::</span> f <span class="dt">Int</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
+<p>Notice that each field is <em>wrapped</em> in <code>f</code>. I use a
+<code>_</code> suffix as a convention to denote that it's a HKDT.
+<code>f</code> could be anything at all of the kind
+<code>Type -&gt; Type</code>; e.g. <code>Maybe</code>, <code>IO</code>,
+<code>Either String</code>, or even strange constructions like
+<code>Compose Maybe (Join (Biff (,) IO Reader))</code> ! You'll discover
+the implications as we go along, so don't worry if you don't get it yet.
+For our first example we'll describe how to get options from Environment
+Variables!</p>
+<h2 id="getting-environment-variables">Getting Environment
+Variables</h2>
+<p>Applications will often set configuration values using Environment
+Variables; it's an easy way to implicitly pass information into programs
+and is nice for sensitive data like secrets. We can describe the options
+in our HKDT in terms of Environment Variables which may or may not
+exist. First we'll need a way to lookup an option for a given key, and a
+way to convert it into the type we expect. You may want to use something
+more sophisticated in your app; but for the blog post I'll just lean on
+the <code>Read</code> typeclass to make a small helper.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">System.Environment</span> (lookupEnv, setEnv)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Text.Read</span> (readMaybe)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Maybe</span> a)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>readEnv envKey <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    lookupEnv envKey <span class="op">&gt;&gt;=</span> <span class="fu">pure</span> <span class="op">.</span> \<span class="kw">case</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="dt">Just</span> x <span class="ot">-&gt;</span> readMaybe x</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Nothing</span></span></code></pre></div>
+<p>This function looks up the given key in the environment, returning a
+<code>Nothing</code> if it doesn't exist or fails to parse. We'll talk
+about more civilized error handling later on, don't worry ;)</p>
+<p>Now we can describe how to get each option in our type using this
+construct:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- This doesn&#39;t work!</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ot">envOpts ::</span> <span class="dt">Options_</span> <span class="op">??</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>envOpts <span class="ot">=</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">OptionsF</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    , verbosity  <span class="ot">=</span> <span class="fu">pure</span> <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
+<p>Close; but if you'll note earlier, each field should contain field's
+underlying type wrapped in some <code>f</code>. Here we've got
+<code>IO (Maybe a)</code>, we can't assign <code>f</code> to
+<code>IO (Maybe _)</code> so we need to compose the two Functors
+somehow. We can employ <code>Compose</code> here to collect both
+<code>IO</code> and <code>Maybe</code> into a single Higher Kinded Type
+to serve as our <code>f</code>. Try the following instead:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Functor.Compose</span> (<span class="dt">Compose</span>(..))</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Add a Compose to our helper</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="ot">readEnv ::</span> <span class="dt">Read</span> a <span class="ot">=&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) a</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>readEnv envKey <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="ot">envOpts ::</span> <span class="dt">Options_</span> (<span class="dt">IO</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>envOpts <span class="ot">=</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">OptionsF</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span> readEnv <span class="st">&quot;SERVER_HOST&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    , verbosity  <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">$</span> <span class="fu">pure</span> <span class="dt">Nothing</span> <span class="co">-- Don&#39;t read verbosity from environment</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
+<p>I personally find it more readable to write <code>Compose</code> as
+infix like this, but some disagree. Very cool; we've got a version of
+our record where each field contains an action which gets and parses the
+right value from the environment! It's clear at a glance that we haven't
+forgotten to check any fields (if you have <code>-Wall</code> enabled
+you'd get a warning about missing fields)! We've effectively turned the
+traditional <code>Options &lt;$&gt; ... &lt;*&gt; ...</code> design
+<strong>inside out</strong>. It's much more declarative this way, and
+now that it's all collected as structured data it'll be easier for us to
+work with from now on too!</p>
 <p>Let's build another one!</p>
 <h2 id="parsing-jsonyaml-configs">Parsing JSON/YAML Configs</h2>
-<p>JSON and YAML configuration files are pretty common these days. I won't bother to dive into where to store them or how we'll parse them, let's assume you've done that already and just pretend we've got ourselves an Aeson <code>Value</code> object from some config file and we want to dump the values into our options object.</p>
-<p>We have two options here and I'll show both! The simplest is just to derive <code>FromJSON</code> and cast the value directly into our type!</p>
-<p>Unfortunately it's not quite so easy as just tacking on a <code>deriving FromJSON</code>; Since GHC doesn't know what type <code>f</code> is it has a tough time figuring out what you want it to do. If you try you'll get an error like:</p>
+<p>JSON and YAML configuration files are pretty common these days. I
+won't bother to dive into where to store them or how we'll parse them,
+let's assume you've done that already and just pretend we've got
+ourselves an Aeson <code>Value</code> object from some config file and
+we want to dump the values into our options object.</p>
+<p>We have two options here and I'll show both! The simplest is just to
+derive <code>FromJSON</code> and cast the value directly into our
+type!</p>
+<p>Unfortunately it's not quite so easy as just tacking on a
+<code>deriving FromJSON</code>; Since GHC doesn't know what type
+<code>f</code> is it has a tough time figuring out what you want it to
+do. If you try you'll get an error like:</p>
 <pre><code>• No instance for (FromJSON (f String))</code></pre>
-<p>We need to help out GHC a bit. No worries though; someone thought of that! Time to pull in the <a href="http://hackage.haskell.org/package/barbies"><code>barbies</code></a> library. An incredibly useful tool for working with HKDT in general. Add the <code>barbies</code> library to your project, then we'll derive a few handy instances:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1"></a><span class="ot">{-# LANGUAGE DeriveGeneric #-}</span></span>
-<span id="cb8-2"><a href="#cb8-2"></a><span class="ot">{-# LANGUAGE DeriveAnyClass #-}</span></span>
-<span id="cb8-3"><a href="#cb8-3"></a><span class="ot">{-# LANGUAGE StandaloneDeriving #-}</span></span>
-<span id="cb8-4"><a href="#cb8-4"></a><span class="co">-- ...</span></span>
-<span id="cb8-5"><a href="#cb8-5"></a><span class="kw">import</span> <span class="dt">GHC.Generics</span> (<span class="dt">Generic</span>)</span>
-<span id="cb8-6"><a href="#cb8-6"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Aeson</span> <span class="kw">as</span> <span class="dt">A</span></span>
-<span id="cb8-7"><a href="#cb8-7"></a><span class="kw">import</span> <span class="dt">Data.Barbie</span></span>
-<span id="cb8-8"><a href="#cb8-8"></a><span class="co">-- ...</span></span>
-<span id="cb8-9"><a href="#cb8-9"></a></span>
-<span id="cb8-10"><a href="#cb8-10"></a><span class="co">-- Go back and add the deriving clause:</span></span>
-<span id="cb8-11"><a href="#cb8-11"></a><span class="kw">data</span> <span class="dt">Options_</span> f <span class="ot">=</span></span>
-<span id="cb8-12"><a href="#cb8-12"></a>    <span class="dt">Options_</span> {<span class="op">...</span>}</span>
-<span id="cb8-13"><a href="#cb8-13"></a>    <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">FunctorB</span>, <span class="dt">TraversableB</span>, <span class="dt">ProductB</span>, <span class="dt">ConstraintsB</span>, <span class="dt">ProductBC</span>)</span>
-<span id="cb8-14"><a href="#cb8-14"></a></span>
-<span id="cb8-15"><a href="#cb8-15"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Show</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Show</span> (<span class="dt">Options_</span> f)</span>
-<span id="cb8-16"><a href="#cb8-16"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Eq</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Eq</span> (<span class="dt">Options_</span> f)</span>
-<span id="cb8-17"><a href="#cb8-17"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">A.FromJSON</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">A.FromJSON</span> (<span class="dt">Options_</span> f)</span></code></pre></div>
-<p>Okay! Let's step through some of that. First we derive <code>Generic</code>, it's used by both <code>aeson</code> and <code>barbies</code> for most of their type classes. We derive a bunch of handy <code>*B</code> helpers (B for Barbies) which also come from the <code>barbies</code> lib, we'll explain them as we use them. The important part right now is the <code>deriving instance</code> clauses. <code>AllBF</code> from <code>barbies</code> asserts that <strong>all</strong> the wrapped fields of the typeclass adhere to some type class. For example, <code>AllBF Show f Options_</code> says that <code>f a</code> is Showable for every field in our product. More concretely, in our case <code>AllBF Show f Options</code> expands into something equivalent to <code>(Show (f String), Show (f Int))</code> since we have fields of type <code>String</code> and <code>Int</code>. Nifty! So we can now derive type classes with behaviour dependent on the wrapping type. In most cases this works as expected, and can sometimes be really handy!</p>
-<p>One example where this ends up being useful is <code>FromJSON</code>. The behaviour of our <code>FromJSON</code> instance will depend on the wrapper type; if we choose <code>f ~ Maybe</code> then all of our fields become optional! Let's use this behaviour to say that we want to parse our JSON file into an <code>Options</code> object, but it's okay if fields are missing.</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
-<span id="cb9-2"><a href="#cb9-2"></a></span>
-<span id="cb9-3"><a href="#cb9-3"></a><span class="ot">jsonOptsDerived ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
-<span id="cb9-4"><a href="#cb9-4"></a>jsonOptsDerived <span class="ot">=</span> fromResult <span class="op">.</span> A.fromJSON</span>
-<span id="cb9-5"><a href="#cb9-5"></a>  <span class="kw">where</span></span>
-<span id="cb9-6"><a href="#cb9-6"></a><span class="ot">    fromResult ::</span> <span class="dt">A.Result</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
-<span id="cb9-7"><a href="#cb9-7"></a>    fromResult (<span class="dt">A.Success</span> a) <span class="ot">=</span> a</span>
-<span id="cb9-8"><a href="#cb9-8"></a>    fromResult (<span class="dt">A.Error</span> _) <span class="ot">=</span> buniq <span class="dt">Nothing</span></span></code></pre></div>
-<p>A few things to point out here; we call <code>fromJson :: FromJSON a =&gt; Value -&gt; Result a</code> here, but we don't really need the outer <code>Result</code> type; we'd prefer if the failure was localized at the individual field level; simply using <code>Nothing</code> for fields which are missing. So we use <code>fromResult</code> to unpack the result if successful, or to construct an <code>Options_ Maybe</code> filled completely with <code>Nothing</code> if the parsing fails for some reason (you'll probably want to come back an improve this error handling behaviour later). You'll notice that nothing we do really has much to do with <code>Options_</code>; so let's generalize this into a combinator we can re-use in the future:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1"></a><span class="ot">jsonOptsDerived ::</span> (<span class="dt">A.FromJSON</span> (b <span class="dt">Maybe</span>), <span class="dt">ProductB</span> b) <span class="ot">=&gt;</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
-<span id="cb10-2"><a href="#cb10-2"></a>jsonOptsDerived <span class="ot">=</span> fromResult <span class="op">.</span> A.fromJSON</span>
-<span id="cb10-3"><a href="#cb10-3"></a>  <span class="kw">where</span></span>
-<span id="cb10-4"><a href="#cb10-4"></a><span class="ot">    fromResult ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> <span class="dt">A.Result</span> (b <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
-<span id="cb10-5"><a href="#cb10-5"></a>    fromResult (<span class="dt">A.Success</span> a) <span class="ot">=</span> a</span>
-<span id="cb10-6"><a href="#cb10-6"></a>    fromResult (<span class="dt">A.Error</span> _) <span class="ot">=</span> buniq <span class="dt">Nothing</span></span></code></pre></div>
-<p><code>buniq</code> requires a <code>ProductB</code> constraint which asserts that the type we're constructing is a Record type or some other Product. This is required because <code>buniq</code> wouldn't know which constructor to instantiate if it were a Sum-type.</p>
-<p>Okay, we've seen the generic version; here's a different approach where we can choose HOW to deserialize each option from the provided <code>Value</code>.</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1"></a><span class="kw">import</span> <span class="dt">Data.Text.Lens</span></span>
-<span id="cb11-2"><a href="#cb11-2"></a><span class="kw">import</span> <span class="dt">Data.Aeson.Lens</span></span>
-<span id="cb11-3"><a href="#cb11-3"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
-<span id="cb11-4"><a href="#cb11-4"></a></span>
-<span id="cb11-5"><a href="#cb11-5"></a><span class="ot">jsonOptsCustom ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
-<span id="cb11-6"><a href="#cb11-6"></a>jsonOptsCustom <span class="ot">=</span> bsequence</span>
-<span id="cb11-7"><a href="#cb11-7"></a>    <span class="dt">Options_</span></span>
-<span id="cb11-8"><a href="#cb11-8"></a>    { serverHost <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;host&quot;</span>        <span class="op">.</span> _String <span class="op">.</span> unpacked</span>
-<span id="cb11-9"><a href="#cb11-9"></a>    , numThreads <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;num_threads&quot;</span> <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
-<span id="cb11-10"><a href="#cb11-10"></a>    , verbosity  <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;verbosity&quot;</span>   <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
-<span id="cb11-11"><a href="#cb11-11"></a>    }</span>
-<span id="cb11-12"><a href="#cb11-12"></a>      <span class="kw">where</span></span>
-<span id="cb11-13"><a href="#cb11-13"></a><span class="ot">        findField ::</span> <span class="dt">Fold</span> <span class="dt">A.Value</span> a <span class="ot">-&gt;</span> <span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span> a</span>
-<span id="cb11-14"><a href="#cb11-14"></a>        findField p <span class="ot">=</span> <span class="dt">Compose</span> (preview p)</span></code></pre></div>
-<p>Some of these types get a bit funky; but IMHO they wouldn't be too terrible if this were all bundled up in some lib for readability. As I said earlier, some of the ergonomics still have room for improvement.</p>
-<p>Let's talk about what this thing does! First we import a bunch of lensy stuff; then in each field of our options type we build a getter function from <code>Value -&gt; Maybe a</code> which tries to extract the field from the JSON Value. <code>preview</code> mixed with <code>Data.Aeson.Lens</code> happens to be a handy way to do this. I pulled out the <code>findField</code> helper mainly to draw attention to the rather cryptic <code>Compose ((-&gt;) A.Value) Maybe a</code> type signature. This is just <code>Compose</code> wrapped around a function <code>A.Value -&gt; Maybe a</code>; why do we need the <code>Compose</code> here? What we REALLY want is <code>A.Value -&gt; Option_ Maybe</code>; but remember that every field MUST contain something that matches <code>f a</code> for some <code>f</code>. A function signature like <code>A.Value -&gt; Maybe a</code> doesn't match this form, but <code>Compose ((-&gt;) A.Value) Maybe a</code> does (where <code>f ~ Compose ((-&gt;) A.Value) Maybe</code>)! Ideally we'd then like to pull the function bits to the outside since we'll be calling each field with the same argument. Conveniently; <code>barbies</code> provides us with <code>bsequence</code>; whose type looks like this:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1"></a><span class="ot">bsequence ::</span></span>
-<span id="cb12-2"><a href="#cb12-2"></a>  (<span class="dt">Applicative</span> f, <span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span></span>
-<span id="cb12-3"><a href="#cb12-3"></a>  b (<span class="dt">Compose</span> f g) <span class="ot">-&gt;</span> f (b g)</span></code></pre></div>
+<p>We need to help out GHC a bit. No worries though; someone thought of
+that! Time to pull in the <a
+href="http://hackage.haskell.org/package/barbies"><code>barbies</code></a>
+library. An incredibly useful tool for working with HKDT in general. Add
+the <code>barbies</code> library to your project, then we'll derive a
+few handy instances:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE DeriveGeneric #-}</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE DeriveAnyClass #-}</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE StandaloneDeriving #-}</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">GHC.Generics</span> (<span class="dt">Generic</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Data.Aeson</span> <span class="kw">as</span> <span class="dt">A</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Barbie</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- ...</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Go back and add the deriving clause:</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Options_</span> f <span class="ot">=</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span> {<span class="op">...</span>}</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">deriving</span> (<span class="dt">Generic</span>, <span class="dt">FunctorB</span>, <span class="dt">TraversableB</span>, <span class="dt">ProductB</span>, <span class="dt">ConstraintsB</span>, <span class="dt">ProductBC</span>)</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Show</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Show</span> (<span class="dt">Options_</span> f)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">Eq</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">Eq</span> (<span class="dt">Options_</span> f)</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="kw">deriving</span> <span class="kw">instance</span> (<span class="dt">AllBF</span> <span class="dt">A.FromJSON</span> f <span class="dt">Options_</span>) <span class="ot">=&gt;</span> <span class="dt">A.FromJSON</span> (<span class="dt">Options_</span> f)</span></code></pre></div>
+<p>Okay! Let's step through some of that. First we derive
+<code>Generic</code>, it's used by both <code>aeson</code> and
+<code>barbies</code> for most of their type classes. We derive a bunch
+of handy <code>*B</code> helpers (B for Barbies) which also come from
+the <code>barbies</code> lib, we'll explain them as we use them. The
+important part right now is the <code>deriving instance</code> clauses.
+<code>AllBF</code> from <code>barbies</code> asserts that
+<strong>all</strong> the wrapped fields of the typeclass adhere to some
+type class. For example, <code>AllBF Show f Options_</code> says that
+<code>f a</code> is Showable for every field in our product. More
+concretely, in our case <code>AllBF Show f Options</code> expands into
+something equivalent to <code>(Show (f String), Show (f Int))</code>
+since we have fields of type <code>String</code> and <code>Int</code>.
+Nifty! So we can now derive type classes with behaviour dependent on the
+wrapping type. In most cases this works as expected, and can sometimes
+be really handy!</p>
+<p>One example where this ends up being useful is <code>FromJSON</code>.
+The behaviour of our <code>FromJSON</code> instance will depend on the
+wrapper type; if we choose <code>f ~ Maybe</code> then all of our fields
+become optional! Let's use this behaviour to say that we want to parse
+our JSON file into an <code>Options</code> object, but it's okay if
+fields are missing.</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ot">jsonOptsDerived ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>jsonOptsDerived <span class="ot">=</span> fromResult <span class="op">.</span> A.fromJSON</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ot">    fromResult ::</span> <span class="dt">A.Result</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    fromResult (<span class="dt">A.Success</span> a) <span class="ot">=</span> a</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    fromResult (<span class="dt">A.Error</span> _) <span class="ot">=</span> buniq <span class="dt">Nothing</span></span></code></pre></div>
+<p>A few things to point out here; we call
+<code>fromJson :: FromJSON a =&gt; Value -&gt; Result a</code> here, but
+we don't really need the outer <code>Result</code> type; we'd prefer if
+the failure was localized at the individual field level; simply using
+<code>Nothing</code> for fields which are missing. So we use
+<code>fromResult</code> to unpack the result if successful, or to
+construct an <code>Options_ Maybe</code> filled completely with
+<code>Nothing</code> if the parsing fails for some reason (you'll
+probably want to come back an improve this error handling behaviour
+later). You'll notice that nothing we do really has much to do with
+<code>Options_</code>; so let's generalize this into a combinator we can
+re-use in the future:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">jsonOptsDerived ::</span> (<span class="dt">A.FromJSON</span> (b <span class="dt">Maybe</span>), <span class="dt">ProductB</span> b) <span class="ot">=&gt;</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>jsonOptsDerived <span class="ot">=</span> fromResult <span class="op">.</span> A.fromJSON</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    fromResult ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> <span class="dt">A.Result</span> (b <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    fromResult (<span class="dt">A.Success</span> a) <span class="ot">=</span> a</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    fromResult (<span class="dt">A.Error</span> _) <span class="ot">=</span> buniq <span class="dt">Nothing</span></span></code></pre></div>
+<p><code>buniq</code> requires a <code>ProductB</code> constraint which
+asserts that the type we're constructing is a Record type or some other
+Product. This is required because <code>buniq</code> wouldn't know which
+constructor to instantiate if it were a Sum-type.</p>
+<p>Okay, we've seen the generic version; here's a different approach
+where we can choose HOW to deserialize each option from the provided
+<code>Value</code>.</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Text.Lens</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Aeson.Lens</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Lens</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ot">jsonOptsCustom ::</span> <span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>jsonOptsCustom <span class="ot">=</span> bsequence</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;host&quot;</span>        <span class="op">.</span> _String <span class="op">.</span> unpacked</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;num_threads&quot;</span> <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    , verbosity  <span class="ot">=</span> findField <span class="op">$</span> key <span class="st">&quot;verbosity&quot;</span>   <span class="op">.</span> _Number <span class="op">.</span> to <span class="fu">round</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>      <span class="kw">where</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="ot">        findField ::</span> <span class="dt">Fold</span> <span class="dt">A.Value</span> a <span class="ot">-&gt;</span> <span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span> a</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>        findField p <span class="ot">=</span> <span class="dt">Compose</span> (preview p)</span></code></pre></div>
+<p>Some of these types get a bit funky; but IMHO they wouldn't be too
+terrible if this were all bundled up in some lib for readability. As I
+said earlier, some of the ergonomics still have room for
+improvement.</p>
+<p>Let's talk about what this thing does! First we import a bunch of
+lensy stuff; then in each field of our options type we build a getter
+function from <code>Value -&gt; Maybe a</code> which tries to extract
+the field from the JSON Value. <code>preview</code> mixed with
+<code>Data.Aeson.Lens</code> happens to be a handy way to do this. I
+pulled out the <code>findField</code> helper mainly to draw attention to
+the rather cryptic <code>Compose ((-&gt;) A.Value) Maybe a</code> type
+signature. This is just <code>Compose</code> wrapped around a function
+<code>A.Value -&gt; Maybe a</code>; why do we need the
+<code>Compose</code> here? What we REALLY want is
+<code>A.Value -&gt; Option_ Maybe</code>; but remember that every field
+MUST contain something that matches <code>f a</code> for some
+<code>f</code>. A function signature like
+<code>A.Value -&gt; Maybe a</code> doesn't match this form, but
+<code>Compose ((-&gt;) A.Value) Maybe a</code> does (where
+<code>f ~ Compose ((-&gt;) A.Value) Maybe</code>)! Ideally we'd then
+like to pull the function bits to the outside since we'll be calling
+each field with the same argument. Conveniently; <code>barbies</code>
+provides us with <code>bsequence</code>; whose type looks like this:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ot">bsequence ::</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">Applicative</span> f, <span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  b (<span class="dt">Compose</span> f g) <span class="ot">-&gt;</span> f (b g)</span></code></pre></div>
 <p>Or if we specialize it to this particular case:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1"></a><span class="ot">bsequence ::</span> <span class="dt">Options_</span> (<span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span>)</span>
-<span id="cb13-2"><a href="#cb13-2"></a>          <span class="ot">-&gt;</span> (<span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span>)</span></code></pre></div>
-<p>We use the <code>-&gt;</code> applicative (also known as <code>Reader</code>) to extract the function Functor to the outside of the structure! This of course requires that the individual fields can be traversed; implying the <code>TraversableB</code> constraint. Hopefully this demonstrates the flexibility of this technique, we can provide an arbitrary lens chain to extract the value for each setting, maybe it's overkill in this case, but I can think of a few situations where it would be pretty handy.</p>
-<p>While we're at it, let's <code>bsequence</code> our earlier Environment Variable object to get the IO on the outside!</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1"></a><span class="ot">envOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
-<span id="cb14-2"><a href="#cb14-2"></a>envOpts <span class="ot">=</span> bsequence</span>
-<span id="cb14-3"><a href="#cb14-3"></a>    <span class="dt">Options_</span></span>
-<span id="cb14-4"><a href="#cb14-4"></a>    <span class="co">-- serverHost is already a string so we don&#39;t need to &#39;read&#39; it.</span></span>
-<span id="cb14-5"><a href="#cb14-5"></a>    { serverHost <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">.</span> lookupEnv <span class="op">$</span> <span class="st">&quot;SERVER_HOST&quot;</span></span>
-<span id="cb14-6"><a href="#cb14-6"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
-<span id="cb14-7"><a href="#cb14-7"></a>    <span class="co">-- We can &#39;ignore&#39; a field by simply returning Nothing.</span></span>
-<span id="cb14-8"><a href="#cb14-8"></a>    , verbosity    <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">.</span> <span class="fu">pure</span> <span class="op">$</span> <span class="dt">Nothing</span></span>
-<span id="cb14-9"><a href="#cb14-9"></a>    }</span></code></pre></div>
-<p>This is dragging on a bit; let's see how we can actually use these things!</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ot">bsequence ::</span> <span class="dt">Options_</span> (<span class="dt">Compose</span> ((<span class="ot">-&gt;</span>) <span class="dt">A.Value</span>) <span class="dt">Maybe</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>          <span class="ot">-&gt;</span> (<span class="dt">A.Value</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span>)</span></code></pre></div>
+<p>We use the <code>-&gt;</code> applicative (also known as
+<code>Reader</code>) to extract the function Functor to the outside of
+the structure! This of course requires that the individual fields can be
+traversed; implying the <code>TraversableB</code> constraint. Hopefully
+this demonstrates the flexibility of this technique, we can provide an
+arbitrary lens chain to extract the value for each setting, maybe it's
+overkill in this case, but I can think of a few situations where it
+would be pretty handy.</p>
+<p>While we're at it, let's <code>bsequence</code> our earlier
+Environment Variable object to get the IO on the outside!</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ot">envOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>envOpts <span class="ot">=</span> bsequence</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- serverHost is already a string so we don&#39;t need to &#39;read&#39; it.</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">.</span> lookupEnv <span class="op">$</span> <span class="st">&quot;SERVER_HOST&quot;</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span> readEnv <span class="st">&quot;NUM_THREADS&quot;</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- We can &#39;ignore&#39; a field by simply returning Nothing.</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    , verbosity    <span class="ot">=</span> <span class="dt">Compose</span> <span class="op">.</span> <span class="fu">pure</span> <span class="op">$</span> <span class="dt">Nothing</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
+<p>This is dragging on a bit; let's see how we can actually use these
+things!</p>
 <h2 id="combining-options-objects">Combining Options Objects</h2>
-<p>Now that we've got two different ways to collect options for our program let's see how we can combine them. Let's write a simple action in IO for getting and combining our options parsers.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1"></a><span class="kw">import</span> <span class="dt">Control.Applicative</span></span>
-<span id="cb15-2"><a href="#cb15-2"></a></span>
-<span id="cb15-3"><a href="#cb15-3"></a><span class="co">-- Fake config file for convenience</span></span>
-<span id="cb15-4"><a href="#cb15-4"></a><span class="ot">readConfigFile ::</span> <span class="dt">IO</span> <span class="dt">A.Value</span></span>
-<span id="cb15-5"><a href="#cb15-5"></a>readConfigFile <span class="ot">=</span></span>
-<span id="cb15-6"><a href="#cb15-6"></a>    <span class="fu">pure</span> <span class="op">$</span> A.object [ <span class="st">&quot;host&quot;</span> <span class="op">A..=</span> <span class="dt">A.String</span> <span class="st">&quot;example.com&quot;</span></span>
-<span id="cb15-7"><a href="#cb15-7"></a>                    , <span class="st">&quot;verbosity&quot;</span> <span class="op">A..=</span> <span class="dt">A.Number</span> <span class="dv">42</span></span>
-<span id="cb15-8"><a href="#cb15-8"></a>                    ]</span>
-<span id="cb15-9"><a href="#cb15-9"></a></span>
-<span id="cb15-10"><a href="#cb15-10"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
-<span id="cb15-11"><a href="#cb15-11"></a>getOptions <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb15-12"><a href="#cb15-12"></a>    configJson <span class="ot">&lt;-</span> readConfigFile</span>
-<span id="cb15-13"><a href="#cb15-13"></a>    envOpts&#39; <span class="ot">&lt;-</span> envOpts</span>
-<span id="cb15-14"><a href="#cb15-14"></a>    <span class="fu">return</span> <span class="op">$</span> bzipWith (<span class="op">&lt;|&gt;</span>) envOpts&#39; (jsonOptsCustom configJson)</span></code></pre></div>
+<p>Now that we've got two different ways to collect options for our
+program let's see how we can combine them. Let's write a simple action
+in IO for getting and combining our options parsers.</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Control.Applicative</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Fake config file for convenience</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="ot">readConfigFile ::</span> <span class="dt">IO</span> <span class="dt">A.Value</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>readConfigFile <span class="ot">=</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> <span class="op">$</span> A.object [ <span class="st">&quot;host&quot;</span> <span class="op">A..=</span> <span class="dt">A.String</span> <span class="st">&quot;example.com&quot;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>                    , <span class="st">&quot;verbosity&quot;</span> <span class="op">A..=</span> <span class="dt">A.Number</span> <span class="dv">42</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>                    ]</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    configJson <span class="ot">&lt;-</span> readConfigFile</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    envOpts&#39; <span class="ot">&lt;-</span> envOpts</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span> <span class="op">$</span> bzipWith (<span class="op">&lt;|&gt;</span>) envOpts&#39; (jsonOptsCustom configJson)</span></code></pre></div>
 <p>Let's try it out, then I'll explain it.</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1"></a>λ<span class="op">&gt;</span> getOptions</span>
-<span id="cb16-2"><a href="#cb16-2"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Nothing</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span>
-<span id="cb16-3"><a href="#cb16-3"></a></span>
-<span id="cb16-4"><a href="#cb16-4"></a>λ<span class="op">&gt;</span> setEnv <span class="st">&quot;NUM_THREADS&quot;</span> <span class="st">&quot;1337&quot;</span></span>
-<span id="cb16-5"><a href="#cb16-5"></a>λ<span class="op">&gt;</span> getOptions</span>
-<span id="cb16-6"><a href="#cb16-6"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span>
-<span id="cb16-7"><a href="#cb16-7"></a></span>
-<span id="cb16-8"><a href="#cb16-8"></a><span class="co">-- We&#39;ve set things up so that environment variables override our JSON config.</span></span>
-<span id="cb16-9"><a href="#cb16-9"></a>λ<span class="op">&gt;</span> setEnv <span class="st">&quot;SERVER_HOST&quot;</span> <span class="st">&quot;chrispenner.ca&quot;</span></span>
-<span id="cb16-10"><a href="#cb16-10"></a>λ<span class="op">&gt;</span> getOptions</span>
-<span id="cb16-11"><a href="#cb16-11"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;chrispenner.ca&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span></code></pre></div>
-<p>Now that we're combining sets of config values we need to decide what semantics we want when values overlap! I've decided to use <code>&lt;|&gt;</code> from <code>Alternative</code> to combine our <code>Maybe</code> values. This basically means "take the first non-Nothing value and ignore the rest". That means in our case that the first setting to be "set" wins out. <code>bzipWith</code> performs element-wise zipping of each element within our <code>Options_</code> record, with the caveat that the function you give it must work over any possible <code>a</code> contained inside. In our case the type is specialized to:</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1"></a><span class="ot">bzipWith  ::</span> (<span class="kw">forall</span> a<span class="op">.</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a)</span>
-<span id="cb17-2"><a href="#cb17-2"></a>          <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span></code></pre></div>
-<p>Which does what we want. This end bit is going to get messy if we add any more sources though, let's see if we can't clean it up! My first thought is that I'd love to use <code>&lt;|&gt;</code> without any lifting/zipping, but the kinds don't line up; <code>Options_</code> is kind <code>(Type -&gt; Type) -&gt; Type</code> whereas <code>Type -&gt; Type</code> is required by <code>Alternative</code>. How do we lift Alternative to Higher Kinds? Well we could try something clever, <strong>OR</strong> we could go the opposite direction and use <code>Alternative</code> to build a <code>Monoid</code> instance for our type; then use that to combine our values!</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1"></a><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Semigroup</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></span>
-<span id="cb18-2"><a href="#cb18-2"></a>  (<span class="op">&lt;&gt;</span>) <span class="ot">=</span> bzipWith (<span class="op">&lt;|&gt;</span>)</span>
-<span id="cb18-3"><a href="#cb18-3"></a></span>
-<span id="cb18-4"><a href="#cb18-4"></a><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></span>
-<span id="cb18-5"><a href="#cb18-5"></a>  <span class="fu">mempty</span> <span class="ot">=</span> buniq empty</span></code></pre></div>
-<p>Now we have a Monoid for <code>Options_</code> whenever <code>f</code> is an <code>Alternative</code> such as <code>Maybe</code>! There are many possible <code>Monoid</code> instance for HKDTs, but in our case it works great! <code>Alternative</code> is actually just a Monoid in the category of Applicative Functors, so it makes sense that it makes a suitable Monoid if we apply it to values within an HKDT.</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> getOptions</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Nothing</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> setEnv <span class="st">&quot;NUM_THREADS&quot;</span> <span class="st">&quot;1337&quot;</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> getOptions</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;example.com&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- We&#39;ve set things up so that environment variables override our JSON config.</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> setEnv <span class="st">&quot;SERVER_HOST&quot;</span> <span class="st">&quot;chrispenner.ca&quot;</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> getOptions</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="dt">Options_</span> {serverHost <span class="ot">=</span> <span class="dt">Just</span> <span class="st">&quot;chrispenner.ca&quot;</span>, numThreads <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">1337</span>, verbosity <span class="ot">=</span> <span class="dt">Just</span> <span class="dv">42</span>}</span></code></pre></div>
+<p>Now that we're combining sets of config values we need to decide what
+semantics we want when values overlap! I've decided to use
+<code>&lt;|&gt;</code> from <code>Alternative</code> to combine our
+<code>Maybe</code> values. This basically means "take the first
+non-Nothing value and ignore the rest". That means in our case that the
+first setting to be "set" wins out. <code>bzipWith</code> performs
+element-wise zipping of each element within our <code>Options_</code>
+record, with the caveat that the function you give it must work over any
+possible <code>a</code> contained inside. In our case the type is
+specialized to:</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ot">bzipWith  ::</span> (<span class="kw">forall</span> a<span class="op">.</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>          <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span> <span class="ot">-&gt;</span> <span class="dt">Options_</span> <span class="dt">Maybe</span></span></code></pre></div>
+<p>Which does what we want. This end bit is going to get messy if we add
+any more sources though, let's see if we can't clean it up! My first
+thought is that I'd love to use <code>&lt;|&gt;</code> without any
+lifting/zipping, but the kinds don't line up; <code>Options_</code> is
+kind <code>(Type -&gt; Type) -&gt; Type</code> whereas
+<code>Type -&gt; Type</code> is required by <code>Alternative</code>.
+How do we lift Alternative to Higher Kinds? Well we could try something
+clever, <strong>OR</strong> we could go the opposite direction and use
+<code>Alternative</code> to build a <code>Monoid</code> instance for our
+type; then use that to combine our values!</p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Semigroup</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  (<span class="op">&lt;&gt;</span>) <span class="ot">=</span> bzipWith (<span class="op">&lt;|&gt;</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> (<span class="dt">Alternative</span> f) <span class="ot">=&gt;</span> <span class="dt">Monoid</span> (<span class="dt">Options_</span> f) <span class="kw">where</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mempty</span> <span class="ot">=</span> buniq empty</span></code></pre></div>
+<p>Now we have a Monoid for <code>Options_</code> whenever
+<code>f</code> is an <code>Alternative</code> such as
+<code>Maybe</code>! There are many possible <code>Monoid</code> instance
+for HKDTs, but in our case it works great! <code>Alternative</code> is
+actually just a Monoid in the category of Applicative Functors, so it
+makes sense that it makes a suitable Monoid if we apply it to values
+within an HKDT.</p>
 <p>Let's see how we can refactor things.</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
-<span id="cb19-2"><a href="#cb19-2"></a>getOptions <span class="ot">=</span> envOpts <span class="op">&lt;&gt;</span> (jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile)</span></code></pre></div>
-<p>Wait a minute; what about the <code>IO</code>? Here I'm actually employing <code>IO</code>s little known Monoid instance! <code>IO</code> is a Monoid whenever the result of the <code>IO</code> is a Monoid; it simply runs both <code>IO</code> actions then <code>mappends</code> the results (e.g. <code>liftA2 (&lt;&gt;)</code>). In this case it's perfect! As we get even more possible option parsers we could even just put them in a list and <code>fold</code> them together: <code>fold [envOpts, jsonOptsCustom &lt;$&gt; readConfigFile, ...]</code></p>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span> envOpts <span class="op">&lt;&gt;</span> (jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile)</span></code></pre></div>
+<p>Wait a minute; what about the <code>IO</code>? Here I'm actually
+employing <code>IO</code>s little known Monoid instance! <code>IO</code>
+is a Monoid whenever the result of the <code>IO</code> is a Monoid; it
+simply runs both <code>IO</code> actions then <code>mappends</code> the
+results (e.g. <code>liftA2 (&lt;&gt;)</code>). In this case it's
+perfect! As we get even more possible option parsers we could even just
+put them in a list and <code>fold</code> them together:
+<code>fold [envOpts, jsonOptsCustom &lt;$&gt; readConfigFile, ...]</code></p>
 <p>But wait! There's more!</p>
 <h2 id="setting-default-values">Setting Default Values</h2>
-<p>We've seen how we can specify multiple <strong>partial</strong> configuration sources, but at the end of the day we're still left with an <code>Options_ Maybe</code>! What if we want to guarantee that we have a value for all required config values? Let's write a new helper.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1"></a><span class="ot">withDefaults ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> b <span class="dt">Identity</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span> <span class="ot">-&gt;</span> b <span class="dt">Identity</span></span>
-<span id="cb20-2"><a href="#cb20-2"></a>withDefaults <span class="ot">=</span> bzipWith fromMaybeI</span>
-<span id="cb20-3"><a href="#cb20-3"></a>  <span class="kw">where</span></span>
-<span id="cb20-4"><a href="#cb20-4"></a><span class="ot">    fromMaybeI ::</span> <span class="dt">Identity</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Identity</span> a</span>
-<span id="cb20-5"><a href="#cb20-5"></a>    fromMaybeI (<span class="dt">Identity</span> a) <span class="dt">Nothing</span>  <span class="ot">=</span> <span class="dt">Identity</span> a</span>
-<span id="cb20-6"><a href="#cb20-6"></a>    fromMaybeI _            (<span class="dt">Just</span> a) <span class="ot">=</span> <span class="dt">Identity</span> a</span></code></pre></div>
-<p>This new helper uses our old friend <code>bzipWith</code> to lift a slightly altered <code>fromMaybe</code> to run over HKDTs! We have to do a little bit of annoying wrapping/unwrapping of Identity, but it's not too bad. This function will take the config value from any <code>Just</code>'s in our <code>Options_ Maybe</code> and will choose the default for the <code>Nothing</code>s!</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1"></a><span class="kw">import</span> <span class="dt">Data.Foldable</span></span>
-<span id="cb21-2"><a href="#cb21-2"></a><span class="co">---</span></span>
-<span id="cb21-3"><a href="#cb21-3"></a><span class="kw">type</span> <span class="dt">Options</span> <span class="ot">=</span> <span class="dt">Options_</span> <span class="dt">Identity</span></span>
-<span id="cb21-4"><a href="#cb21-4"></a></span>
-<span id="cb21-5"><a href="#cb21-5"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
-<span id="cb21-6"><a href="#cb21-6"></a>getOptions <span class="ot">=</span></span>
-<span id="cb21-7"><a href="#cb21-7"></a>  withDefaults defaultOpts <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
-<p>We introduce the alias <code>type Options = Options_ Identity</code> as a convenience.</p>
+<p>We've seen how we can specify multiple <strong>partial</strong>
+configuration sources, but at the end of the day we're still left with
+an <code>Options_ Maybe</code>! What if we want to guarantee that we
+have a value for all required config values? Let's write a new
+helper.</p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ot">withDefaults ::</span> <span class="dt">ProductB</span> b <span class="ot">=&gt;</span> b <span class="dt">Identity</span> <span class="ot">-&gt;</span> b <span class="dt">Maybe</span> <span class="ot">-&gt;</span> b <span class="dt">Identity</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>withDefaults <span class="ot">=</span> bzipWith fromMaybeI</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    fromMaybeI ::</span> <span class="dt">Identity</span> a <span class="ot">-&gt;</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Identity</span> a</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    fromMaybeI (<span class="dt">Identity</span> a) <span class="dt">Nothing</span>  <span class="ot">=</span> <span class="dt">Identity</span> a</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    fromMaybeI _            (<span class="dt">Just</span> a) <span class="ot">=</span> <span class="dt">Identity</span> a</span></code></pre></div>
+<p>This new helper uses our old friend <code>bzipWith</code> to lift a
+slightly altered <code>fromMaybe</code> to run over HKDTs! We have to do
+a little bit of annoying wrapping/unwrapping of Identity, but it's not
+too bad. This function will take the config value from any
+<code>Just</code>'s in our <code>Options_ Maybe</code> and will choose
+the default for the <code>Nothing</code>s!</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Foldable</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Options</span> <span class="ot">=</span> <span class="dt">Options_</span> <span class="dt">Identity</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> <span class="dt">Options</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  withDefaults defaultOpts <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
+<p>We introduce the alias <code>type Options = Options_ Identity</code>
+as a convenience.</p>
 <h2 id="better-errors">Better Errors</h2>
-<p>So far our system silently fails in a lot of places. Let's see how HKDTs can give us more expressive error handling!</p>
-<p>The first cool thing is that we can store error messages directly alongside fields they pertain to!</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
-<span id="cb22-2"><a href="#cb22-2"></a><span class="co">---</span></span>
-<span id="cb22-3"><a href="#cb22-3"></a><span class="ot">optErrors ::</span> <span class="dt">Options_</span> (<span class="dt">Const</span> <span class="dt">String</span>)</span>
-<span id="cb22-4"><a href="#cb22-4"></a>optErrors <span class="ot">=</span></span>
-<span id="cb22-5"><a href="#cb22-5"></a>    <span class="dt">Options_</span></span>
-<span id="cb22-6"><a href="#cb22-6"></a>    { serverHost <span class="ot">=</span> <span class="st">&quot;server host required but not provided&quot;</span></span>
-<span id="cb22-7"><a href="#cb22-7"></a>    , numThreads <span class="ot">=</span> <span class="st">&quot;num threads required but not provided&quot;</span></span>
-<span id="cb22-8"><a href="#cb22-8"></a>    , verbosity  <span class="ot">=</span> <span class="st">&quot;verbosity required but not provided&quot;</span></span>
-<span id="cb22-9"><a href="#cb22-9"></a>    }</span></code></pre></div>
-<p>If we use <code>Const String</code> in our HKDT we are saying that we actually don't care about the type of the field itself, we just want to store a string no matter what! If we turn on <code>OverloadedStrings</code> we can even leave out the <code>Const</code> constructor if we like! But I'll leave that choice up to you.</p>
-<p>Now that we've got errors which relate to each field we can construct a helpful error message if we're missing required fields:</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1"></a><span class="kw">import</span> <span class="dt">Data.Either.Validation</span></span>
-<span id="cb23-2"><a href="#cb23-2"></a><span class="co">---</span></span>
-<span id="cb23-3"><a href="#cb23-3"></a><span class="ot">validateOptions ::</span> (<span class="dt">TraversableB</span> b, <span class="dt">ProductB</span> b)</span>
-<span id="cb23-4"><a href="#cb23-4"></a>                <span class="ot">=&gt;</span> b (<span class="dt">Const</span> <span class="dt">String</span>)</span>
-<span id="cb23-5"><a href="#cb23-5"></a>                <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
-<span id="cb23-6"><a href="#cb23-6"></a>                <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] (b <span class="dt">Identity</span>)</span>
-<span id="cb23-7"><a href="#cb23-7"></a>validateOptions errMsgs mOpts <span class="ot">=</span> bsequence&#39; <span class="op">$</span> bzipWith validate mOpts errMsgs</span>
-<span id="cb23-8"><a href="#cb23-8"></a>  <span class="kw">where</span></span>
-<span id="cb23-9"><a href="#cb23-9"></a><span class="ot">    validate ::</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Const</span> <span class="dt">String</span> a <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] a</span>
-<span id="cb23-10"><a href="#cb23-10"></a>    validate (<span class="dt">Just</span> x) _          <span class="ot">=</span> <span class="dt">Success</span> x</span>
-<span id="cb23-11"><a href="#cb23-11"></a>    validate <span class="dt">Nothing</span> (<span class="dt">Const</span> err) <span class="ot">=</span> <span class="dt">Failure</span> [err]</span></code></pre></div>
-<p><code>validateOptions</code> takes any traversable product HKDT with <code>Maybe</code> fields and an HKDT filled with error messages inside <code>Const</code> and will return a <code>Validation</code> object containing either a summary of errors or a validated <code>Identity</code> HKDT. Just as before we use <code>bzipWith</code> with a function which operates at the level of functors as a Natural Transformation; i.e. it cares only about the containers, not the values. Note that Validation is very similar to the <code>Either</code> type, but accumulates all available errors rather than failing fast. We use <code>bsequence'</code> here, which is just like <code>bsequence</code>; but saves us the trouble of explicitly threading an <code>Identity</code> into our structure. Check the docs in <code>barbies</code> if you'd like to learn more.</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</span>
-<span id="cb24-2"><a href="#cb24-2"></a>getOptions <span class="ot">=</span></span>
-<span id="cb24-3"><a href="#cb24-3"></a>  validateOptions optErrors <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
+<p>So far our system silently fails in a lot of places. Let's see how
+HKDTs can give us more expressive error handling!</p>
+<p>The first cool thing is that we can store error messages directly
+alongside fields they pertain to!</p>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="ot">optErrors ::</span> <span class="dt">Options_</span> (<span class="dt">Const</span> <span class="dt">String</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>optErrors <span class="ot">=</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span> <span class="st">&quot;server host required but not provided&quot;</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span> <span class="st">&quot;num threads required but not provided&quot;</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    , verbosity  <span class="ot">=</span> <span class="st">&quot;verbosity required but not provided&quot;</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
+<p>If we use <code>Const String</code> in our HKDT we are saying that we
+actually don't care about the type of the field itself, we just want to
+store a string no matter what! If we turn on
+<code>OverloadedStrings</code> we can even leave out the
+<code>Const</code> constructor if we like! But I'll leave that choice up
+to you.</p>
+<p>Now that we've got errors which relate to each field we can construct
+a helpful error message if we're missing required fields:</p>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Data.Either.Validation</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="ot">validateOptions ::</span> (<span class="dt">TraversableB</span> b, <span class="dt">ProductB</span> b)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>                <span class="ot">=&gt;</span> b (<span class="dt">Const</span> <span class="dt">String</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>                <span class="ot">-&gt;</span> b <span class="dt">Maybe</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>                <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] (b <span class="dt">Identity</span>)</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>validateOptions errMsgs mOpts <span class="ot">=</span> bsequence&#39; <span class="op">$</span> bzipWith validate mOpts errMsgs</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">where</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="ot">    validate ::</span> <span class="dt">Maybe</span> a <span class="ot">-&gt;</span> <span class="dt">Const</span> <span class="dt">String</span> a <span class="ot">-&gt;</span> <span class="dt">Validation</span> [<span class="dt">String</span>] a</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    validate (<span class="dt">Just</span> x) _          <span class="ot">=</span> <span class="dt">Success</span> x</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    validate <span class="dt">Nothing</span> (<span class="dt">Const</span> err) <span class="ot">=</span> <span class="dt">Failure</span> [err]</span></code></pre></div>
+<p><code>validateOptions</code> takes any traversable product HKDT with
+<code>Maybe</code> fields and an HKDT filled with error messages inside
+<code>Const</code> and will return a <code>Validation</code> object
+containing either a summary of errors or a validated
+<code>Identity</code> HKDT. Just as before we use <code>bzipWith</code>
+with a function which operates at the level of functors as a Natural
+Transformation; i.e. it cares only about the containers, not the values.
+Note that Validation is very similar to the <code>Either</code> type,
+but accumulates all available errors rather than failing fast. We use
+<code>bsequence'</code> here, which is just like <code>bsequence</code>;
+but saves us the trouble of explicitly threading an
+<code>Identity</code> into our structure. Check the docs in
+<code>barbies</code> if you'd like to learn more.</p>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  validateOptions optErrors <span class="op">&lt;$&gt;</span> fold [envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
 <p>Now if we end up with values missing we get a list of errors!</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1"></a>λ<span class="op">&gt;</span> getOptions</span>
-<span id="cb25-2"><a href="#cb25-2"></a><span class="dt">Failure</span> [<span class="st">&quot;num threads required but not provided&quot;</span>]</span></code></pre></div>
-<p>You can trust me that if we had more than one thing missing it would collect them all. That's a lot of content all at once, so I'll leave some other experiments for next time. Once you start to experiment a world of opportunities opens up; you can describe validation, forms, documentations, schemas, and a bunch of other stuff I haven't even though of yet!! A challenge for the reader: try writing a proper validator using HKDTs which validates that each field fulfills specific properties. For example, check that the number of threads is &gt; 0; check that the host is non-empty, etc. You may find the following newtype helpful ;) <code>newtype Checker a = Checker (a -&gt; Maybe String)</code></p>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>λ<span class="op">&gt;</span> getOptions</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="dt">Failure</span> [<span class="st">&quot;num threads required but not provided&quot;</span>]</span></code></pre></div>
+<p>You can trust me that if we had more than one thing missing it would
+collect them all. That's a lot of content all at once, so I'll leave
+some other experiments for next time. Once you start to experiment a
+world of opportunities opens up; you can describe validation, forms,
+documentations, schemas, and a bunch of other stuff I haven't even
+though of yet!! A challenge for the reader: try writing a proper
+validator using HKDTs which validates that each field fulfills specific
+properties. For example, check that the number of threads is &gt; 0;
+check that the host is non-empty, etc. You may find the following
+newtype helpful ;)
+<code>newtype Checker a = Checker (a -&gt; Maybe String)</code></p>
 <h2 id="bonus-parsing-cli-options">Bonus: Parsing CLI Options</h2>
-<p>Just for fun here's a bonus config source for getting options from the Command Line using Optparse Applicative</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1"></a><span class="kw">import</span> <span class="dt">Options.Applicative</span> <span class="kw">hiding</span> (<span class="dt">Failure</span>, <span class="dt">Success</span>)</span>
-<span id="cb26-2"><a href="#cb26-2"></a><span class="co">---</span></span>
-<span id="cb26-3"><a href="#cb26-3"></a><span class="ot">cliOptsParser ::</span> <span class="dt">Options_</span> <span class="dt">Parser</span></span>
-<span id="cb26-4"><a href="#cb26-4"></a>cliOptsParser <span class="ot">=</span></span>
-<span id="cb26-5"><a href="#cb26-5"></a>    <span class="dt">Options_</span></span>
-<span id="cb26-6"><a href="#cb26-6"></a>    { serverHost <span class="ot">=</span></span>
-<span id="cb26-7"><a href="#cb26-7"></a>          strOption (long <span class="st">&quot;serverHost&quot;</span> <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;HOST&quot;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;host for API interactions&quot;</span>)</span>
-<span id="cb26-8"><a href="#cb26-8"></a>    , numThreads <span class="ot">=</span></span>
-<span id="cb26-9"><a href="#cb26-9"></a>          option auto</span>
-<span id="cb26-10"><a href="#cb26-10"></a>                 (long <span class="st">&quot;threads&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;t&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;number of threads&quot;</span> <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;INT&quot;</span>)</span>
-<span id="cb26-11"><a href="#cb26-11"></a>    , verbosity  <span class="ot">=</span> option auto</span>
-<span id="cb26-12"><a href="#cb26-12"></a>                          (long <span class="st">&quot;verbosity&quot;</span></span>
-<span id="cb26-13"><a href="#cb26-13"></a>                           <span class="op">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span></span>
-<span id="cb26-14"><a href="#cb26-14"></a>                           <span class="op">&lt;&gt;</span> help <span class="st">&quot;Level of verbosity&quot;</span></span>
-<span id="cb26-15"><a href="#cb26-15"></a>                           <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;VERBOSITY&quot;</span>)</span>
-<span id="cb26-16"><a href="#cb26-16"></a>    }</span>
-<span id="cb26-17"><a href="#cb26-17"></a></span>
-<span id="cb26-18"><a href="#cb26-18"></a></span>
-<span id="cb26-19"><a href="#cb26-19"></a><span class="ot">mkOptional ::</span> <span class="dt">FunctorB</span> b <span class="ot">=&gt;</span> b <span class="dt">Parser</span> <span class="ot">-&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</span>
-<span id="cb26-20"><a href="#cb26-20"></a>mkOptional <span class="ot">=</span> bmap (<span class="dt">Compose</span> <span class="op">.</span> optional)</span>
-<span id="cb26-21"><a href="#cb26-21"></a></span>
-<span id="cb26-22"><a href="#cb26-22"></a><span class="ot">toParserInfo ::</span> (<span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">ParserInfo</span> (b <span class="dt">Maybe</span>)</span>
-<span id="cb26-23"><a href="#cb26-23"></a>toParserInfo b <span class="ot">=</span> info (bsequence b) briefDesc</span>
-<span id="cb26-24"><a href="#cb26-24"></a></span>
-<span id="cb26-25"><a href="#cb26-25"></a><span class="ot">cliOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
-<span id="cb26-26"><a href="#cb26-26"></a>cliOpts <span class="ot">=</span> execParser <span class="op">$</span> toParserInfo (mkOptional cliOptsParser)</span>
-<span id="cb26-27"><a href="#cb26-27"></a></span>
-<span id="cb26-28"><a href="#cb26-28"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</span>
-<span id="cb26-29"><a href="#cb26-29"></a>getOptions <span class="ot">=</span></span>
-<span id="cb26-30"><a href="#cb26-30"></a>  validateOptions optErrors <span class="op">&lt;$&gt;</span> fold [cliOpts, envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
+<p>Just for fun here's a bonus config source for getting options from
+the Command Line using Optparse Applicative</p>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Options.Applicative</span> <span class="kw">hiding</span> (<span class="dt">Failure</span>, <span class="dt">Success</span>)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="ot">cliOptsParser ::</span> <span class="dt">Options_</span> <span class="dt">Parser</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>cliOptsParser <span class="ot">=</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">Options_</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    { serverHost <span class="ot">=</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>          strOption (long <span class="st">&quot;serverHost&quot;</span> <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;HOST&quot;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;host for API interactions&quot;</span>)</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    , numThreads <span class="ot">=</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>          option auto</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>                 (long <span class="st">&quot;threads&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;t&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;number of threads&quot;</span> <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;INT&quot;</span>)</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    , verbosity  <span class="ot">=</span> option auto</span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>                          (long <span class="st">&quot;verbosity&quot;</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>                           <span class="op">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>                           <span class="op">&lt;&gt;</span> help <span class="st">&quot;Level of verbosity&quot;</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>                           <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;VERBOSITY&quot;</span>)</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a><span class="ot">mkOptional ::</span> <span class="dt">FunctorB</span> b <span class="ot">=&gt;</span> b <span class="dt">Parser</span> <span class="ot">-&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>)</span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>mkOptional <span class="ot">=</span> bmap (<span class="dt">Compose</span> <span class="op">.</span> optional)</span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a><span class="ot">toParserInfo ::</span> (<span class="dt">TraversableB</span> b) <span class="ot">=&gt;</span> b (<span class="dt">Parser</span> <span class="ot">`Compose`</span> <span class="dt">Maybe</span>) <span class="ot">-&gt;</span> <span class="dt">ParserInfo</span> (b <span class="dt">Maybe</span>)</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>toParserInfo b <span class="ot">=</span> info (bsequence b) briefDesc</span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="ot">cliOpts ::</span> <span class="dt">IO</span> (<span class="dt">Options_</span> <span class="dt">Maybe</span>)</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>cliOpts <span class="ot">=</span> execParser <span class="op">$</span> toParserInfo (mkOptional cliOptsParser)</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a><span class="ot">getOptions ::</span> <span class="dt">IO</span> (<span class="dt">Validation</span> [<span class="dt">String</span>] <span class="dt">Options</span>)</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>getOptions <span class="ot">=</span></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>  validateOptions optErrors <span class="op">&lt;$&gt;</span> fold [cliOpts, envOpts, jsonOptsCustom <span class="op">&lt;$&gt;</span> readConfigFile]</span></code></pre></div>
 
         <p>
           Hopefully you learned something 🤞! If you did, please consider
