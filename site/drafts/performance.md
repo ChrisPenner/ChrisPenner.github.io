@@ -231,10 +231,6 @@ smack-dab in the middle of our core logic that we would only  use once in a blue
 By separating off and `NOINLINE`ing that big chunk it cut down on the code size of the main loop and we got a small but noticeable speedup on
 the more common instructions.
 
-## The wonders (and pains) of worker-wrapper optimizations
-
-## Manual unboxing
-
 ## Finding allocations
 
 There was one point where the interpreter was running a bit slower than expected and I wasn't sure why, it seemed like a regression.
@@ -286,6 +282,54 @@ Here's an example output from `-sstderr` from an arbitrary run so you get an ide
 
 We can see the total amount of memory we allocated, peak memory residency, time spent on GC, average pause times, all that good stuff!
 
+## The wonders (and pains) of worker-wrapper optimizations
+
+There's one GHC optimization in particular that I hadn't heard of prior, the [worker-wrapper transformation](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-optimisation.html#ghc-flag-fworker-wrapper).
+
+The goal of this optimization is to swap out the usage of boxed types with cheaper unboxed versions where possible.
+Unboxed types avoid a lot of ceremony, allocations, and pointer-chasing, so they're a big boost to performance when you can use them.
+
+However, using unboxed types manually is a massive pain, and isn't something you'd typically want to do by hand.
+
+Here's where the worker-wrapper transformation comes in. 
+GHC can use strictness analysis to notice when a certain function of your program 
+forces the evaluation of its arguments, it can then unpack those arguments into unboxed 
+types within that scope without otherwise affecting the behaviour of the program.
+
+This can be particularly useful in self-recursive or looping bits of your program.
+In our case, the `eval` function of the interpreter uses a stack data-type strictly and it's just a self-recursive loop.
+
+GHC will split this eval function up into `eval` and `weval` during compilation, where
+`eval` is simply a wrapper which accepts the boxed arguments, unwraps them, then calls down into the worker `weval` which uses the unboxed versions of these arguments. GHC will also rewrite all the self-recursive calls to `weval` so as to avoid packing the arguments back up until we eventually return up to the wrapper.
+
+Getting worker-wrapper to trigger reliably is an art of its own, and can require the use of strictness annotations and a lot of examining GHC core to see what's going on. I have neither the time nor space to go deeply into reading core here, but if you've got a tight loop in your program it's worth digging into the core code to ensure GHC is performing this optimization, search for calls to the `w<func>` within the core for your module!
+
+Some other quick tips here:
+
+* If your function has many arguments, or the arguments are records with several fields, check your [`-fmax-worker-args`](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-optimisation.html#ghc-flag-fmax-worker-args-n) setting, and consider increasing it. If unpacking the data in your arguments will cause a worker function to have more than this many arguments, GHC will not perform the worker-wrapper transformation.
+* In certain very rare cases you may wish to manually write your own unboxed worker function. We had to do this as part of splitting off the large case-statement I mentioned eariler. Perhaps because of the `NOINLINE` pragma GHC had decided not to unbox the stack argument here, and thus the whole `eval` function was using a boxed stack. I was able to fix this by explicitly accepting unboxed arguments, then for ergonomics I immediately re-boxed them within the method. GHC of course can see that it's silly to rebox them and will rewrite the function to be completely unboxed without causing me undue suffering.
+* Some records are best left boxed, GHC is usually pretty good at this, in our case we had one large record which was rarely touched. After some experimentation we discovered that unboxing it actually slowed things down because it required passing many more arguments, and since it was so rarely used there wasn't a significant performance gain from unboxing it.
+
+## Learn to read a bit of Core
+
+Core is one of the intermediate languages which GHC targets as part of compilation.
+You can see much of the optimization work that GHC has performed by looking at the Core
+after the optimization passes.
+
+It can help you know where you're allocating, whether worker-wrapper has been triggered, what is getting inlined, etc.
+
+For me, I've found that reading Core is largely a lot of skimming and learning to recognize certain patterns, 
+so I'd encourage you to start by reading through the core for some small chunks of code which you already know well
+for practice.
+
+If you'd like to give it a go, you can read up on the myriad of core flags [here](https://downloads.haskell.org/ghc/9.10-latest/docs/users_guide/debugging.html#core-representation-and-simplification), but here's a starter-pack which you can add to your `package.yaml` or pass to ghc directly.
+
+```
+ghc-options: -ddump-simpl -ddump-to-file -dsuppress-coercions -dsuppress-idinfo -dsuppress-module-prefixes -ddump-str-signatures -ddump-simpl-stats
+```
+
+If you're using `stack` you can find the core files inside `.stack-work/dist/<arch>/<ghc-version>/build/` in your package directory after running a build.
+
 ##  Trusting GHC
 
 If there's one final tip I've learned, it's that in the absence of knowing 
@@ -297,10 +341,12 @@ This, incidentally is also why having benchmarks is so important!
 
 ##  Conclusion
 
+That was a lot, I know it won't all be useful to you right now, but hopefully can serve as a list of areas to look into the next time you've exhausted your own arsenal of profiling and optimization techniques.
+
+Optimizing code can be significantly more complex in Haskell than other languages, 
+but just remember that GHC has got your back and you can achieve truly impressive speed in such a high-level language.
+
+Happy Haskelling!
+
 2. Manual data inlining for instructions
 2. Manual inlining with knot-tying
-3. Unlifted/unboxed types wherever possible
-6. Worker-wrapper and friends
-8. Trust GHC
-9. Manual worker-wrapper wrappers.
-10. Reading Core
