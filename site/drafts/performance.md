@@ -16,6 +16,8 @@ My co-worker Dan and I have been crunching on Unison's performance for several m
 
 While I certainly won't claim that all these things are applicable to the reader's situation, there's sure to be some interesting tidbits for all. Let's get to it!
 
+Before we even start, make sure you've enabled optimization on your builds using `-O2` or all bets are off!
+
 ## First things first, mind your algorithmic complexity
 
 I won't spend much time here, but all the performance tricks in the world won't help as much as
@@ -229,21 +231,71 @@ smack-dab in the middle of our core logic that we would only  use once in a blue
 By separating off and `NOINLINE`ing that big chunk it cut down on the code size of the main loop and we got a small but noticeable speedup on
 the more common instructions.
 
-## Manual worker-wrapper
+## The wonders (and pains) of worker-wrapper optimizations
+
+## Manual unboxing
 
 ## Finding allocations
 
--B
+There was one point where the interpreter was running a bit slower than expected and I wasn't sure why, it seemed like a regression.
+
+On a hunch, I decided to load up a hot-loop  which just counts from 1 to 1,000,000 then I ran
+it with the useful and whimsical `+RTS -B` flag, which rings your terminal's bell whenever
+the runtime performs a garbage collection, and wouldn't you know it, it started dinging like crazy.
+Though perhaps a bit silly, it can definitely be a useful tool.
+
+In my case, it was helpful because the UCM executable loads some code on startup and so I'd expect a couple GCs, 
+but I wouldn't expect any GCs to be happening once the loop starts. Hearing a simple audio cue makes it easy to tell _when_ the GCs are happening in 
+your program's life-cycle.
+
+GHC is actually _extremely_ fast when it comes to allocating and collecting short-lived memory,
+but for tight loops in an interpreter we really don't have any excuse to be allocating at all.
+
+Now that we know we're allocating more than we should, we can combine this info with the useful `+RTS -sstderr` flag which will print out runtime stats 
+and you get a pretty good picture of your allocations and garbage collections.
+
+Here's an example output from `-sstderr` from an arbitrary run so you get an idea.
+
+```
+   2,953,202,040 bytes allocated in the heap
+     118,339,168 bytes copied during GC
+      18,415,336 bytes maximum residency (7 sample(s))
+         254,232 bytes maximum slop
+              83 MiB total memory in use (0 MiB lost due to fragmentation)
+
+                                     Tot time (elapsed)  Avg pause  Max pause
+  Gen  0       697 colls,     0 par    0.001s   0.128s     0.0002s    0.0058s
+  Gen  1         7 colls,     6 par    0.126s   0.139s     0.0199s    0.0939s
+
+  Parallel GC work balance: 92.45% (serial 0%, perfect 100%)
+
+  TASKS: 25 (1 bound, 24 peak workers (24 total), using -N8)
+
+  SPARKS: 0 (0 converted, 0 overflowed, 0 dud, 0 GC'd, 0 fizzled)
+
+  INIT    time    0.009s  (  0.025s elapsed)
+  MUT     time    1.208s  (  1.536s elapsed)
+  GC      time    0.127s  (  0.267s elapsed)
+  EXIT    time    0.006s  (  0.010s elapsed)
+  Total   time    1.350s  (  1.839s elapsed)
+
+  Alloc rate    2,445,681,543 bytes per MUT second
+
+  Productivity  89.4% of total user, 83.6% of total elapsed
+```
+
+We can see the total amount of memory we allocated, peak memory residency, time spent on GC, average pause times, all that good stuff!
 
 ##  Trusting GHC
 
+If there's one final tip I've learned, it's that in the absence of knowing 
+exactly what you're doing, it's often best to just trust GHC and its defaults.
 
+There were many times where I attempted to optimize something by rearranging code or adding a pragma only 
+to realize that either GHC was _already_ performing that optimization for me, or that my change actually made things worse.
+This, incidentally is also why having benchmarks is so important!
 
-4. Cut down on allocations. 
-
-GHC is actually _extremely_ fast when it comes to allocating memory, but the more we allocate, the
-more we have to garbage collect, and that imposes a cost which we could mitigate by allocating less.
-
+##  Conclusion
 
 2. Manual data inlining for instructions
 2. Manual inlining with knot-tying
@@ -252,4 +304,3 @@ more we have to garbage collect, and that imposes a cost which we could mitigate
 8. Trust GHC
 9. Manual worker-wrapper wrappers.
 10. Reading Core
-11. '-B' and '-sstderr'
