@@ -7,38 +7,39 @@ description: "Some things I learned writing high performance Haskell these past 
 image: flux-monoid/flux.jpg
 ---
 
-Gotta go fast!
 
-Make it work, make it right, make it fast; so the saying goes. Whether you buy into that or not, the implementation of the Unison programming language's interpreter has officially entered its "make it fast" era.
+Make it work, make it right, make it fast; so the saying goes. 
+Over at Unison we've been in the "make it fast" chapter of our journey for the past few months,
+Dan Doel (my co-worker) and I have managed to boost the speed of Unison's core interpreter loop by ~24 times!
 
-Others who've been tasked with ensuring Haskell code is running at its fastest are well aware that it's a bit of an arcane art. 
-My co-worker Dan and I have been crunching on Unison's performance for several months now and I figured it's time that I collect and chronicle some of the most impactful and strange performance improvements we've found, if only so I'll remember them the next time I need to do this sort of thing.
+Others tasked with speeding up code written in Haskell may well be aware that it's certainly a bit of an arcane art.
+Throughout the process I've really benefited from the writing of others, so it's time to give back.
 
-While I certainly won't claim that all these things are applicable to the reader's situation, there's sure to be some interesting tidbits for all. Let's get to it!
+Here's my collection of some of the most impactful (and some of the most strange) performance improvements we've found... if only so I'll remember them the next time I need to do this sort of thing.
 
-Before we even start, make sure you've enabled optimization on your builds using `-O2` or all bets are off!
+While I certainly won't claim that all of these approaches are applicable to the reader's situation, there's sure to be some interesting tidbits for all. Let's get to it!
 
-## First things first, mind your algorithmic complexity
+## Prequel to the Prequel
 
-I won't spend much time here, but all the performance tricks in the world won't help as much as
-reducing the time complexity of your algorithm. Your first step should be to think
-about what your hotspots are doing at a high level and make sure your core algorithm makes sense.
+Before we even start, we should make sure we understand our goal and our problem.
 
-But how do you know where your hotspots are? Profiling! 👇
+Presumably if you want to speed something up it's because you've noticed some issue with your app.
+Your first job is to distill this issue down into a repeatable automated benchmark. This allows us to 
+measure our progress, and by implementing many different benchmarks can also help protect us against regressions.
 
 ## Profile, profile, profile.
 
-Okay I lied earlier, your VERY first step should be to write some realistic benchmarks or 
-workflows which exercise your system in a way that's similar to how the end user will use it.
+Okay, we've got some benchmarks, now we need to find out definitively _exactly where_ we're spending our time
+in our slow workflow.
 
-After that, you can profile it to determine which parts of your code are _actually_ slow. Spoiler alert, it's not always where you think it may be! 
+Spoiler alert, it's very often something you didn't expect.
 I can't count the number of times I thought one area of my code would be a problem only to learn that my code was doing
 something exponentially dumber (literally) in a completely different place.
 
-Consult the latest version of the excellent [GHC Manual](https://downloads.haskell.org/ghc/9.6.5/docs/users_guide/profiling.html) to
+We can avoid exponential idiocy by consulting the latest version of the excellent [GHC Manual](https://downloads.haskell.org/ghc/9.6.5/docs/users_guide/profiling.html) to
 see how to compile with profiling enabled and how to inspect cost centers and such.
 
-This isn't a profiling guide, but I'll highlight a few additional things which I've personally found useful.
+This isn't a profiling guide, so I'll just highlight a few additional things which I've personally found useful.
 
 If you use the `stack` build tool, profiling your program is usually as easy as compiling with 
 `stack build --profile` then using `stack exec --profile my-exe +RTS -P -RTS`. This should output a
@@ -64,23 +65,28 @@ I'll often have both the profiterole and profiteur pages open at the same time.
 
 ![](perf/profiterole.png)
 
+With these tools we've got objective data on where we're spending our execution time, which tells us places we may
+be able to get the biggest possible performance gains.
+
 ## Computer, zoom in and enhance!
 
 I feel safe saying that for the _majority_ of cases profiling will be enough to identify your worst bottlenecks, however
 in the case of Unison's interpreter the default profiling setup was unfortunately not all that
-useful. We had a plethora of `INLINE` pragmas within the interpreter, resulting in a profile output
-which just said we spent most of our time within our interpreter's `eval` function... thanks but I
-could've guessed that!
+useful. 
 
-Sure we could remove the inlining to get a better profile, but now we're not actually profiling the
-real optimized code that we'll be shipping, which is a cardinal sin in profiling. 
-So what can we do if we want a more granual profiling readout but without
-making sweeping changes to the code? Enter the `SCC` pragma!
+In the interpreter we have a plethora of `INLINE` pragmas which result in a profile output
+that just says we spend most of our time within our interpreter's `eval` function... Thanks, but I'd
+guessed that!
 
-`SCC` means "Set Cost Center", cost centers are how the profiler keeps track of how to label
-the execution time it tracks. GHC will automatically assign cost centers to function calls which aren't 
-inlined, but in our case most things ARE being inlined so we need to get more fine-grained. SCC 
-allows us to manually tell GHC to label costs within arbitrary blocks of code.
+We could remove the inlining to get a better profile, but now we're not actually profiling the
+real optimized code that we'll be shipping, which is a cardinal sin. 
+
+So what can we do if we want a more granular profiling readout but without
+making sweeping changes to the code? Let's learn about the `SCC` pragma!
+
+`SCC` means "Set Cost Center", cost centers are how the profiler keeps track of execution time.
+GHC will automatically create cost centers for function calls which aren't 
+inlined, but in our case most functions _ARE_ being inlined. So what can we do about that? 
 
 There are a few flags available in the [profiling manual](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#ghc-flag--fprof-auto) which tell GHC where to add more cost centers, but there's also the [SCC pragma](https://downloads.haskell.org/ghc/latest/docs/users_guide/profiling.html#inserting-cost-centres-by-hand) which allows us to easily tell GHC we want a label in a specific block of code.
 
@@ -95,67 +101,78 @@ myFunction = do
 ```
 
 And now if we profile our program we'll have a `busywork` label which tells us how much time we
-spent in that `do` block! Nifty!
+spent in that `do` block. How nifty!
 
-I used this a lot to determine which branches of our giant `eval` and `exec` case statements
+I used this a lot to determine which individual branches of our giant `eval` and `exec` case statements
 we were spending the most time in, or to see which were performing a lot of allocations.
 
-## When profiling isn't enough
+Now we have fine-grained observability into where our time is being spent and can start trying to speed things up.
 
-Profiling helped a little and can tell us _where_ things are slow, but it doesn't help us actually
-speed it up!
+## The simplest thing that could possibly work
 
-Once you've found your problem areas, here are some things you can think about to hopefully find an
-avenue towards more speed.
+First, ensure you've enabled optimization on your builds by passing `-O2` to GHC.
+
+This is the simplest thing you can do, but is also the most important, (almost) everything that follows depends on running an optimized build.
+
+Moving on!
+
+## Mind your algorithmic complexity
+
+To be brief, all the performance tricks in the world won't help as much as
+reducing the time complexity of your algorithm. Your first step should be to think
+about what your hotspots are doing at a high level and make sure your core algorithm makes sense.
+
+This is responsible for some of my biggest wins on the Unison CLI, I've gotten as much as a 20X speedup by replacing an exponential-time
+algorithm with a linear-time one.
+
+If your profile is showing a lot of time spent within some domain-specific algorithm, spend some time thinking about how you might be able to speed it up, use caching for it, or even skip that part entirely.
 
 ## Module boundaries and inlining
 
 In Haskell, code is organized into modules. Typically we think about modules being organized for the
 programmer's benefit, grouping code by purpose and making the codebase easier to navigate, but it
-has an effect on compilation and optimization too!
+has an effect on compilation and optimization too.
 
-Most notably, it affects how GHC inlines your functions.
+Notably, module boundaries can affect how GHC inlines your functions.
 
 Inlining is when the code of a function is copied from its definition directly into the call-site.
 In many languages this is beneficial for small functions because it avoids the cost of a function
-call, but it can have much larger ripple effects with a smart optimizing compiler like GHC, since
-it brings more  code into the same shared scope for GHC to reason about.
+call, but it can have much larger ripple effects with a smart optimizing compiler like GHC
 
-GHC uses many heuristics to decide when to inline a function call, but in order to inline it needs to
-have the source code of a function available when examining the call site. GHC doesn't
-always expose the source code of functions across module boundaries since doing this for _everything_ would be slow and add bloat. 
-All  in all, this means that a function imported from some other module may not be inlined even when it makes sense to!
+GHC uses many heuristics to decide when to inline a function call, but in order to inline a function GHC needs to
+have the source code available. 
 
-If there's a particular function you think could benefit from being inlined elsewhere, either because you want it to be _specialized_ at all its call-sites, or because it's only used in one or two places, then you can choose
-to tell GHC to definitely expose the source code to other modules using the `INLINEABLE` pragma!
+GHC doesn't
+always expose the source code of functions across module boundaries since doing so for every function would be slow and add bloat. 
+All this to say, **a function which is imported from some other module may not be inlined even when it makes sense to!**
+
+If there's a particular function which you think could benefit from being inlined elsewhere in your program, either because you want it to be _specialized_ at all its call-sites, or because it's only used in one or two places, then you can choose
+to tell GHC to definitely expose the source code to other modules using the `INLINEABLE` pragma.
 
 Just slap an `{-# INLINEABLE myFunc #-}` next to your function and GHC 
 will ensure its source code will be available for call sites to inline it.
 Note that unlike `INLINE` this doesn't force GHC to inline the function, it just makes it possible
-if the heuristics decide it's a good idea.
+if the existing inlining heuristics indicate that it would be a good idea.
 
 As an anecdote, at one point I discovered a few utility functions had been moved into their own
 module without an inline pragma on them, adding an inline pragma to them resulted in a 1.5X speedup
 to a hotspot _that didn't even use those utils_, simply because GHC was able to trigger additional
-optimizations in other places.
+optimizations in other places which cascaded throughout the app.
 
 ## Specializing typeclass methods
 
-For better or worse, Typeclasses are a huge part of Haskell.
 Ad-hoc polymorphism is a powerful tool, but polymorphism can sometimes be at odds with performance.
 
-Functions like typeclass methods are difficult for GHC to optimize effectively since they almost always
-rely on arguments with parameterized types. This means that GHC doesn't necessarily know which 
-implementation of given typeclass methods it may be calling by examining the definition of the function alone.
+Functions like typeclass method implementations are difficult for GHC to optimize effectively since they almost always
+rely on arguments containing type parameters, limiting the amount of specialization it can perform looking without more context.
 
-GHC can statically resolve some of these unknowns when it can _specialize_ a method. If a typeclass method is
-called with concrete type at a given call-site, then GHC knows exactly which implementations
-are being called and can resolve them statically, avoiding any sort of dynamic dispatch and possibly even inlining them for further gains!
+GHC can often do better when it has the context of the call-site of a typeclass method. 
+If the typeclass method is called with a more concrete type at a given call-site then GHC can insert a specific typeclass implementation and specialize it to the types at that specific call site. This avoids any sort of dynamic dispatch can allow other optimizations to trigger at this call site.
 
-Typically the biggest blocker here is, as mentioned above, that typeclass instances are often defined in a
-separate module from their call-sites.
-It's a bit of an annoyance, but adding an `INLINEABLE` or `INLINE` pragma to typeclass method
-implementations can sometimes help as it will allow GHC to inline and specialize many more of the call sites.
+Unfortunately, typeclass instances are very often defined in a separate module from their call-sites.
+
+Adding the `INLINEABLE` or `INLINE` pragmas I mentioned earlier to typeclass method
+implementations can sometimes help, it will allow GHC to inline and specialize many more of the call sites even across module boundaries.
 
 Doing this correctly allows you to use the convenience of typeclasses without incurring
 additional runtime cost, if a given implementation is inlined it should behave just as though you wrote a specialized version of the
@@ -163,9 +180,9 @@ typeclass methods for each usage site.
 
 ## When to NOINLINE
 
-I've talked a lot about inlining so far, but there's also its counterpart: `NOINLINE`!
+I've talked a lot about inlining so far, but there's also its counterpart: `NOINLINE`.
 
-Most Haskellers have probably only seen this used in cases pertaining to `unsafePerformIO`; e.g. 
+Most Haskellers have probably only seen this pragma used in situations pertaining to `unsafePerformIO`; e.g. 
 
 ```haskell
 myGlobalVar :: TVar Int
@@ -173,8 +190,8 @@ myGlobalVar = unsafePerformIO $ newTVarIO 0
 {-# NOINLINE myGlobalVar #-}
 ```
 
-This is a necessity to ensure correctness in spite of the weirdness of `unsafePerformIO`, but
-there's another case where `NOINLINE` can be helpful that I want to talk about.
+This is a necessity to ensure correct semantics in spite of the weirdness of `unsafePerformIO`, but
+there's another case where `NOINLINE` can be helpful for performance rather than semantics.
 
 In the Unison interpreter we use runtime tags to indicate the type of certain values we're holding on the
 stack. For unrelated reasons, these tags are part of a much larger `Closure` data-type and we can't use a
@@ -187,12 +204,12 @@ intTag = Closure IntTag
 ```
 
 Then GHC is likely to choose to inline the definition wherever it's used. In most cases this would be fine,
-maybe even preferrable! However in our case, we prefer to keep this tag as a single top-level expression so that we can
-allocate the memory for it exactly once, and simply _refer_ to it at each usage site. 
+maybe even preferable! However in the interpreter we prefer to keep this tag as a single top-level expression so that we can
+allocate the memory for it exactly once and simply _refer_ to it via a pointer at each usage site. 
 If it were inlined it may be allocated once per call site, or even
-within a tight loop, which we certainly want to avoid.
+churn allocations within a tight loop, which we certainly want to avoid.
 
-In most cases such small allocation is nothing to be concerned about, but inside the core loop of an interpreter we want to avoid 
+In most cases such small allocation isn't something you should be worried about, but inside the core loop of an interpreter we want to avoid 
 as many allocations as possible.
 
 Adding a simple `NOINLINE` by the definition will prevent that from happening and give us the assurance that it
@@ -206,30 +223,29 @@ intTag = Closure IntTag
 
 ### Avoiding code-size bloat
 
-There's another case where NOINLINE can be useful, it has to do with code-size!
+There's another case where NOINLINE can be useful, this one has to do with code-size.
 
-In Haskell we operate at high level and typically don't think about the low-level machines that actually execute our
-code. At the end of the day our Haskell code runs on processors just like everything else, and we need to be aware of that.
+Generally when writing Haskell we operate at a high level and don't think much about the low-level machines that actually execute our
+code. In high-performance Haskell that's a mistake, at the end of the day our Haskell code runs on processors just like everything else, and we need to be aware of that.
 
 Real-world processors have to load the code they're about to execute, and they have a number of code
-caches which they use to speed up this process as much as possible. These code caches are very limited in size.
-If we manage to keep the actual size of the code we're executing relatively small, it's more
-likely that the processor will be able to keep commonly accessed bits of code in its cache, which
-can provide significant speed ups, especially in tight loops like our interpreter.
+caches which they use to speed this process up as much as possible. These code caches are very limited in size,
+so if we can keep the size of the code we're executing relatively small it's more
+likely that the processor will be able to keep commonly accessed bits of code in its cache. 
+This, in turn, can sometimes provide significant speed ups, especially in tight loops like our interpreter.
 
-What does this look like in practice? Let me explain.
+What does this look like in practice? Let me explain with an example.
 
-I  was recently rewriting part of our code for executing builtins in the Unison interpreter.
+I was recently rewriting part of our code for executing builtins in the Unison interpreter.
 As part of that work I replaced a dynamic dispatch mechanism with a giant case statement,
-this was a performance win, but now that GHC could see that the call was a single static case-statement it decided
+this was largely a performance win, but now that GHC could see that the call was a single static case-statement it decided
 to inline the entire thing, which makes sense since it was only being called from one place, why pay the cost of a function call?
 
-However, this particular place happened to be in the core loop of our interpreter, and the case statement was _huge_ (several hundred cases).
-Beforehand we may have had enough processor cache to keep at least a bit of our core loop hot, but now we had hundreds of lines of code
-smack-dab in the middle of our core logic that we would only  use once in a blue moon.
+In this case however, it was inlined directly into the core loop of our interpreter, and the case statement was _huge_ (several hundred cases).
+Beforehand we may have had enough processor cache to keep at least a bit of our core interpreter loop instructions hot, but now we had hundreds of lines of code
+smack-dab in the middle of our core logic that we would only use once in a blue moon, fragmenting our cache between useful and useless code.
 
-By separating off and `NOINLINE`ing that big chunk it cut down on the code size of the main loop and we got a small but noticeable speedup on
-the more common instructions.
+We separated this big case statement off into its own function and added a `NOINLINE` tag on it, keeping it out of the main interpreter loop and despite adding a function call it got us a small but noticeable speedup.
 
 ## Finding allocations
 
@@ -244,7 +260,7 @@ In my case, it was helpful because the UCM executable loads some code on startup
 but I wouldn't expect any GCs to be happening once the loop starts. Hearing a simple audio cue makes it easy to tell _when_ the GCs are happening in 
 your program's life-cycle.
 
-GHC is actually _extremely_ fast when it comes to allocating and collecting short-lived memory,
+GHC is _extremely_ fast when it comes to allocating and collecting short-lived memory,
 but for tight loops in an interpreter we really don't have any excuse to be allocating at all.
 
 Now that we know we're allocating more than we should, we can combine this info with the useful `+RTS -sstderr` flag which will print out runtime stats 
@@ -282,27 +298,28 @@ Here's an example output from `-sstderr` from an arbitrary run so you get an ide
 
 We can see the total amount of memory we allocated, peak memory residency, time spent on GC, average pause times, all that good stuff!
 
+This helped me to confidently say that there was way too much allocation happening, which enabled me to dig into the core and find the offending allocations.
+
 ## The wonders (and pains) of worker-wrapper optimizations
 
-There's one GHC optimization in particular that I hadn't heard of prior, the [worker-wrapper transformation](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-optimisation.html#ghc-flag-fworker-wrapper).
+There's one GHC optimization in particular that I hadn't heard of prior to this project, the [worker-wrapper transformation](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-optimisation.html#ghc-flag-fworker-wrapper).
 
-The goal of this optimization is to swap out the usage of boxed types with cheaper unboxed versions where possible.
-Unboxed types avoid a lot of ceremony, allocations, and pointer-chasing, so they're a big boost to performance when you can use them.
-
-However, using unboxed types manually is a massive pain, and isn't something you'd typically want to do by hand.
+The goal of this optimization is to swap out the usage of boxed Haskell types with unboxed versions where possible.
+Unboxed types can avoid ceremony, allocations, and pointer-chasing, so they're typically a big boost to performance when you can use them,
+however using unboxed types manually is a massive pain. It's not something you'd typically want to instrument by hand.
 
 Here's where the worker-wrapper transformation comes in. 
 GHC can use strictness analysis to notice when a certain function of your program 
-forces the evaluation of its arguments, it can then unpack those arguments into unboxed 
-types within that scope without otherwise affecting the behaviour of the program.
-
+forces the evaluation of its arguments, in this case it can then unpack those arguments into unboxed 
+types within that scope without otherwise affecting the behaviour of the program, and will happily do so.
 This can be particularly useful in self-recursive or looping bits of your program.
-In our case, the `eval` function of the interpreter uses a stack data-type strictly and it's just a self-recursive loop.
+
+In our case, the `eval` function of the interpreter is strict in its use of our custom stack data-type and it's just a self-recursive loop, so the worker-wrapper optimization can apply.
 
 GHC will split this eval function up into `eval` and `weval` during compilation, where
 `eval` is simply a wrapper which accepts the boxed arguments, unwraps them, then calls down into the worker `weval` which uses the unboxed versions of these arguments. GHC will also rewrite all the self-recursive calls to `weval` so as to avoid packing the arguments back up until we eventually return up to the wrapper.
 
-Getting worker-wrapper to trigger reliably is an art of its own, and can require the use of strictness annotations and a lot of examining GHC core to see what's going on. I have neither the time nor space to go deeply into reading core here, but if you've got a tight loop in your program it's worth digging into the core code to ensure GHC is performing this optimization, search for calls to the `w<func>` within the core for your module!
+Getting worker-wrapper to trigger reliably is an art of its own, and can require the use of strictness annotations and a lot of examining GHC core to see what's going on. I have neither the time nor space to go deeply into reading core here, but if you've got a tight loop in your program it's worth digging into the core code to ensure GHC is performing this optimization, search for calls to the `w<func>` within the core for your module, if you can find them you know you're getting worker-wrapper, if not you may have some tweaking to do.
 
 Some other quick tips here:
 
@@ -347,6 +364,3 @@ Optimizing code can be significantly more complex in Haskell than other language
 but just remember that GHC has got your back and you can achieve truly impressive speed in such a high-level language.
 
 Happy Haskelling!
-
-2. Manual data inlining for instructions
-2. Manual inlining with knot-tying
