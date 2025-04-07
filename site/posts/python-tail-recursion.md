@@ -4,7 +4,7 @@ author: Chris Penner
 date: Jul 26, 2016
 tags: [python, programming]
 description: Tail Recursion in python without introspection
-image: ouroboros.jpg
+image: ouroborous.jpg
 ---
 
 Some programming languages are [tail-recursive](https://en.wikipedia.org/wiki/Tail_call), essentially this
