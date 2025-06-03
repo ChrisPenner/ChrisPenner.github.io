@@ -1,13 +1,27 @@
 <!DOCTYPE html>
-<html lang="en"> 
-<head profile="http://www.w3.org/2005/10/profile">
-    <meta charset="UTF-8">
-    <meta name="description" content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath.">
-    <meta name="author" content="Chris Penner">
-    <meta name=viewport content="width=device-width, initial-scale=1">
-    <title>Chris Penner's FP</title>
-    <link rel="alternative" type="application/rss+xml" title="Chris Penner RSS Feed" href="/feed" />
-    <link rel="icon" type="image/png" href="/images/favicon.png">
+<html lang="en">
+  <head profile="http://www.w3.org/2005/10/profile">
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="The Personal blog and musings of Chris Penner, a designer, developer and future opsimath."
+    />
+    <meta name="author" content="Chris Penner" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@chrislpenner">
+    <meta name="twitter:creator" content="@chrislpenner">
+    <meta name="twitter:title" content="Building Industrial Strength Software without Unit Tests">
+    <meta name="twitter:description" content="Unit tests aren&#39;t the only way.">
+    <meta name="twitter:image" content="http://chrispenner.ca/images/transcript-tests.jpg">
+    <title>Building Industrial Strength Software without Unit Tests</title>
+    <link
+      rel="alternate"
+      type="application/atom+xml"
+      title="Chris Penner FP"
+      href="/atom.xml"
+    />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -19,8 +33,8 @@
     <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/syntax.css">
-</head>
-<body>
+  </head>
+  <body>
     <header>
         <nav>
             <a id="beacon" href="/">
@@ -731,26 +745,419 @@
         </div>
     </header>
 
-<div id="page">
-            <section class="table-of-contents">
-                <h1>unison</h1>
-                <ul>
-                        <li>
-            <a href="/posts/transcript-tests">Building Industrial Strength Software without Unit Tests <span class="date">Jun 2, 2025</span> </a>
-        </li>
-        <li>
-            <a href="/posts/unison-type-search">Building Type Search for Unison <span class="date">Aug 14, 2024</span> </a>
-        </li>
-</ul>
-        </section>
-</div>
+ 
+    <div id="page">
+      <div class="wrapper">
+        <div class="masthead">
+          <h1 class="title">
+            Building Industrial Strength Software without Unit Tests
+          </h1>
+          <br />
 
-<footer>
-    &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
-</footer>
+          <img class="post-image" src="/images/transcript-tests.jpg" />
+          <br />
+          <span class="byline">by Chris Penner</span>
+          <br />
+          <span class="date">Jun 2, 2025</span>
+          <br />
+          <div class="metadata">
+            <br />
+            <span class="tags">
+              Tags<br />
+              <a class="tag" href="/tag/programming">programming</a>
+              <a class="tag" href="/tag/haskell">haskell</a>
+              <a class="tag" href="/tag/unison">unison</a>
+              <a class="tag" href="/tag/testing">testing</a>
+            </span>
+          </div>
+        </div>
+      </div>
+      <article class="post">
+        <p>I don't know about you, but testing isn't my favourite part of
+software development.</p>
+<p>It's usually the last thing standing between me and shipping a shiny
+new feature, and writing tests is often an annoying process with a lot
+of boilerplate and fighting against your system to get your app into a
+good start starting for the test or mocking out whichever services your
+app depends on.</p>
+<p>Much ink has been spilled about how to organize your code in order to
+make this easier, but the fact that so many blog posts and frameworks
+exist for this express purpose suggests to me that we as a community of
+software developers haven't quite solved this issue yet.</p>
+<p>Keep reading to see how I've solved this problem for myself by simply
+avoiding unit testing altogether.</p>
+<h2 id="an-alternative-testing-method">An alternative testing
+method</h2>
+<p>When I first started at Unison Computing I was submitting my first
+feature when I learned there were precious few unit tests. I found it
+rather surprising for a codebase for a compiler for a programming
+language! How do you prevent regressions without unit tests?</p>
+<p>The answer is what the Unison team has dubbed <strong>transcript
+tests</strong>. These are a variation on the concept of <em>golden-file
+tests</em>.</p>
+<p>A <em>Unison transcript</em> is a markdown file which explains in
+standard what behaviour it is going to test, then intersperses
+code-blocks which outline the steps involved in testing that feature
+using a mix of Unison code and UCM commands (UCM is Unison's CLI tool).
+After that comes the magic trick; UCM itself can understand and run
+these transcript files directly and record the results of each
+block.</p>
+<p>When running a transcript file with the <code>ucm transcript</code>
+command UCM produces a deterministic output file containing the result
+of processing each code block. Unless the behaviour of UCM has changed
+since the last time it was run the resulting file will always be the
+same.</p>
+<p>Each block in the markdown file is either a command, which is sent to
+the UCM shell tool, or it represents an update to a file on the
+(virtual) file-system, in which case it will be typechecked against the
+state of the codebase.</p>
+<p>Here's a quick example of a transcript for testing UCM's view command
+so you can get a feel for it.</p>
+<pre><code># Testing the `view` command
 
-<link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
-<link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+First, let&#39;s write a simple definition to view:
 
-</body>
+``` unison
+isZero = cases
+  0 -&gt; true
+  _ -&gt; false
+```
+
+Now we add the definition to the codebase, and view it.
+
+``` ucm
+scratch/main&gt; update
+scratch/main&gt; view isZero
+```</code></pre>
+<p>We run this transcript file with
+<code>ucm transcript my-transcript.md</code> which produces the
+<code>my-transcript.output.md</code> file.</p>
+<p>Notice how compiler output is added inline, ignore the hashed names,
+It's because I'm skipping the step which adds names for Unison's
+builtins.</p>
+<pre><code># Testing the `view` command
+
+First, let&#39;s write a simple definition to view:
+
+``` unison
+isZero = cases
+  0 -&gt; true
+  _ -&gt; false
+```
+
+``` ucm :added-by-ucm
+  Loading changes detected in scratch.u.
+
+  I found and typechecked these definitions in scratch.u. If you
+  do an `add` or `update`, here&#39;s how your codebase would
+  change:
+
+    ⍟ These new definitions are ok to `add`:
+    
+      isZero : ##Nat -&gt; ##Boolean
+```
+
+Now we add the definition to the codebase, and view it.
+
+``` ucm
+scratch/main&gt; update
+
+  Done.
+
+scratch/main&gt; view isZero
+
+  isZero : ##Nat -&gt; ##Boolean
+  isZero = cases
+    0 -&gt; true
+    _ -&gt; false
+```</code></pre>
+<p>Feel free to browse through the <a
+href="https://github.com/unisonweb/unison/tree/86bf4b2/unison-src/transcripts-using-base">collection
+of transcripts</a> we test in CI to keep UCM working as expected.</p>
+<h2 id="testing-in-ci">Testing in CI</h2>
+<p>Running transcript tests in CI is pretty trivial; we discover all
+markdown files within our transcript directory and run them all. After
+the outputs have been written we can use
+<code>git diff --exit-code</code> which will then fail with a non-zero
+code if anything of the outputs have changed from what was committed.
+Conveniently, git will also report <em>exactly</em> what changed, and
+what the old output was.</p>
+<p>This failure method allows the developer to know exactly which file
+has unexpected behaviour so they can easily re-run that file or recreate
+the state in their own codebase if they desire.</p>
+<h2 id="transcript-tests-in-other-domains">Transcript tests in other
+domains</h2>
+<p>I liked the transcript tests in UCM so much that when I was tasked
+with building out the Unison Share webapp I decided to use
+transcript-style testing for that too. Fast forward a few years and
+Unison Share is now a fully-featured package repository and code
+collaboration platform running in production without a
+<strong>single</strong> unit test.</p>
+<p>If you're interested in how I've adapted transcript tests to work
+well for a webapp, I'll leave a few notes at the end of the post.</p>
+<h2 id="benefits-of-transcript-tests">Benefits of transcript tests</h2>
+<p>Here's a shortlist of benefits I've found working with transcript
+tests over alternatives like unit tests.</p>
+<p><strong>You write a transcript using the same syntax as you'd
+interact with UCM itself.</strong></p>
+<p>This allows all your users to codify any buggy behaviour they've
+encountered into a deterministic transcript. Knowing exactly how to
+reproduce the behaviour your users are seeing is a huge boon, and having
+a single standardized format for accepting bug reports helps reduce a
+lot of the mental work that usually goes into reproducing bug reports
+from a variety of sources. This also means that the bug report itself
+can go directly into the test suite if we so desire.</p>
+<p><strong>All tests are written against the tool's <em>external</em>
+interface.</strong></p>
+<p>The tests use the same interface that the users of your software will
+employ, which means that <strong>internal refactors won't ever break
+tests</strong> unless there's a change in behaviour that's externally
+observable.</p>
+<p>This has been a huge benefit for me personally. I'd often find myself
+hesitant to re-work code because I knew that at the end I'd be rewriting
+thousands of lines of tests. If you always have to rewrite your tests at
+the same time you've rewritten your code, how do you have any confidence
+that the tests still work as intended?</p>
+<p><strong>Updating tests is trivial</strong></p>
+<p>In the common case where transcripts are mismatched because some help
+message was altered, or perhaps the behaviour has changed but the change
+is intended, you don't need to rewrite any complex assertions, or mock
+out any new dependencies. You can simply look at the new output, and if
+it's reasonable you commit the changed transcript output files.</p>
+<p>It can't be understated how convenient this is when making sweeping
+changes; e.g. making changes to Unison's pretty printer. We don't need
+to manually update test-cases, we just run the transcripts locally and
+commit the output if it all looks good!</p>
+<p><strong>Transcript changes appear in PR reviews</strong></p>
+<p>Since all transcript outputs are committed, any change in behaviour
+will show up in the PR diff in an easy-to-read form. This allows
+reviewers to trivially see the old and new behaviour for each relevant
+feature.</p>
+<p><strong>Transcript tests are documentation</strong></p>
+<p>Each transcript shows how a feature is intended to be used by
+end-users.</p>
+<p><strong>Transcripts as a collaboration tool</strong></p>
+<p>When I'm implementing new features in Unison Share I need to
+communicate the shape of a JSON API with our Frontend designer Simon.
+Typically I'll just write a transcript test which exercises all possible
+variants of the new feature, then I can just point at the transcript
+output as the interface for those APIs.</p>
+<p>It's beneficial for both of us since I don't need to keep an example
+up-to-date for him, and he knows that the output is actually accurate
+since it's generated from an execution of the service itself.</p>
+<h2 id="transcript-testing-for-webapps">Transcript testing for
+Webapps</h2>
+<p>I've adapted transcript testing a bit for the Unison Share webapp. I
+run the standard Share executable locally with its dependencies mocked
+out via docker-compose. I've got a SQL file which resets the database
+with a known set of test fixtures, then use a zsh script to reset my
+application state in between running each transcript.</p>
+<p>Each transcript file is just a zsh script that interacts with the
+running server using a few bash functions which wrap curl commands, but
+save the output to json files, which serve as the transcript output.</p>
+<p>I've also got helpers for capturing specific fields from an API call
+into local variables which I can then interpolate into future queries,
+this is handy if you need to, for example, create a project then switch
+it from private to public, then fetch that project via API.</p>
+<p>Here's a small snippet from one of my transcripts for testing Unison
+Share's project APIs:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#!/usr/bin/env zsh</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Fail the transcript if any command fails</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="bu">set</span> <span class="at">-e</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Load utility functions and variables for user credentials</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> <span class="st">&quot;../../transcript_helpers.sh&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a UCM transcript to upload some code to load in projects.</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="ex">transcript_ucm</span> transcript prelude.md</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># I should be able to see the fixture project as an unauthenticated user.</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="ex">fetch</span> <span class="st">&quot;</span><span class="va">$unauthenticated_user</span><span class="st">&quot;</span> GET project-get-simple <span class="st">&#39;/users/test/projects/publictestproject&#39;</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co"># I should be able to create a new project as an authenticated user.</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="ex">fetch</span> <span class="st">&quot;</span><span class="va">$transcripts_user</span><span class="st">&quot;</span> POST project-create <span class="st">&#39;/users/transcripts/projects/containers&#39;</span> <span class="st">&#39;{</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;summary&quot;: &quot;This is my project&quot;,</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;visibility&quot;: &quot;private&quot;,</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;tags&quot;: []</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="st">}&#39;</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="ex">fetch</span> <span class="st">&quot;</span><span class="va">$transcripts_user</span><span class="st">&quot;</span> GET project-list <span class="st">&#39;/users/transcripts/projects&#39;</span></span></code></pre></div>
+<p>You can see the output files generated by the full transcript <a
+href="https://github.com/unisoncomputing/share-api/tree/f475f49/transcripts/share-apis/projects-flow">in
+this directory</a>.</p>
+<h2 id="requirements-of-a-good-transcript-testing-tool">Requirements of
+a good transcript testing tool</h2>
+<p>After working with two different transcript testing tools across two
+different apps I've got a few criteria for what makes a good transcript
+testing tool, if you're thinking of adding transcript tests to your app
+consider the following:</p>
+<p><strong>Transcripts should be deterministic</strong></p>
+<p>This is critical. Transcripts are only useful if they produce the
+same result on every run, on every operating system, at every time of
+day.</p>
+<p>You may need to make a few changes in your app to adapt or remove
+randomness, at least when in the context of a transcript test.</p>
+<p>In Share there were a lot of timestamps, random IDs, and JWTs (which
+contain a timestamp). The actual values of these weren't important for
+the tests themselves, so I solved the issue by piping the curl output
+through a <code>sed</code> script before writing to disk. The script
+matches timestamps, UUIDs, and JWTs and replaces them with placeholders
+like <code>&lt;TIMESTAMP&gt;</code>, <code>&lt;UUID&gt;</code>, and
+<code>&lt;JWT&gt;</code> accordingly.</p>
+<p>A special mode in your app for transcript testing which avoids
+randomness can be useful, but use custom modes sparingly lest your app's
+behaviour differ too much during transcripts and you can't test the real
+thing.</p>
+<p>I also make sure that the data returned by APIs is always sorted by
+something other than randomized IDs, it's a small price to pay, and
+reduces randomness and heisenbugs in the app as a helpful byproduct.</p>
+<p><strong>Transcripts should be isolated</strong></p>
+<p>Each individual transcript should be run in its own pristine
+environment. Databases should be reset to known state, if the
+file-system is used, it should be cleared or even better, a virtual
+file-system should be used.</p>
+<p><strong>Transcripts should be self-contained</strong></p>
+<p>Everything that pertains to a given test-case's state or
+configuration should be evident from within the transcript file itself.
+I've found that changes in behaviour from the file's location or name
+can just end up being confusing.</p>
+<h2 id="difficulties-working-with-transcripts">Difficulties working with
+Transcripts</h2>
+<p><strong>Transcripts often require custom tooling</strong></p>
+<p>In UCM's case the transcript tooling has evolved slowly over many
+years, it has it's own parser, and you can even test UCM's API server by
+using special code blocks for that.</p>
+<p>Share has a variety of <code>zsh</code> utility scripts which provide
+helpers for fetching endpoints using curl, and filtering output to
+capture data for future calls. It also has a few tools for making
+database calls and assertions.</p>
+<p>Don't shy away from investing a bit of time into making transcript
+testing sustainable and pleasant, it will pay dividends down the
+road.</p>
+<p><strong> </strong>Intensive Setup**</p>
+<p>As opposed to unit tests which are generally pretty lightweight;
+transcript tests are full integration tests, and require setting up
+data, and sometimes executing entire flows so that we can get the system
+into a good state for testing each feature.</p>
+<p>You can mitigate the setup time by testing multiple features with
+each transcript.</p>
+<p>I haven't personally found transcript tests to take too much time in
+CI, largely because I think transcript testing tends to produce fewer
+tests, but of higher value than unit testing. I've seen many unit test
+suites bogged down by particular unit tests which generate hundreds of
+test cases that aren't actually providing real value. Also, any
+setup/teardown is going to be more costly on thousands of unit-tests as
+compared to dozens or hundreds of transcript tests.</p>
+<p><strong>Service Mocking</strong></p>
+<p>Since transcript tests run against the system-under-test's external
+interface, you won't have traditional mocking/stubbing frameworks
+available to you. Instead, you'll mock out the system's dependencies by
+specifying custom services using environment variables, or wiring things
+up in docker-compose.</p>
+<p>Most systems have a setup for local development anyways, so
+integrating transcript tests against it has the added benefit that
+they'll ensure your local development setup is tested in CI, is
+consistent for all members of your team, and continues to work as
+expected.</p>
+<h2 id="in-summary">In Summary</h2>
+<p>Hopefully this post has helped you to consider your relationship with
+unit tests and perhaps think about whether other testing techniques may
+work better for your app.</p>
+<p>Transcript tests surely aren't ideal for <strong>all</strong>
+possible apps or teams, but my last few years at Unison have proven to
+me that tests can be more helpful, efficient, and readable than I'd
+previously thought possible.</p>
+<p>Let me know how it works out for you!</p>
+
+        <p>
+          Hopefully you learned something 🤞! If you did, please consider
+          checking out my book: It teaches the principles of using optics in
+          Haskell and other functional programming languages and takes you all
+          the way from an beginner to wizard in all types of optics! You can get
+          it <a href="https://leanpub.com/optics-by-example/">here</a>. Every
+          sale helps me justify more time writing blog posts like this one and
+          helps me to continue writing educational functional programming
+          content. Cheers!
+        </p>
+
+        <br />
+        <br />
+
+        <!--Share buttons-->
+        <div class="social-buttons">
+          <a
+            href="https://twitter.com/share"
+            class="twitter-share-button"
+            data-url="https://chrispenner.ca/posts/transcript-tests"
+            data-text="Check out: Building Industrial Strength Software without Unit Tests - "
+            data-via="chrislpenner"
+            >Tweet</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <a
+            href="https://twitter.com/chrislpenner"
+            class="twitter-follow-button"
+            data-show-count="false"
+            data-dnt="true"
+            >Follow @chrislpenner</a
+          >
+          <script>
+            !(function (d, s, id) {
+              var js,
+                fjs = d.getElementsByTagName(s)[0],
+                p = /^http:/.test(d.location) ? 'http' : 'https';
+              if (!d.getElementById(id)) {
+                js = d.createElement(s);
+                js.id = id;
+                js.src = p + '://platform.twitter.com/widgets.js';
+                fjs.parentNode.insertBefore(js, fjs);
+              }
+            })(document, 'script', 'twitter-wjs');
+          </script>
+          <div
+            class="fb-like"
+            data-href="https://chrispenner.ca/transcript-tests"
+            data-layout="button"
+            data-action="like"
+            data-show-faces="true"
+            data-share="true"
+          ></div>
+        </div>
+
+        <!-- Disqus Comments -->
+        <!-- <div id="disqus_thread"></div> -->
+        <!-- <script type="text/javascript"> -->
+        <!--     var disqus_shortname = 'chrispenner'; -->
+        <!--     var disqus_identifier = ''; -->
+        <!--     var disqus_url = 'http://chrispenner.ca'; -->
+
+        <!-- (function() { -->
+        <!-- var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; -->
+        <!-- dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js'; -->
+        <!-- (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); -->
+        <!-- })(); -->
+        <!-- </script> -->
+      </article>
+    </div>
+
+    <footer>
+        &copy; 2014-2018 Chris Penner - <a href="/atom.xml">Feed</a>
+    </footer>
+    
+    <link href='https://fonts.googleapis.com/css?family=Quicksand:300,400' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Oswald' rel='stylesheet' type='text/css'>
+  </body>
 </html>
