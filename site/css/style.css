@@ -53,6 +53,7 @@ div.sourceCode {
   max-width: 100vw;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 1em;
 }
 
 pre.sourceCode {
@@ -60,9 +61,6 @@ pre.sourceCode {
   -webkit-overflow-scrolling: touch;
   padding: 1em;
   max-width: 100vw;
-}
-
-.sourceCode {
   padding: 1em;
 }
 
@@ -74,7 +72,7 @@ pre.sourceCode {
 
 /* Variables */
 html {
-  font-family: Helvetica, sans-serif;
+  font-family: "EB Garamond", serif;
   color: var(--fg);
   background: var(--bg);
   background-attachment: fixed;
@@ -123,30 +121,21 @@ h1 {
   color: var(--highlight-fg);
   font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: bold;
-  font-size: 2.5em;
-  text-align: center;
-  width: 80%;
-  margin: 0 auto 0;
-  padding: 1em 0 0 0;
+  font-size: 1.7em;
 }
 
 h2 {
   color: var(--title-fg);
   font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: bold;
-  font-size: 2em;
-  text-align: center;
-  width: 80%;
-  margin: 0 auto 0;
-  padding: 1em 0 0 0;
+  font-size: 1.5em;
+  margin-top: 1em;
 }
 
 h3 {
   font-family: "helvetica neue", sans-serif;
   color: var(--title-two-fg);
   font-size: 1.4em;
-  margin: 0.5em 0;
-  text-align: center;
 }
 
 blockquote {
@@ -242,19 +231,17 @@ footer {
 .title {
   font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: 400;
-  font-size: 3em;
+  font-size: 2em;
   text-transform: capitalize;
   max-width: 800px;
   display: block;
   margin: auto;
-  text-align: center;
 }
 
 .byline {
-  font-family: "helvetica neue", sans-serif;
-  font-style: italic;
+  font-family: "EB Garamond", serif;
   font-weight: 100;
-  font-size: 1em;
+  font-size: 1.5em;
 }
 
 .wrapper {
@@ -368,7 +355,7 @@ a.category:hover {
   min-width: 100px;
   max-width: 900px;
   padding: 0px 20px;
-  margin: 3em auto;
+  margin: 1.5em auto;
   transition: color 2s;
   font-size: 1.2em;
   align-items: center;
@@ -376,7 +363,7 @@ a.category:hover {
 
 .post p {
   width: 100%;
-  line-height: 1.6em;
+  line-height: 1.2em;
   letter-spacing: 0.02em;
   margin: 0.5em 0 0 0;
   hyphens: auto;
@@ -385,12 +372,6 @@ a.category:hover {
 
 .post p + p {
   margin-top: 1em;
-}
-
-.post > p:first-of-type:first-letter {
-  font-size: 8em;
-  line-height: 0.1em;
-  padding-right: 0.06em;
 }
 
 .post ul {
@@ -723,10 +704,7 @@ a.category:hover {
     max-width: 100vw;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  h2 {
-    border-top: 3px solid #777;
+    padding: 1em;
   }
 
   .page {
