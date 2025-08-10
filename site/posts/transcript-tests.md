@@ -258,7 +258,7 @@ It also has a few tools for making database calls and assertions.
 
 Don't shy away from investing a bit of time into making transcript testing sustainable and pleasant, it will pay dividends down the road.
 
-**
+
 **Intensive Setup**
 
 As opposed to unit tests which are generally pretty lightweight; transcript tests are full integration tests,
