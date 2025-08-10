@@ -1,0 +1,45 @@
+:root {
+  --code-bg: var(--base01);
+  --code-fg: var(--base07);
+  --code-comment: var(--base05);
+  --code-keyword: var(--base0D);
+  --code-symbol: var(--base08);
+  --code-data: var(--base0A);
+  --code-number: var(--base0C);
+  --code-char: var(--base0C);
+  --code-alert: var(--base09);
+  --code-function: var(--base09);
+}
+
+pre {
+    background-color: var(--code-bg);
+}
+
+code {
+    background-color: var(--code-bg);
+    color: var(--code-fg);
+}
+
+/* KeyWordTok */
+.sourceCode .kw { color: var(--code-keyword); }
+/* DataTypeTok */
+.sourceCode .dt { color: var(--code-data); }
+
+/* DecValTok (decimal value), BaseNTok, FloatTok */
+.sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: var(--code-number); }
+/* CharTok */
+.sourceCode .ch { color: var(--code-char); }
+/* StringTok */
+.sourceCode .st { color: var(--code-char); }
+/* CommentTok */
+.sourceCode .co { color: var(--code-comment); }
+/* OtherTok */
+.sourceCode .ot { color: var(--code-symbol); }
+/* AlertTok */
+.sourceCode .al { color: var(--code-alert); font-weight: bold; }
+/* FunctionTok */
+.sourceCode .fu { color: var(--code-function); }
+/* RegionMarkerTok */
+.sourceCode .re { }
+/* ErrorTok */
+.sourceCode .er { color: var(--code-alert); font-weight: bold; }
