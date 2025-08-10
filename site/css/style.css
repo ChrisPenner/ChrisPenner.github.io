@@ -50,10 +50,19 @@ html {
 }
 
 div.sourceCode {
-  max-width: 100%;
+  max-width: 100vw;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
 pre.sourceCode {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1em;
+  max-width: 100vw;
+}
+
+.sourceCode {
   padding: 1em;
 }
 
@@ -73,6 +82,7 @@ html {
   width: 100%;
   z-index: -10;
 }
+
 html.dark {
   background: #333;
   background: -webkit-linear-gradient(
@@ -111,7 +121,7 @@ body {
 
 h1 {
   color: var(--highlight-fg);
-  font-family: 'Quicksand', 'helvetica neue', sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: bold;
   font-size: 2.5em;
   text-align: center;
@@ -122,7 +132,7 @@ h1 {
 
 h2 {
   color: var(--title-fg);
-  font-family: 'Quicksand', 'helvetica neue', sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: bold;
   font-size: 2em;
   text-align: center;
@@ -132,7 +142,7 @@ h2 {
 }
 
 h3 {
-  font-family: 'helvetica neue', sans-serif;
+  font-family: "helvetica neue", sans-serif;
   color: var(--title-two-fg);
   font-size: 1.4em;
   margin: 0.5em 0;
@@ -158,6 +168,7 @@ blockquote {
   -ms-flex-pack: center;
   justify-content: center;
 }
+
 blockquote > p {
   padding-left: 7px;
   border-left: 5px solid rgba(76, 76, 76, 0.9);
@@ -191,6 +202,7 @@ a:hover {
   -webkit-transition: color 0.1s;
   transition: color 0.1s;
 }
+
 a:hover,
 a:visited:hover,
 a:hover:hover {
@@ -228,7 +240,7 @@ footer {
 }
 
 .title {
-  font-family: 'Quicksand', 'helvetica neue', sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-weight: 400;
   font-size: 3em;
   text-transform: capitalize;
@@ -239,7 +251,7 @@ footer {
 }
 
 .byline {
-  font-family: 'helvetica neue', sans-serif;
+  font-family: "helvetica neue", sans-serif;
   font-style: italic;
   font-weight: 100;
   font-size: 1em;
@@ -302,7 +314,7 @@ footer {
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
-  font-family: 'helvetica neue', sans-serif;
+  font-family: "helvetica neue", sans-serif;
 }
 
 .categories,
@@ -311,7 +323,7 @@ footer {
   font-size: 0.9em;
   font-style: italic;
   line-height: 2em;
-  font-family: 'helvetica neue', sans-serif;
+  font-family: "helvetica neue", sans-serif;
   width: 100%;
   max-width: 500px;
   display: block;
@@ -329,16 +341,19 @@ a.category {
   -webkit-transition: 0.3s;
   transition: 0.3s;
 }
+
 a.tag:hover,
 a.category:hover {
   background: var(--highlight-bg);
   color: var(--fg);
   text-decoration: none;
 }
+
 .dark a.tag,
 .dark a.category {
   color: #ddd;
 }
+
 .dark a.tag:hover,
 .dark a.category:hover {
   background: #ddd;
@@ -358,6 +373,7 @@ a.category:hover {
   font-size: 1.2em;
   align-items: center;
 }
+
 .post p {
   width: 100%;
   line-height: 1.6em;
@@ -366,18 +382,22 @@ a.category:hover {
   hyphens: auto;
   word-break: break-word;
 }
+
 .post p + p {
   margin-top: 1em;
 }
+
 .post > p:first-of-type:first-letter {
   font-size: 8em;
   line-height: 0.1em;
   padding-right: 0.06em;
 }
+
 .post ul {
   list-style-type: disc;
   text-indent: -1em;
 }
+
 .post ul li {
   line-height: 1.3em;
   letter-spacing: 0.05em;
@@ -399,18 +419,22 @@ a.category:hover {
   clear: both;
   width: 100%;
 }
+
 .table-of-contents h1 {
   font-size: 3em;
   text-align: center;
-  font-family: 'Quicksand', 'helvetica neue', sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
 }
+
 .table-of-contents ul {
   margin: 3em 0;
   list-style: none;
 }
+
 .table-of-contents li {
   width: 100%;
 }
+
 .table-of-contents li a {
   color: var(--fg);
   font-weight: normal;
@@ -424,20 +448,24 @@ a.category:hover {
   -webkit-transition: color 0.7s, background 0.7s, padding 0.5s;
   transition: color 0.7s, background 0.7s, padding 0.5s;
 }
+
 .table-of-contents li a .date {
   float: right;
   margin-top: -0.25em;
   /* color: rgba(128, 128, 128, 0.8); */
 }
+
 .table-of-contents li a:hover {
   background: var(--highlight-bg);
   color: #fffffc;
   text-decoration: none;
   padding-left: 2em;
 }
+
 .dark .table-of-contents ul a {
   color: #ddd;
 }
+
 .dark .table-of-contents ul a:hover {
   background: #ddd;
   color: #333;
@@ -475,6 +503,7 @@ a.category:hover {
   transition: background 0.5s, opacity 0.5s, width 0.5s;
   cursor: pointer;
 }
+
 .arrow:hover {
   box-sizing: border-box;
   width: 2em;
@@ -486,9 +515,11 @@ a.category:hover {
   transition: background 0.5s, opacity 0.5s, width 0.5s;
   text-decoration: none;
 }
+
 .dark .arrow {
   background: #222;
 }
+
 .dark .arrow:hover {
   color: #c00762;
   border-color: #c00762;
@@ -508,9 +539,11 @@ a.category:hover {
   justify-content: center;
   margin: 1em 0;
 }
+
 .social-buttons > div {
   /*margin: 0 1em;*/
 }
+
 .social-buttons .twitter-share-button {
   max-width: 90px;
   margin-right: 5px;
@@ -524,6 +557,7 @@ a.category:hover {
 .monochrome {
   color: #333;
 }
+
 .dark .monochrome {
   color: #ddd;
 }
@@ -542,17 +576,21 @@ a.category:hover {
   -ms-flex-align: center;
   align-items: center;
 }
+
 .gem-info table {
   border: 1px solid #333;
   border-collapse: collapse;
 }
+
 .gem-info table td {
   border: 1px solid #333;
   padding: 0.4em 1em;
 }
+
 .dark .gem-info table {
   border: 1px solid #ddd;
 }
+
 .dark .gem-info table td {
   border: 1px solid #ddd;
 }
@@ -570,6 +608,7 @@ a.category:hover {
   -ms-flex-align: center;
   align-items: center;
 }
+
 .pager-title span {
   text-align: center;
 }
@@ -588,7 +627,7 @@ a.category:hover {
 
 #theme-button {
   text-transform: uppercase;
-  font-family: 'Quicksand', 'helvetica neue', sans-serif;
+  font-family: "Quicksand", "helvetica neue", sans-serif;
   font-size: 1.5em;
   font-weight: bold;
   text-align: right;
@@ -597,15 +636,17 @@ a.category:hover {
   transition: opacity 0.5s, color 2s;
   opacity: 0.6;
 }
+
 #theme-button:hover {
   opacity: 1;
 }
+
 .dark #theme-button {
   color: #ddd;
 }
 
 #beacon {
-  font-family: 'Oswald', sans-serif;
+  font-family: "Oswald", sans-serif;
   font-size: 4em;
   height: 1.5em;
   width: 1.5em;
@@ -618,13 +659,16 @@ a.category:hover {
   transition: opacity 0.5s;
   color: inherit;
 }
+
 #beacon path {
   fill: currentColor;
 }
+
 #beacon .logo {
   width: 100%;
   height: 100%;
 }
+
 #beacon:hover {
   opacity: 1;
   text-decoration: none;
@@ -670,8 +714,17 @@ a.category:hover {
     opacity: 0.5;
   }
 }
+
 @media only screen and (min-device-width: 320px) and (max-device-width: 480px) {
   /* Styles */
+  pre,
+  pre.sourceCode,
+  div.sourceCode {
+    max-width: 100vw;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   h2 {
     border-top: 3px solid #777;
   }
@@ -702,6 +755,7 @@ a.category:hover {
     line-height: 0.1em;
   }
 }
+
 @media only screen and (max-height: 450px) {
   .masthead {
     min-height: 350px;
