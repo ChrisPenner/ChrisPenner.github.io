@@ -1,5 +1,5 @@
 ---
-title: "Traversals for batch work"
+title: "Using traversals to batch database queries"
 author: Chris Penner
 date: Aug 11, 2025
 tags: [programming, haskell]
@@ -7,7 +7,7 @@ description: "Techniques for lateralizing nested code"
 image: pipes.jpg
 ---
 
-This article is about a code-transformation technique I used to get 100x-300x performance improvements when loading Unison code from Postgres in Unison Share. I haven't seen it documented anywhere else, so wanted to share the trick!
+This article is about a code-transformation technique I used to get 100x-300x performance improvements on a particularly slow bit of code which was loading Unison code from Postgres in Unison Share. I haven't seen it documented anywhere else, so wanted to share the trick!
 
 It's a perennial annoyance when I'm programming that often the most readable way to write some code
 is also directly at odds with being performant. A lot of data has a tree structure, and so working with this data is usually most simply expressed as a series of nested function calls. Nested function calls are a reasonable approach when executing CPU-bound tasks,
@@ -370,5 +370,7 @@ I was also able to perform a fully batched rewrite of heavily nested code withou
 This was particularly useful because it allowed me to partially large portions 
 of the codebase in smaller pieces by using batched methods with a simple `id` Traversal, 
 and using simple traverse on methods you haven't rewritten yet.
+
+You may not get such huge gains if your code isn't pessimistically linear in the first place, but this is also a nice, composable way to write batch code in the first place.
 
 Anyways, give it a go and let me know what you think of it!
