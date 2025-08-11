@@ -1,10 +1,10 @@
 ---
 title: "Traversals for batch work"
 author: Chris Penner
-date: May 7, 2025
+date: Aug 11, 2025
 tags: [programming, haskell]
 description: "Techniques for lateralizing nested code"
-image: flux-monoid/flux.jpg
+image: pipes.jpg
 ---
 
 This article is about a code-transformation technique I used to get 100x-300x performance improvements when loading Unison code from Postgres in Unison Share. I haven't seen it documented anywhere else, so wanted to share the trick!
@@ -13,28 +13,29 @@ It's a perennial annoyance when I'm programming that often the most readable way
 is also directly at odds with being performant. A lot of data has a tree structure, and so working with this data is usually most simply expressed as a series of nested function calls. Nested function calls are a reasonable approach when executing CPU-bound tasks,
 but in webapps we're often querying or fetching data along the way.
 In a nested function structure we'll naturally end up interleaving a lot of one-off data requests. In most cases these data requests will block
-execution until a round-trip to the database fetches the data we need to proceed.
+further execution until a round-trip to the database fetches the data we need to proceed.
 
-In Unison Share, I often need to hydrate an ID into an AST structure which represents a chunk of code, and each reference in that code will often contain some metadata or information of its own. We split off large text blobs and external code references from the AST itself, so sometimes these fetches will proceed in layers, e.g. fetch the AST, then fetch the text literals referenced in the tree, then fetch the code referenced by the tree, etc.
+In Unison Share, I often need to hydrate an ID into an AST structure which represents a chunk of code, and each reference in that code will often contain some metadata or information of its own. 
+We split off large text blobs and external code references from the AST itself, so sometimes these fetches will proceed in layers, e.g. fetch the AST, then fetch the text literals referenced in the tree, then fetch the metadata for code referenced by the tree, etc.
 
 When hydrating a large batch of code definitions, if each definition takes N database calls, loading M definitions is NxM database round-trips, NxM query plans, and potentially NxM index or table scans! If you make a call for each text ID or external reference individually, then this scales even worse.
 
-This post investigates a technique I've crafted for iteratively evolving **linear, nested** codepaths into **batched** versions of the
-same codepaths which allow you to keep the same nested code structure, avoiding the need to restructure the whole codebase. It also provides a trivial mechanism for **deduplicating** data requests, and even allows using the exact same codepath for loading 0, 1, or many entities in a typesafe way. First a quick explanation of how I ended up in this situation.
+The technique in the post details a technique for using traversals to iteratively evolve **linear, nested** codepaths into similar functions which work on **batches** of data instead.
+Critically, It allows keeping all the same codepaths which allow you to keep the same nested code structure, avoiding the need to restructure the whole codebase and allowing you to easily introduce batching progressively without shipping a whole rewrite at once. It also provides a trivial mechanism for **deduplicating** data requests, and even allows using the exact same codepath for loading 0, 1, or many entities in a typesafe way. First a quick explanation of how I ended up in this situation.
 
 
 ## Case study: Unison Share definition loading
 
 I'm in charge of the [Unison Share](https://share.unison-lang.org/) code-hosting and collaboration platform.
-The codebase for this webapp started its life as a webapp by collecting bits and pieces of code from the UCM CLI application. UCM uses SQLite, so the first iteration was minimal rewrite which simply replaced SQLite bits with equivalent Postgres calls, but the codepaths themselves were left largely the same.
+The codebase for this webapp started its life by collecting bits and pieces of code from the UCM CLI application. UCM uses SQLite, so the first iteration was minimal rewrite which simply replaced SQLite queries with the equivalent Postgres queries, but the codepaths themselves were left largely the same.
 
-SQLite operates in-process and loads everything from memory or disk, so for our intents and purposes in UCM it has essentially no latency. As a result, most code for loading definitions from the user's codebase in UCM was written simply and linearly, loading the data only as it is needed. E.g. we may have a method `loadText :: TextId -> Sqlite.Transaction Text`, and if you want to load many text references it was perfectly reasonable to just traverse `loadText` over a list of IDs.
+SQLite operates in-process and loads everything from memory or disk, so for our intents and purposes in UCM it has essentially no latency. As a result, most code for loading definitions from the user's codebase in UCM was written simply and linearly, loading the data only as it is needed. E.g. we may have a method `loadText :: TextId -> Sqlite.Transaction Text`, and when we needed to load many text references it was perfectly reasonable to just traverse `loadText` over a list of IDs.
 
-Not all databases have the same tradeoffs though! In the Unison Share webapp we now use a Postgres Database, which means the database has a network call and round-trip latency for each and every query.
+However, not all databases have the same trade-offs! In the Unison Share webapp we use Postgres, which means the database has a network call and round-trip latency for each and every query.
 We now pay a fixed round-trip latency cost on every query that simply wasn't a factor before.
-Something simple like`traverse loadText textIds` is now performing **hundreds** of _sequential_ database calls and individual text index lookups! Postgres doesn't know anything about which query we'll run next, so it can't optimize this at all (aside from warming up caches) That's clearly not good.
+Something simple like `traverse loadText textIds` is now performing **hundreds** of _sequential_ database calls and individual text index lookups! Postgres doesn't know anything about which query we'll run next, so it can't optimize this at all (aside from warming up caches) That's clearly not good.
 
-To optimize for Postgres we'd much prefer to make one large database call which collects all the `TextId`s and returns all the `Text` values in a single query, this allows Postgres to save a lot of work by finding all text values in a single scan, and means we only pay for a single round-trip delay rather than one delay per text.
+To optimize for Postgres we'd much prefer to make one large database call which takes an array of a batch of `TextId`s and returns all the `Text` results in a single query, this allows Postgres to save a lot of work by finding all text values in a single scan, and means we only incur a single round-trip delay rather than one per text.
 
 Here's a massively simplified sketch of what the original naive linear code looked like:
 
@@ -53,11 +54,10 @@ loadText textId =
   queryOneColumn [sql| SELECT text FROM texts WHERE id = #{textId} |]
 ```
 
-We really want to load all the Texts in a single query, but the TextIds aren't
+We really want to load all the Texts in a single query, but the `TextIds` aren't
 just sitting in a nice list, they're nested within the AST structure.
 
-Assuming your DB query tool has some way to accept and return arrays, I think the
-approach folks would commonly take here would be something like the following:
+Here's some pseudocode for fetching a these as a batch:
 
 ```haskell
 batchLoadASTTexts :: AST TermReference TextId -> Transaction (AST TermInfo Text)
@@ -77,9 +77,9 @@ batchLoadASTTexts ast = do
       pure $ Map.fromList resolvedTexts
 ```
 
-This solves the biggest problem, most importantly it reduces N queries down to a single batch query which is already a huge improvement, but it's a bit of boilerplate, and we'd need to write a custom version of this for each container we want to batch load texts from.
+This solves the biggest problem, most importantly it reduces N queries down to a single batch query which is already a huge improvement! However, it is a bit of boilerplate, and we'd need to write a custom version of this for each container we want to batch load texts from.
 
-Clever folks will realize that we actually don't care about the "AST" structure at all, we only need a container which is Traversable, so we can generalize over that:
+Clever folks will realize that we actually don't care about the `AST` structure at all, we only need a container which is Traversable, so we can generalize over that:
 
 ```haskell
 batchLoadTexts :: Traversable t => t TextId -> Transaction (t Text)
@@ -106,7 +106,7 @@ loadText textId = do
   pure text
 ```
 
-However, this approach still requires that the IDs you want to batch load are the focus of some Traversable instance; what if your structure contains a half-dozen different ID types?
+This approach does still require that the IDs you want to batch load are the focus of some Traversable instance. What if instead your structure contains a half-dozen different ID types, or is arranged such that it's not in the Traversable slot of your type parameters?
 Bitraversable can handle up to two parameters, but after that you're back to writing bespoke functions for your container types.
 
 For instance, how would we use this technique to batch load our `TermInfo` from the AST's `TermReference`s?
@@ -138,7 +138,7 @@ traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
 
 As it turns out, we don't need a type class in order to construct and pass functions of this type around, we can define them ourselves.
 
-With this signature though it's still requiring that the elements being traversed are the final type parameter of the container 't'; we need a more general version. We can instead use this:
+With this signature it's still requiring that the elements being traversed are the final type parameter of the container `t`; we need a more general version. We can use this instead:
 
 ```haskell
 type Traversal s t a b = Applicative f => (a -> f b) -> s -> f t
@@ -158,9 +158,9 @@ Applicative f => (TermReference -> f TermInfo) -> AST TermReference text -> f (A
 
 If you've ever worked with optics or the `lens` library before this should be looking mighty familiar, we've just derived `lens`'s [`Traversal`](https://hackage-content.haskell.org/package/lens-5.3.5/docs/Control-Lens-Combinators.html#t:Traversal) type!
 
-Most optics are essentially just generalized traversals, we can write one-off traversals for any situation we might need, and can trivially compose small independent traversals together to create more complex traversals.
+Most optics are essentially just traversals, we can write one-off traversals for any situation we might need, and can trivially compose small independent traversals together to create more complex traversals.
 
-Let's rewrite our batch loaders to take an explicit Traversal argument rather than using a type class.
+Let's rewrite our batch loaders to take an explicit Traversal argument.
 
 ```haskell
 import Control.Lens qualified as Lens
@@ -328,10 +328,14 @@ Using `unsafePartsOf` allows us to act on the foci of a traversal _as though_ th
 The `unsafe` bit is that it will crash if we don't return a list with the exact same number of elements, so be aware of that, but 
 it's the same crash we'd have gotten in our old version if an ID was missing a value.
 
+This also allows us to avoid the song-and-dance for converting the incoming traversal into a fold.
+
 We need the `ord` column simply because sql doesn't guarantee any specific result order unless we specify one.
 This will pair up result rows piecewise with the input IDs, and so it doesn't require any Ord instance.
 
-We can wrap `unsafePartsOf` with our own combinator to add a few additional features:
+We can wrap `unsafePartsOf` with our own combinator to add a few additional features.
+
+Here's a version which will deduplicate IDs in the input list, will skip the action if the input list is empty, and will provide a nice error with a callstack if anything goes sideways.
 
 ```haskell
 asListOf :: (HasCallStack, Ord a) => Traversal s t a b -> Traversal s t [a] [b]

@@ -9,6 +9,6 @@ image: comonadic-layout/layout.jpg
 
 Hey folks! I feel like Comonads are a topic which people tend to have a pretty
 tough time wrapping their heads around. Honestly I think a lot of this stems
-from the face that oftentimes people assume they should be relating it to their
+from the fact that oftentimes people assume they should be relating it to their
 knowledge of Monads (as if that's likely to simplify anything). Regardless of the 
 reason for the misunderstanding I've found for myself that 

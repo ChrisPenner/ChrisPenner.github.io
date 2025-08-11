@@ -8,7 +8,7 @@ image: postman/mail.jpg
 ---
 
 
-Classes od data
+Classes of data
 
 # Empty
 
