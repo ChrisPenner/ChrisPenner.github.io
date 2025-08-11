@@ -331,8 +331,40 @@ it's the same crash we'd have gotten in our old version if an ID was missing a v
 We need the `ord` column simply because sql doesn't guarantee any specific result order unless we specify one.
 This will pair up result rows piecewise with the input IDs, and so it doesn't require any Ord instance.
 
-Neither of our approaches have de-duplicated the input IDs, which is a quick optimization that could prove very effective in practice.
-We can add this optimization as a traversal combinator to replace the default `unsafePartsOf`.
+We can wrap `unsafePartsOf` with our own combinator to add a few additional features:
 
+```haskell
+asListOf :: (HasCallStack, Ord a) => Traversal s t a b -> Traversal s t [a] [b]
+asListOf trav f s =
+  s
+    & unsafePartsOf trav %%~ \case
+      -- No point making a database call which will return no results
+      [] -> pure []
+      inputs -> do
+        -- First, deduplicate the inputs as a self indexed map.
+        let asMap = Map.fromList (zip inputs inputs)
+        asMap
+          -- Call the action with the list of deduped inputs
+          & unsafePartsOf traversed f
+          <&> \resultMap ->
+            -- Now map the result for each input in the original list to its result value
+            let resultList = mapMaybe (\k -> Map.lookup k resultMap) inputs
+                aLength = length inputs
+                bLength = length resultList
+             in if aLength /= bLength
+                  -- Better error message if our query is bad and returns the wrong number of elements.
+                  then error $ "asListOf: length mismatch, expected " ++ show aLength ++ " elements, got " ++ show bLength <> " elements"
+                  else resultList
+```
 
+Using a tool like this has caveats, it's very easy to cause runtime crashes if your query isn't written to _always_ return the same number of results as it was given inputs, and skipping the action on empty lists could result in some confusion.
 
+### Conclusion
+
+I've gotten a ton of use out of this technique in Unison Share, and managed to speed things up by 2 orders of magnitude. 
+I was also able to perform a fully batched rewrite of heavily nested code without needing to re-arrange the code-graph.
+This was particularly useful because it allowed me to partially large portions 
+of the codebase in smaller pieces by using batched methods with a simple `id` Traversal, 
+and using simple traverse on methods you haven't rewritten yet.
+
+Anyways, give it a go and let me know what you think of it!
