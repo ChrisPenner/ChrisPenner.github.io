@@ -312,4 +312,4 @@ Ultimately this is a bit of a naive implementation which won't work well on huge
 
 ## Summary
 
-That's all I've got for you today, nothing to revolutionary I'm sure, but hopefully you had a bit of fun, or maybe learned a thing or two about what code looks like in Haskell compared to your favourite language 😄
+That's all I've got for you today, nothing too revolutionary I'm sure, but hopefully you had a bit of fun, or maybe learned a thing or two about what code looks like in Haskell compared to your favourite language 😄

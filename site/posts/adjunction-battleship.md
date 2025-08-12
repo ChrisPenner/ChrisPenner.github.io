@@ -256,8 +256,7 @@ It's at this point we want to start making guesses using a Coord and
 seeing what's in each position! How else are we going to sink the
 battleship? Well, when we start talking about 'Indexing' into our board
 (which is a functor) I think immediately of the Representable typeclass from
-[Data.Functor.Rep](https://hackage.haskell.org/package/adjunctions-4.3/docs/Dat
-a-Functor-Rep.html#t:Representable). Don't let the name scare you, one of the
+[Data.Functor.Rep](https://hackage.haskell.org/package/adjunctions-4.3/docs/Data-Functor-Rep.html#t:Representable). Don't let the name scare you, one of the
 things that Representable gives you is the notion of *indexing* into a functor.
 
 ```haskell
@@ -289,8 +288,7 @@ by Data.Functor.Adjunction as your implementations for your Representable instan
 
 
 For Representable we also have a prerequisite of Distributive from
-[Data.Distributive](https://hackage.haskell.org/package/distributive-0.5.0.2/do
-cs/Data-Distributive.html#t:Distributive), All Representable functors are also
+[Data.Distributive](https://hackage.haskell.org/package/distributive-0.5.0.2/docs/Data-Distributive.html#t:Distributive), All Representable functors are also
 Distributive and this library has decided to make that an explicit requirement.
 
 No problem though, it turns out that since every Representable is Distributive
