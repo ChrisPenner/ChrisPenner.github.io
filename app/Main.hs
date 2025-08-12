@@ -194,7 +194,7 @@ formatDate humanDate = toIsoDate parsedTime
       parseTimeOrError True defaultTimeLocale "%b %e, %Y" humanDate :: UTCTime
 
 toIsoDate :: UTCTime -> String
-toIsoDate = formatShow (withUTCDesignator $ utcTimeFormat (calendarFormat ExtendedFormat) (timeOfDayFormat ExtendedFormat))
+toIsoDate = formatShow (utcTimeFormat (calendarFormat ExtendedFormat) (timeOfDayFormat ExtendedFormat))
 
 buildFeed :: [Post] -> Action ()
 buildFeed posts = do
