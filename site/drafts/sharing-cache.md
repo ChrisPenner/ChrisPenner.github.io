@@ -1,60 +1,190 @@
 ---
-title: 'Save memory using a sharing cache'
+title: 'Save memory and CPU with an interning cache'
 author: "Chris Penner"
-date: "Aug 6, 2022"
+date: "Aug 12, 2025"
 tags: [haskell]
-description: "How to save memory in long-lived applications by enforcing sharing."
-image: gadts.jpg
+description: "Weak Caching for Strong Apps"
+image: filing-cabinet.jpg
 ---
 
-This post will teach you how, depending on your app, you might be able to add a very simple caching
-layer which not only improves performance, but might also drastically reduce the memory residency of your program.
+This post will introduce a simple caching strategy, with a small twist, which depending on your app may help you not only improve performance, but might also drastically reduce the memory residency of your program.
+
+I had originally written this post in 2022, but looks like I got busy and failed to release it, so just pretend you're reading this in 2022, okay? It was a simpler time.
+
+In case you're wondering, we continued to optimize storage and the newest UCM uses a fraction of the memory mentioned in the article, looks like it had a happy ending after all.
 
 ## Case Study
 
-I work on the team building the [Unison Language](https://www.unison-lang.org/).
+I help build the [Unison Language](https://www.unison-lang.org/).
 One unique thing about the language is that programmers interact with the language through the Unison Codebase Manager (a.k.a. `ucm`), which is an interactive shell.
-Some users have started to amass larger codebases, and lately we'd been noticing that the memory usage of `ucm` was growing to unacceptable levels.
-Loading one specific codebase (which I'll use for testing throughout this article) required 2.73GB to load into memory, and took about 90 seconds to do so, which 
-is far larger and slower than we'd like. We have concrete plans to avoid loading _all_ of the code on startup, but those plans will take a little longer to execute so we were looking for a quicker fix.
+Some users have started to amass larger codebases, and lately we've been noticing that the memory usage of `ucm` was growing to unacceptable levels.
 
-There are 2 important facets of how Unison stores code that will help aid understanding of how I was able to achieve such good results.
-This particular optimization was very well-suited to our problem domain, so it's likely your gains won't be quite so substantial, but it's
-definitely worth knowing about how this optimization works, it just might help!
+Loading one specific codebase, which I'll use for testing throughout this article, required 2.73GB and took about 90 seconds to load from SQLite. 
+This is far larger and slower than we'd like.
 
-1. Unison code is immutable, and is referenced by a content-based hash.
+There are 2 important facets of how Unison stores code that will be important to know as we go forward, and will help you understand whether this technique might work for you.
 
-On startup `ucm` loads the user's codebase into memory so they can interact with it. A codebase is essentially a tree with many branches, each branch may contain many definitions, and also has references to the history of the codebase at that point in the tree. In Unison, once a definition is added to the codebase it is immutable, this is similar to how commits work in git; commits can be built upon, and branches can change which commit they point to, but once a commit is created it cannot be changed and is uniquely identified by its hash. Unison tags definitions with hashes, but each branch state is also hashed and uniquely identifies the set of definitions in that branch and all of its children at a given point in time. 
+1. Unison codebases are append-only, and codebase definitions are referenced by a content-based hash.
 
-1. A given codebase tree is likely to refer to a given library many times in different projects.
+A Unison codebase is a tree with many branches, each branch contains many definitions and also has references its history. In Unison, once a definition is added to the codebase it is immutable, this is similar to how commits work in git; commits can be built upon, and branches can change which commit they point to, but once a commit is created it cannot be changed and is uniquely identified by its hash.
 
-Unison's dependency management strategy is still in flux, but at the moment each project can pull in any libraries it depends on by simply copying that dependency into its `lib` namespace. Doing so is inexpensive because in effect we simply copy the hash which refers to a given snapshot of the library, we don't need to make copies of any of the underlying code. However, when loading the codebase into memory `ucm` hydrates each and every library reference into a full in-memory representation of that branch which we use for most operations.
+2. A given Unison codebase is likely to refer to subtrees of code like libraries many times across different Unison branches. E.g. most projects contain a reference to the `base` library.
 
-There are certainly some larger design changes we can make to avoid loading so much code into memory, and we definitely have plans to continue to improve here, but those changes take a lot of work and time, so ideally there's some quicker fix which still provides a reasonable improvement.
+Unison projects can pull in the libraries it depends on by simply mounting that dependency into its `lib` namespace. Doing so is inexpensive because in effect we simply copy the hash which refers to a given snapshot of the library, we don't need to make copies of any of the underlying code. 
+However, when loading the codebase into memory `ucm` was hydrating each and every library reference into a 
+full in-memory representation of that code. No good!
 
-Indeed, after about 80 lines of code, I was able to reduce both the memory residency and start-up load times by a whopping ~95%! 
+Spoiler warning, with about 80 lines of code, I was able to reduce both the memory residency and start-up times by a whopping ~95%! 
 From 90s -> 4s startup time, and from 2.73GB -> 148MB. All of these gains were realized by tweaking our app to enforce _sharing_ between identical objects in memory.
 
 ## What is sharing and why do I want it?
 
 Sharing is a very simple concept at its core: rather than having multiple copies of the same identical object in memory, we should just have one.
-Sharing a single instance of an object across all use-cases means we only use enough memory to fit the object once. E.g. if I load a 2MB configuration object from a JSON file in 3 different places, the Haskell runtime won't do anything clever to normalize them, so we end up with `3 * 2MB = 6MB`. The amount of times a given entity might be duplicated in your app depends of course on the sorts of things you're doing, I'll talk about some common cases a bit later on.
+It's obviously simple if you say it like that, but there are many ways we can end up with duplicates of values in memory. For example, if I load the same codebase from SQLite several times then SQLite won't know that the object I'm loading already exists in memory and will make a whole new copy.
 
-If you're working in a language where objects are mutable by default you'll want to think long and hard about whether sharing is sensible or even possible for your use-case, since mutating an object which is shared in many places could have disastrous consequences. Luckily for me, everything in Haskell is immutable by default so there's really no reason not to share identical objects across all places where they are used.
+In language where data is mutable by default you'll want to think long and hard about whether sharing is sensible or even possible for your use-case, but luckily for me, everything in Haskell is immutable by default so there's absolutely no reason to make copies of identical values.
 
-Here are a few of the benefits we can expect when we ensure our data is shared in memory:
-
-* We only pay memory for each unique object we load _once_ across ALL instances rather than once per instance.
-* Sharing thunks means each expensive computations can also be shared.
-* It's easy to build the sharing cache around the location where the objects are initially constructed, meaning we can often avoid expensive computation or even database calls using the sharing cache.
-
-## Goals
-
-* Reduce memory residency by having a single in-memory representation for each branch, even if that branch exists at many spots in the codebase
-* Improve load times by only building that branch from sqlite once
-* Ensure that the cache doesn't persist objects in memory past their lifecycle
-
+There's an additional benefit to sharing beyond just saving memory in some code: equality checks may be optimized!
+Some Haskell types like `ByteString`s include [an optimization](https://hackage-content.haskell.org/package/bytestring-0.12.2.0/docs/src/Data.ByteString.Internal.Type.html#eq) in their `Eq` instance which short circuits the whole check if the two values are pointer-equal. 
+Typically testing equality on string-like types is actually _most_ expensive when the two strings are actually equal since the check must examine every single byte to see if any of them differ.
+By interning our values using a cache we can reduce these checks become a single pointer equality check rather than an expensive byte-by-byte check.
 
 ## Implementation
 
-Okay let's build it!
+We can't deduplicate every database query, but simple queries where we're simply looking up a value by its ID are very easily memoized, so let's start with that.
+
+One issue with caches like this is that they can grow to eventually consume unbounded amounts of memory, we certainly don't want every value we've cached to stay there forever. 
+Haskell is a garbage collected language, so naively the ideal lifetime for a value to live in memory is until it would otherwise be garbage collected, but how can we know that?
+
+GHC implements [weak pointers](https://hackage.haskell.org/package/base-4.21.0.0/docs/System-Mem-Weak.html#t:Weak)!
+This nifty feature allows us to do two helpful things: 
+
+1. We can attach a finalizer to values returned from a cache, such that values will automatically evict themselves from the cache when they're no longer reachable.
+2. Weak references don't prevent the value they're pointing to from being garbage collected. This means that if a value is _only_ referenced by a weak pointer in a cache then it will still be garbage collected.
+
+As a result, there's really no downside to this caching except a very small amount of compute and memory used to maintain the cache itself, but as the numbers show, in our case this cost was very much worth it when we compare it to the gains.
+
+Here's an implementation of a simple "Interning Cache":
+
+```haskell
+module InternCache
+  ( InternCache,
+    newInternCache,
+    lookupCached,
+    insertCached,
+    intern,
+    hoist,
+  )
+where
+
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as HashMap
+import Data.Hashable (Hashable)
+import System.Mem.Weak
+import UnliftIO.STM
+
+-- | Parameterized by the monad in which it operates, the key type, and the value type.
+data InternCache m k v = InternCache
+  { lookupCached :: k -> m (Maybe v),
+    insertCached :: k -> v -> m ()
+  }
+
+-- | Creates an 'InternCache' which uses weak references to only keep values in the cache for
+-- as long as they're reachable by something else in the app.
+--
+-- This means you don't need to worry about a value not being GC'd because it's in the cache.
+newInternCache :: forall m k v. (MonadIO m, Hashable k) => m (InternCache m k v)
+newInternCache = do
+  var <- newTVarIO mempty
+  pure $
+    InternCache
+      { lookupCached = lookupCachedImpl var,
+        insertCached = insertCachedImpl var
+      }
+  where
+    lookupCachedImpl :: TVar (HashMap k (Weak v)) -> k -> m (Maybe v)
+    lookupCachedImpl var ch = liftIO $ do
+      cache <- readTVarIO var
+      case HashMap.lookup ch cache of
+        Nothing -> pure Nothing
+        Just weakRef -> do
+          deRefWeak weakRef
+
+    insertCachedImpl :: TVar (HashMap k (Weak v)) -> k -> v -> m ()
+    insertCachedImpl var k v = liftIO $ do
+      -- It's worth reading the semantics of these operations.
+      -- We may in the future wish to instead keep the value alive for as long as the
+      -- key is alive, this is easy to do with 'mkWeak', but we'll start with only
+      -- keeping the value alive as long as it's directly referenced.
+      wk <- mkWeakPtr v (Just $ removeDeadVal var k)
+      atomically $ modifyTVar' var (HashMap.insert k wk)
+
+    -- Use this as a finalizer to remove the key from the map when its value gets GC'd
+    removeDeadVal :: TVar (HashMap k (Weak v)) -> k -> IO ()
+    removeDeadVal var k = liftIO do
+      atomically $ modifyTVar' var (HashMap.delete k)
+
+-- | When a value is its own key, ensures that the given value is in the cache, 
+-- and always return the single canonical in-memory instance of that value, garbage collecting any others.
+intern :: (Hashable k, Monad m) => InternCache m k k -> k -> m k
+intern cache k = do
+  mVal <- lookupCached cache k
+  case mVal of
+    Just v -> pure v
+    Nothing -> do
+      insertCached cache k k
+      pure k
+
+-- | Changing the monad in which the cache operates with a natural transformation.
+hoist :: (forall x. m x -> n x) -> InternCache m k v -> InternCache n k v
+hoist f (InternCache lookup' insert') =
+  InternCache
+    { lookupCached = f . lookup',
+      insertCached = \k v -> f $ insert' k v
+    }
+```
+
+Now you can create a cache for any values you like! You can maintain a cache 
+within the scope of a given chunk of code, or you can make a global cache for your entire app 
+using `unsafePerformIO` like this:
+
+
+```haskell
+-- An in memory cache for interning hashes.
+-- This allows us to avoid creating multiple in-memory instances of the same hash bytes;
+-- but also has the benefit that equality checks for equal hashes are O(1) instead of O(n), since
+-- they'll be pointer-equal.
+hashCache :: (MonadIO m) => InternCache m Hash Hash
+hashCache = unsafePerformIO $ hoist liftIO <$> IC.newInternCache @IO @Hash @Hash 
+{-# NOINLINE hashCache #-}
+```
+
+And here's an example of what it looks like to use the cache in practice:
+
+```haskell
+expectHash :: HashId -> Transaction Hash
+expectHash h =
+  -- See if we've got the value in the cache
+  lookupCached hashCache h >>= \case
+    Just hash -> pure hash
+    Nothing -> do
+      hash <-
+        queryOneCol
+          [sql|
+              SELECT base32
+              FROM hash
+              WHERE id = :h
+            |]
+      -- Since we didn't have it in the cache, add it now
+      insertCached hashCache h hash
+      pure hash
+```
+
+For things like Hashes, the memory savings are more modest, but in the cases of entire subtrees of code the difference for us was substantial.
+Not only did we save memory, but we saved a ton of time re-hydrating subtrees of code from SQLite that we already had.
+
+## Conclusion
+
+An approach like this doesn't work for every app, notably it's much easier to use when working with immutable values like this, but if there's a situation in your app where it makes sense I recommend giving it a try!
+I'll reiterate that for us, we dropped our codebase load times from 90s down to 4s, and our resting memory usage from 2.73GB down to 148MB.

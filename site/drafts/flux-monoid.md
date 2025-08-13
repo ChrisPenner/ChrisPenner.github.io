@@ -7,17 +7,6 @@ description: Description and implementation of a Monoid to effeciently count ele
 image: flux-monoid/flux.jpg
 ---
 
-When mappended gives us some information about the problem we're
-trying to solve. For random access we're really only concerned with the
-**count** of objects in the sequence. When choosing your monoid it's helpful to
-think about how the monoidal **sum** of **sequences** interact, not just
-individual elements. What if we could keep track of the number of elements in
-any given subsequence? The size of the combination of any subsequences would
-simply be the sum of the counts of the subsequences.
-
-`split`, `dropUntil`, and
-`search` all kind of seem like they might help though!
-
 ```haskell
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
