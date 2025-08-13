@@ -12,34 +12,65 @@
 }
 
 pre {
-    background-color: var(--code-bg);
+  background-color: var(--code-bg);
 }
 
 code {
-    background-color: var(--code-bg);
-    color: var(--code-fg);
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+}
+
+/* Code that is NOT in a source code block: */
+code:not(.sourceCode) {
+  background-color: var(--code-bg);
+  color: var(--code-data);
 }
 
 /* KeyWordTok */
-.sourceCode .kw { color: var(--code-keyword); }
+.sourceCode .kw {
+  color: var(--code-keyword);
+}
 /* DataTypeTok */
-.sourceCode .dt { color: var(--code-data); }
+.sourceCode .dt {
+  color: var(--code-data);
+}
 
 /* DecValTok (decimal value), BaseNTok, FloatTok */
-.sourceCode .dv, .sourceCode .bn, .sourceCode .fl { color: var(--code-number); }
+.sourceCode .dv,
+.sourceCode .bn,
+.sourceCode .fl {
+  color: var(--code-number);
+}
 /* CharTok */
-.sourceCode .ch { color: var(--code-char); }
+.sourceCode .ch {
+  color: var(--code-char);
+}
 /* StringTok */
-.sourceCode .st { color: var(--code-char); }
+.sourceCode .st {
+  color: var(--code-char);
+}
 /* CommentTok */
-.sourceCode .co { color: var(--code-comment); }
+.sourceCode .co {
+  color: var(--code-comment);
+}
 /* OtherTok */
-.sourceCode .ot { color: var(--code-symbol); }
+.sourceCode .ot {
+  color: var(--code-symbol);
+}
 /* AlertTok */
-.sourceCode .al { color: var(--code-alert); font-weight: bold; }
+.sourceCode .al {
+  color: var(--code-alert);
+  font-weight: bold;
+}
 /* FunctionTok */
-.sourceCode .fu { color: var(--code-function); }
+.sourceCode .fu {
+  color: var(--code-function);
+}
 /* RegionMarkerTok */
-.sourceCode .re { }
+.sourceCode .re {
+}
 /* ErrorTok */
-.sourceCode .er { color: var(--code-alert); font-weight: bold; }
+.sourceCode .er {
+  color: var(--code-alert);
+  font-weight: bold;
+}

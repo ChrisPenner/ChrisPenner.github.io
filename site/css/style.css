@@ -43,6 +43,7 @@ hr {
   --fade-fg: var(--base06);
   --highlight-bg: var(--base08);
   --light-bg: var(--base01);
+  --emphasis-fg: var(--base0A);
 }
 
 html {
@@ -81,16 +82,20 @@ html {
 
 html.dark {
   background: #333;
-  background: -webkit-linear-gradient(top,
-      #2a2a2a 0%,
-      #333 10%,
-      #333 90%,
-      #2a2a2a 100%);
-  background: linear-gradient(to bottom,
-      #2a2a2a 0%,
-      #333 10%,
-      #333 90%,
-      #2a2a2a 100%);
+  background: -webkit-linear-gradient(
+    top,
+    #2a2a2a 0%,
+    #333 10%,
+    #333 90%,
+    #2a2a2a 100%
+  );
+  background: linear-gradient(
+    to bottom,
+    #2a2a2a 0%,
+    #333 10%,
+    #333 90%,
+    #2a2a2a 100%
+  );
   background-attachment: fixed;
   width: 100%;
   height: 100%;
@@ -133,12 +138,12 @@ h3 {
 }
 
 blockquote {
-  width: 90%;
+  width: 95%;
   margin: 0.7em auto;
-  text-align: center;
-  padding-left: 0.5em;
+  text-align: left;
+  padding: 0.5em;
   font-size: 1.1em;
-  font-style: italic;
+  background: var(--light-bg);
   display: -webkit-box;
   display: -webkit-flex;
   display: -ms-flexbox;
@@ -152,7 +157,7 @@ blockquote {
   justify-content: center;
 }
 
-blockquote>p {
+blockquote > p {
   padding-left: 7px;
   border-left: 5px solid rgba(76, 76, 76, 0.9);
   margin: auto;
@@ -170,6 +175,12 @@ li {
 em {
   font-weight: bold;
   font-style: italic;
+  color: var(--highlight-fg);
+}
+
+strong {
+  font-weight: bold;
+  color: var(--emphasis-fg);
 }
 
 img {
@@ -363,7 +374,7 @@ a.category:hover {
   word-break: break-word;
 }
 
-.post p+p {
+.post p + p {
   margin-top: 1em;
 }
 
@@ -513,7 +524,7 @@ a.category:hover {
   margin: 1em 0;
 }
 
-.social-buttons>div {
+.social-buttons > div {
   /*margin: 0 1em;*/
 }
 
@@ -689,7 +700,6 @@ a.category:hover {
 }
 
 @media only screen and (min-device-width: 320px) and (max-device-width: 480px) {
-
   /* Styles */
   pre,
   pre.sourceCode,
@@ -720,7 +730,7 @@ a.category:hover {
     max-width: 280px;
   }
 
-  .page>p:first-of-type:first-letter {
+  .page > p:first-of-type:first-letter {
     font-size: 4em;
     line-height: 0.1em;
   }
@@ -744,7 +754,7 @@ a.category:hover {
   display: flex;
 }
 
-.right-sidebar>* {
+.right-sidebar > * {
   margin-left: 12px;
 }
 
