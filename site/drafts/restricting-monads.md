@@ -1,29 +1,31 @@
 ---
 title: "Monads are too powerful"
 author: Chris Penner
-date: Aug 14, 2025
+date: Sep 15, 2025
 tags: [programming, haskell]
-description: "Monads are a useful tool, but what we gain in power we lose in static analysis."
+description: "Monads are a useful tool, but what we gain in power we lose in programmatic analysis."
 image: pipes.jpg
 ---
 
-# Motivation
-
-Okay, so you and I both know Monads are great, they allow us to sequence operations
+Okay, so you and I both know Monads are great, they allow us to sequence effects
 in a structured way and are in many ways a super-power in the functional-programming toolkit.
 
-My argument, however, is that monads are actually _too_ powerful, or to be more clear, monads are _im_**precise**.
+My argument however, is that monads are actually _too_ powerful for their own good. Or to be more clear, 
+monads are more **expressive** than they need to be, at the cost of other benefits.
 
-Monads allow us to express a sequence of effects we wish to perform, where notably,
-the selection of which effects which will be performed next can **depend on the results of running the previous effects**.
+A defining feature of the Monadic interface is that they allow dynamic selection 
+of effects based on **the results of previous effects**.
 
-This is a huge boon, it's hard to imagine any modern Haskell program without the use of monads, obviously there are cases where
-you'll need to fetch some data from a file or database before deciding what to do next.
+This is a huge boon, it allows critical workflows like fetching input from a user before 
+deciding which command to run, and things like fetching documents from a database, then fetching more documents 
+which are referenced by the first documents.
+
+It's truly hard to imagine what any modern Haskell program would look like without using monads!
 But too much power can be a bad thing.
 
-Why would we ever want to restrict ourselves?
+Alas, I must convince you, so why would we ever want to restrict ourselves?
 
-Well let's talk about Applicatives!
+Well, let's talk about Applicatives!
 
 ## The origin of Applicatives
 
@@ -34,8 +36,10 @@ Take note that this paper was written _after_ Monads were already in widespread 
 Applicatives are, by definition, _less powerful_ than Monads, or to be more precise, Applicatives can
 express fewer effectful programs than Monads can. This is easily proven by the fact that every Monad implements the Applicative interface, but not every Applicative is a Monad.
 
-Despite being _weaker_ by this definition, Applicatives are still very useful! They allow us to express programs with effects that aren't valid monads,
-but they also provide us with the ability of runtime static analysis of effectful programs.
+Despite being _weaker_ (a.k.a _less expressive_) by this definition, Applicatives are still very useful! They allow us to express programs with effects that aren't valid monads,
+but they also provide us with the ability to analyse values which are sequences of Applicative effects at runtime and glean information about them before running them.
+
+Let's dive a bit deeper to make sure we understand that bit. Feel free to skip ahead if you've got it down.
 
 Looking at the Applicative interface:
 
@@ -45,7 +49,7 @@ class Functor f => Applicative f where
   (<*>) :: f (a -> b) -> f a -> f b
 ```
 
-We can see that there's no way way to sequence effects at _runtime_ such that the chosen sequence of effects is dependent on the results of effects at runtime (that is, when we're running the effects).
+We can see that it affords no way to sequence effects at such that the chosen sequence of effects is dependent on the results of previous effects.
 
 Compare this to the Monad interface:
 
@@ -53,7 +57,6 @@ Compare this to the Monad interface:
 class Applicative m => Monad m where
   (>>=) :: m a -> (a -> m b) -> m b
   return :: a -> m a
-  return = pure
 ```
 
 Bind (`>>=`) allows creating new effects in a Haskell function using the result of a previous effect. Apply (`<*>`) on the other hand allows running a Haskell function, but the result of the function is completely independent from the sequence of effects. By the time we're running the effects we already know _exactly_ what the sequence of planned effects is, and, except for a pure exception (which is a whole other can of worms) there's no way to change the planned sequence.
@@ -67,7 +70,7 @@ and can even do interesting things like reverse or rearrange the ordering of the
 E.g. see the [Backwards](https://hackage-content.haskell.org/package/transformers-0.6.2.0/docs/Control-Applicative-Backwards.html) applicative transformer in the `transformers` package.
 
 I hope that's enough ink to convince you that the _expressiveness_ (i.e. the breadth of programs we can express)
-is not a matter of "more expressible programs is always better", but rather that expressiveness exists on a continuum between
+is not a simple matter of "more expressible programs is always better", but rather that expressiveness exists on a continuum between
 ease of program analysis and expressiveness.
 
 ```
@@ -160,7 +163,7 @@ myProgram = do
 ```
 
 This example is obviously contrived for the sake of simplicity and pedagogy of course, but if I'm about to execute a `Command` program at runtime, 
-it'd be very nice to first be able to programatically analyse all the possible effect chains, in this case discovering that one of them does indeed trigger `deleteMyHardDrive`.
+it'd be very nice to first be able to programmatically analyse all the possible effect chains, in this case discovering that one of them does indeed trigger `deleteMyHardDrive`.
 
 However, since `getInput` uses `bind` to pass its result into a lambda, there's no way to analyze anything past that point without actually running things.
 We could of course use the power of the Free monad to interpret the program in steps and we could bail or error if we find a `DeleteMyHardDrive` effect, but in 
@@ -201,7 +204,7 @@ I hope this blog post helps others to understand that while Monads were a huge d
 we shouldn't stop looking for abstractions which are a better fit for the problems we generally face in day-to-day programming.
 
 Selective Applicatives are a great step in the right direction, 
-but are unfortunately under-utilized, aren't part of Haskell's Functor-Applicative-Monad Hierarchy, 
+but are unfortunately under-utilized, aren't part of Haskell s Functor-Applicative-Monad Hierarchy, 
 and don't have their own syntax. 
 
 This is just one post in a series I have planned, but I've noticed that multiple years of thinking on these problems have passed 
