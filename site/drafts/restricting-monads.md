@@ -15,7 +15,7 @@ First and foremost, this is NOT yet-another-nomad-tutorial. This post is for peo
 already know and love monads. If that's not you, feel free to read on, but know that
 it might be a bit terse.
 
-## Whats the big deal?
+# Motivation
 
 Okay, so we you and I both know Monads are great, they allow us to sequence operations
 in a structured way, and are in many ways a super-power in the functional-programming toolkit. 
@@ -109,7 +109,64 @@ However, there are unfortunately a lot of problems with Selective Applicatives t
 * There's no good syntax for expressing Selective Applicatives like there is with do-notation for Monads and ApplicativeDo.
 * None of Functors, Applicative, Selective Applicative Functors, OR Monads have any structured representation of inputs or the flow of data from one effectful computation to the next.
 
-## An Alternative Approach
+## The missing piece
+
+There's a place even further towards the expressive end of the continuum, that still 
+maintains enough structure to perform useful static analysis, it's occupied by a
+structure which requires all possible effects to be declared (and statically analyzable) while 
+still allowing downstream effects to depend on those that come before.
+
+Allow me to demonstrate what I mean. Let's build a teensy tiny command line.
+We'll need a few effects:
+
+```haskell
+-- | These are the commands the user might enter
+data Command = 
+  Cat FilePath
+  Copy FilePath FilePath
+
+-- | Here's the interface we need from any system which wants to implement our DSL
+class Monad m => MonadCommand m where
+  getCommand :: m Command
+  readFile :: FilePath -> m String
+  writeFile :: FilePath -> String -> m ()
+  print :: String -> m ()
+
+-- | How we run commands.
+-- I'll be very verbose with binds here so it's clear where the lambdas are.
+runCommand :: MonadCommand m => m ()
+runCommand = do
+  getCommand >>= \cmd -> 
+    case cmd of
+      Cat fp -> 
+        readFile fp >>= \contents -> 
+          print contents
+      Copy source dest -> do
+        readFile source >>= \contents -> 
+          writeFile dest contents
+```
+
+Let's say we now want to analyze our `runCommand` function, specifically we want to know
+
+
+
+Now let's build a static site generator:
+
+```haskell
+class Monad m => MonadMake m where
+  readFile :: FilePath -> m String
+```
+
+Most `make` systems work declaring your dependency tree, then you request that a given resource be built, and the system will traverse the dependency tree to determine which parts of the tree need to be rebuilt to make that happen.
+However there are also many systems which work in reverse, you provide a set of resources and the build system will produce a set of output resources _base on_ the inputs to the system.
+
+* We can trim the graph and only recompute the branches which lead to the output we want.
+* We can detect that some resource in the middle of our graph changed, and propagate that change forward through the 
+  graph without needing to recompute the graph prefix.
+
+
+
+# An Alternative Approach
 
 What if I told you that we already had a rigorous and mathematically sound set of structures which 
 span a similar continuum like that between Functor <-> Monad, but which also
@@ -172,9 +229,45 @@ In fact, IO is just a variant of the `State` monad, so if you look closely above
 
 I'll leave the other implementations for another post lest this one get waaaaaay too long.
 
-## A better syntax
+# The Case for Tracked Inputs
 
-I promised you a syntax sugar for this new Category-based hierarchy
+The Category hierarchy is 
+
+```haskell
+readFile :: FilePath -> IO String
+writeFile :: FilePath -> String -> IO ()
+```
+
+
+# A better syntax
+
+I promised you a syntax sugar for this new Category-based hierarchy, ever heard of Arrow notation?
+
+There's a very good chance you haven't, so allow me to explain a bit.
+
+There's a great jumping off point in the [GHC manual](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/arrows.html)
+
+Arrow notation is a do-notation-like syntax for working with Arrows, and Arrows are 
+part of the Category hierarchy!
+
+Unfortunately, Arrow notation hasn't gotten much love in a loooong while, and as Haskell has evolved we've
+also discovered that [the Arrow hierarchy isn't quite right](https://github.com/purescript-deprecated/purescript-arrows/issues/9), but I think the notation itself is more than salvageable.
+
+It's come to light that the Arrow class can be broken down into much more granular pieces, 
+notably Category, Profunctor, Strong, Choice, Plus, etc. However this wasn't know when 
+Arrow notation was first introduced, so it was designed to work with the Arrow class itself,
+so the biggest issue with it as I see it is that it currently _requires_ an `Arrow` instance. 
+This instance in turn requires an implementation for `arr :: Arrow a => (b -> c) -> a b c`;
+which, in the new hierarchy is like requiring at least `Category` and `Strong`, since you can implement `arr` in terms of those two:
+
+```
+arr :: (Category a, Profunctor a) => (b -> c) -> a b c
+arr f = dimap id f Category.id
+```
+
+
+
+This unfortunately means that in its current implementation we can't 
 
 
 
