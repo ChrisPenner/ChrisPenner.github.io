@@ -3,15 +3,18 @@ title: "Monads are too powerful"
 author: Chris Penner
 date: Sep 15, 2025
 tags: [programming, haskell]
-description: "Monads are a useful tool, but what we gain in power we lose in programmatic analysis."
+description: "Monads are a useful tool, but what costs do we pay for their expressive power?"
 image: pipes.jpg
 ---
 
-Okay, so you and I both know Monads are great, they allow us to sequence effects
+Okay, so you and I both know monads are great, they allow us to sequence effects
 in a structured way and are in many ways a super-power in the functional-programming toolkit.
+It's likely none of us would have even heard of Haskell without them.
 
-My argument however, is that monads are actually _too_ powerful for their own good. Or to be more clear, 
-monads are more **expressive** than they need to be, at the cost of other benefits.
+It's my opinion, though, that monads are actually _too_ powerful for their own good. Or to be more clear, 
+monads are more **expressive** than they need to be, and that we're paying hidden costs to gain expressive power that we rarely, if ever, actually use.
+
+If you'll allow me a bit of time I'll happily explain.
 
 A defining feature of the Monadic interface is that they allow dynamic selection 
 of effects based on **the results of previous effects**.
@@ -20,12 +23,80 @@ This is a huge boon, it allows critical workflows like fetching input from a use
 deciding which command to run, and things like fetching documents from a database, then fetching more documents 
 which are referenced by the first documents.
 
-It's truly hard to imagine what any modern Haskell program would look like without using monads!
-But too much power can be a bad thing.
+You can even model something as powerful as an interpreter; a program which reads in strings of user-provided code, parses them, then 
+executes arbitrary Turing-complete code that wasn't even compiled into the executable,
+this is about as expressive as I could ask for from any effects system.
 
-Alas, I must convince you, so why would we ever want to restrict ourselves?
+Alas, as it turns out, expressiveness isn't free! It exists on a spectrum. 
+As anyone who's maintained any relatively complex JavaScript or Python codebase can tell you, the _ability_
+to do anything at any time comes at a cost of readability, perhaps more relevant to the 
+current discussion, at the cost of static analysis.
 
-Well, let's talk about Applicatives!
+Allow me to present, in all its glory, the Expressiveness Spectrum:
+
+```
+Strong Static Analysis <+------------+------------+> Embarrassingly Expressive Code
+```
+
+As you can clearly see, as you gain more expressive power you begin to lose the ability to know what the heck your 
+program could possibly do when it runs. This has fueled a good many debates,
+and it turns out that there's a smaller version of the debate to be had within the realm of effect systems themselves!
+
+In their essence, effect systems are just methods of expressing miniature programs
+**within** your programming language of choice, these mini programs can be constructed,
+analysed, and executed at runtime, and the same Expressiveness Spectrum applies to them as well!
+
+In the effect-system microcosm there are similar mini _compile time_ and _run time_ stages. 
+For an example here's a simple Haskell program:
+
+```haskell
+-- The common way to express effects in Haskell 
+-- is with a Monadic typeclass interface.
+class Monad m => ReadWrite m where
+  readLine :: m String
+  writeLine :: String -> m ()
+
+-- We can write a little program builder which depends on 
+-- input that may only be known at runtime.
+greetUser :: ReadWrite m => String -> m () 
+greetUser greeting = do
+  writeLine (greeting <> ", what is your name?")
+  name <- readLine
+  writeLine ("Hello, " <> name <> "!")
+
+-- We can, at run time, construct a new mini-program that the world has never seen before!
+mkSimpleGreeting :: ReadWrite m => IO (m ())
+mkSimpleGreeting = do 
+  greeting <- readFile "greeting.txt"
+  pure (greetUser greeting)
+```
+
+In this simplified example we clearly see that we can use arbitrary values we discover at runtime 
+to construct a brand new mini program which uses the `ReadWrite` effect to interact with the user.
+
+This is all well and good in such a simple case, however if we expand our simple `ReadWrite` effect slightly by adding a new effect:
+
+```haskell
+class Monad m => ReadWriteDelete m where
+  readLine :: m String
+  writeLine :: String -> m ()
+  deleteMyHardDrive :: m ()
+```
+
+Well now, if we're constructing or parsing programs of the `ReadWriteDelete` effect type at runtime, 
+we probably want to be able to _know_ whether or not the program we're about to run contains a call to `deleteMyHardDrive` _before_ we actually run it!
+
+We could of course constrain the ability to actually delete the hard drive within the _implementation_ of the effect typeclass, which is nice, 
+but in more complex cases where we may need to run effects which interact with the outside world in order to even discover whether we hit some problematic case, 
+we'd really love to be able to _analyse_ the program _before_ we run anything at all.
+
+Analysing these effect-system programs provides a lot of the same benefits as static analysis of regular programming language code.
+With the ability to run sufficient static analysis of runtime code we can even copy techniques from compilers like rewriting sequences of expressions to better utilize resources, or caching, or compute.
+We could scan programs for possible security problems, search for possible deadlocks, or even just provide better error messages to users, all worth causes!
+
+So, we're well familiar with the spectrum of Dynamic <-> Static typing in programming languages, what does the Expressiveness Spectrum look like when applied to Effect Systems?
+
+Let's talk about Applicatives!
 
 ## The origin of Applicatives
 
@@ -33,13 +104,11 @@ As far as I can determine, the first widespread introduction of Applicatives to 
 in [Applicative Programming with Effects](https://www.staff.city.ac.uk/~ross/papers/Applicative.pdf), a 2008 paper by Conor McBride and Ross Paterson.
 
 Take note that this paper was written _after_ Monads were already in widespread use.
-Applicatives are, by definition, _less powerful_ than Monads, or to be more precise, Applicatives can
-express fewer effectful programs than Monads can. This is easily proven by the fact that every Monad implements the Applicative interface, but not every Applicative is a Monad.
+Applicatives are, by definition, **less expressive** than Monads. To be precise, Applicatives can
+express _fewer effectful programs_ than Monads can. This is easily proven by the fact that every **Monad** implements the **Applicative** interface, but not every **Applicative** is a Monad.
 
-Despite being _weaker_ (a.k.a _less expressive_) by this definition, Applicatives are still very useful! They allow us to express programs with effects that aren't valid monads,
+Despite being _less expressive_ Applicatives are still very useful! They allow us to express programs with effects that aren't valid monads,
 but they also provide us with the ability to analyse values which are sequences of Applicative effects at runtime and glean information about them before running them.
-
-Let's dive a bit deeper to make sure we understand that bit. Feel free to skip ahead if you've got it down.
 
 Looking at the Applicative interface:
 
@@ -59,15 +128,61 @@ class Applicative m => Monad m where
   return :: a -> m a
 ```
 
-Bind (`>>=`) allows creating new effects in a Haskell function using the result of a previous effect. Apply (`<*>`) on the other hand allows running a Haskell function, but the result of the function is completely independent from the sequence of effects. By the time we're running the effects we already know _exactly_ what the sequence of planned effects is, and, except for a pure exception (which is a whole other can of worms) there's no way to change the planned sequence.
+_Bind_ (`>>=`) allows creating new effects in a Haskell function using the result of a previous effect. 
+_Apply_ (`<*>`) on the other hand allows running a Haskell function, but the result of the function is 
+completely independent from the sequence of effects. 
+This means that by the time we're ready to execute the effects we already know _exactly_ what the sequence of planned effects is, and, except for a pure exception (which is a whole other can of worms) we can be confident that there's no way to change the planned sequence of effects.
 
 This _limitation_, if you can even call it that, gives us a ton of utility in program analysis.
 For example, we could take an applicative effect chain and produce a list
 of all the planned effects before running any of them, then could ask the end-user for permission before running potentially harmful effects.
-Since the program's structure is set, we can also parallelize effects when we know it's safe to do so.
-We can analyse resources accessed by effects and track them in an interactive build system, re-running the effect change when any dependency changes,
-and can even do interesting things like reverse or rearrange the ordering of the effects to optimize for some criteria.
-E.g. see the [Backwards](https://hackage-content.haskell.org/package/transformers-0.6.2.0/docs/Control-Applicative-Backwards.html) applicative transformer in the `transformers` package.
+
+Here's a quick demo!
+
+```haskell
+import Control.Applicative (liftA3)
+import Control.Monad.Writer (Writer, runWriter, tell)
+
+-- | We only require the Applicative interface now
+class (Applicative m) => ReadWrite m where
+  readLine :: m String
+  writeLine :: String -> m ()
+
+data Command
+  = ReadLine
+  | WriteLine String
+  deriving (Show)
+
+-- | We can implement a dummy interpreter that simply records the commands
+-- the program would run.
+instance ReadWrite (Writer [Command]) where
+  readLine = tell [ReadLine] *> pure "Simulated User Input"
+  writeLine msg = tell [WriteLine msg]
+
+-- | A helper to run our program and get the list of commands it would execute
+recordCommands :: Writer [Command] String -> [Command]
+recordCommands w = snd (runWriter w)
+
+-- | A simple program that greets the user.
+myProgram :: (ReadWrite m) => String -> m String
+myProgram greeting =
+  liftA3
+    (\_ name _ -> name)
+    (writeLine (greeting <> ", what is your name?"))
+    readLine
+    (writeLine "Welcome!")
+
+-- We can now run our program in the Writer applicative to see what it would do!
+main :: IO ()
+main = do
+  let commands = recordCommands (myProgram "Hello")
+  print commands
+
+-- [WriteLine "Hello, what is your name?",ReadLine,WriteLine "Welcome!"]
+```
+
+Since this interface doesn't provide us with a bind, we can't use results from `readLine` in a future `writeLine` effect, which is a bummer,
+but it DOES allow us to run an analysis of a program written in `ReadWrite` to see exactly which effects it will run, and which arguments each of them are provided with, before we execute anything for real.
 
 I hope that's enough ink to convince you that the _expressiveness_ (i.e. the breadth of programs we can express)
 is not a simple matter of "more expressible programs is always better", but rather that expressiveness exists on a continuum between
