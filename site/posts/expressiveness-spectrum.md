@@ -1,5 +1,5 @@
 ---
-title: "Monads are too powerful"
+title: "Monads are too powerful, The Expressiveness Spectrum"
 author: Chris Penner
 date: Sep 24, 2025
 tags: [programming, haskell]
