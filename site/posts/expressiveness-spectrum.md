@@ -1,5 +1,5 @@
 ---
-title: "Monads are too powerful"
+title: "Monads are too powerful: The Expressiveness Spectrum"
 author: Chris Penner
 date: Sep 24, 2025
 tags: [programming, haskell]
@@ -43,12 +43,12 @@ As you can clearly see, as you gain more expressive power you begin to lose the 
 program could possibly do when it runs. 
 
 This has fueled a good many debates among programming language connoisseurs, 
-and it turns out that there's a similar version of the debate to be had within the realm of effect systems themselves!
+and it turns out that there's a similar version of the debate to be had within the realm of effect systems themselves.
 
 In their essence, effect systems are just methods of expressing miniature programs
 **within** your programming language of choice. These mini programs can be constructed,
 analysed, and executed at runtime within the framework of the larger programming language, 
-and the same Expressiveness Spectrum applies independently to them as well! That is, the more programs you 
+and the same Expressiveness Spectrum applies independently to them as well. That is, the more programs you 
 allow your effect system to express, the less you can know about any individual program before you run it.
 
 In the effect-system microcosm there are similar mini _compile time_ and _run time_ stages. 
@@ -89,7 +89,7 @@ class Monad m => ReadWriteDelete m where
 ```
 
 Well now, if we're constructing or parsing programs of the `ReadWriteDelete` effect type at runtime, 
-we probably want to be able to _know_ whether or not the program we're about to run contains a call to `deleteMyHardDrive` _before_ we actually run it!
+we probably want to be able to _know_ whether or not the program we're about to run contains a call to `deleteMyHardDrive` _before_ we actually run it.
 
 We could of course simply abort execution or ignore requests to delete everything when we're running the effects in our host language, which is nice, 
 but the fact remains that if our app is handed an arbitrary `ReadWriteDelete m => m ()` program at runtime, there's _no_ way to know whether or not it could possibly contain a call to `deleteMyHardDrive` without actually running the program, and even then, there's no way to know whether there's some __other__ possible execution path that we missed which _does_ call `deleteMyHardDrive`.
@@ -108,8 +108,8 @@ perform code transformations like removing redundant calls, parallelizing indepe
 
 We can also gain useful knowledge, like creating a call graph for developers to better understand what's about to happen. Or perhaps analyzing the use of sensitive resources like the file system or network such that we can ask for approval before even beginning execution.
 
-But as I've already mentioned, we can't do _most_ of these techniques in a Monadic effect system!
-The monad interface itself makes it clear why this is the case🀄
+But as I've already mentioned, we can't do _most_ of these techniques in a Monadic effect system.
+The monad interface itself makes it clear why this is the case:
 
 ```haskell
 class Applicative m => Monad m where
@@ -119,9 +119,9 @@ class Applicative m => Monad m where
 
 We can see from `Bind` (`>>=`) that in order to know which effects (`m b`) will be executed next, we need to first execute the previous effect (`m a`) and then 
 we need the host language (Haskell) to execute an arbitrary Haskell function. There's no way at all
-for us to gain insight about what the results of that function might be without running it first!
+for us to gain insight about what the results of that function might be without running it first.
 
-Let's move a step towards the analysis side of the spectrum and talk about Applicatives!
+Let's move a step towards the analysis side of the spectrum and talk about Applicatives...
 
 ## The origin of Applicatives
 
@@ -134,7 +134,7 @@ Take note that this paper was written _after_ Monads were already in widespread 
 and Applicatives are, by their very definition, **less expressive** than Monads. To be precise, Applicatives can
 express _fewer effectful programs_ than Monads can. This is shown by the fact that every **Monad** implements the **Applicative** interface, but not every **Applicative** is a Monad.
 
-Despite being _less expressive_ Applicatives are still very useful! 
+Despite being _less expressive_ Applicatives are still very useful. 
 They allow us to express programs with effects that aren't valid monads,
 but they also provide us with the ability to better analyse which effects are part of an effectful program before running it.
 
@@ -148,7 +148,7 @@ class Functor f => Applicative f where
 
 We can see that, unlike Monads, it affords no way to sequence effects such that future effects depend in any way on previously run effects.
 The sequence of effects is determined entirely by the host language before we start to run the effects, and thus the sequence of effects
-can be reliably inspected in advance!
+can be reliably inspected in advance.
 
 This _limitation_, if you can even call it that, gives us a ton of utility in program analysis.
 For any given sequence of Applicative Effects we can analyse it and produce a list
@@ -212,7 +212,7 @@ Expressive power comes at a cost, specifically the cost of analysis.
 So clearly Applicatives are nice, but they're a pretty strong limitation and prevent us 
 from writing a lot of useful programs. What if there was an interface somewhere on the spectrum between the two?
 
-**Selective Applicatives** fit nicely between Applicatives and Monads!
+**Selective Applicatives** fit nicely between Applicatives and Monads.
 
 If you haven't heard of them, this isn't a tutorial on Selective itself, so go read up on them [here](https://hackage.haskell.org/package/selective) if you like.
 
@@ -333,14 +333,14 @@ input we want to handle, we can't even write a simple program which echos back w
 There are clearly still some substantial limitations on which programs we can express here.
 
 However, let's look on the bright side for a bit, similar to our approach with Applicatives we can analyse the commands our program may run. 
-This time however, we've got branching paths in our program!
+This time however, we've got branching paths in our program.
 
 The selective interface gives us two methods to analyse our program:
 
 * The `Under` newtype will let us collect the minimum possible sequence of of effects that our program will run no matter what inputs it receives.
 * The `Over` newtype instead collects the list of _all_ possible effects that our program could possibly encounter if it were to run through all of its branching paths.
 
-This isn't as usful as receiving, say, a graph representing the possible execution paths, but it does give us enough information to give users a warning aobut what a program might possibly do, we can let them know that hey, I don't know exactly what will cause it, but this program has the ability to delete your hard-drive!
+This isn't as usful as receiving, say, a graph representing the possible execution paths, but it does give us enough information to give users a warning aobut what a program might possibly do, we can let them know that hey, I don't know exactly what will cause it, but this program has the ability to delete your hard-drive.
 
 You can of course write additional Selective interfaces, or use the Free Selective to re-write Selective computations in order to optimize or memoize them as you wish just like you can with Applicatives.
 
@@ -353,10 +353,10 @@ It's clear at this point that Selectives are another good tool, but the limitati
 
 ## In search of the true sweet spot
 
-This isn't a solved problem yet, but don't worry, there are yet more different methods of sequencing effects!
+This isn't a solved problem yet, but don't worry, there are yet more methods of sequencing effects.
 
 It may take me another 5 years to finally finish it, but at some point we'll continue this journey and explore how we can 
-sequence effects using Cartesian Categories instead, and how this may help us find a more tenable middle-ground on our Expressiveness Spectrum. 
+sequence effects using a hierarchy of Category classes instead, and how this may help us find a more tenable middle-ground on our Expressiveness Spectrum. 
 A place where we can analyze possible execution paths without sacrificing the ability to write the programs we need.
 
 I hope this blog post helps others to understand that while Monads were a huge discovery to the benefit of functional programming, 
