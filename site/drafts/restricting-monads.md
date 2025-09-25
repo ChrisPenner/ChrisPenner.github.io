@@ -1,10 +1,10 @@
 ---
 title: "Monads are too powerful"
 author: Chris Penner
-date: Sep 15, 2025
+date: Sep 24, 2025
 tags: [programming, haskell]
 description: "Monads are a useful tool, but what costs do we pay for their expressive power?"
-image: pipes.jpg
+image: power-small.jpg
 ---
 
 Okay, so you and I both know monads are great, they allow us to sequence effects
