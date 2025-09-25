@@ -67,8 +67,8 @@ Yikes, let's break this down:
     convert it into some monoid `v`
 -   `(v -> Bool)`: This is our search predicate, `split` will use it to split a
     sequence into two smaller subsequences: The longest
-    subsequence such that running the predicate on the measure of this
-    subsequence `False`, and the everything that's left-over.
+    prefix subsequence such that running the predicate on the measure of this
+    subsequence is `False`, and the everything that's left-over.
 - `FingerTree v a`: This is the tree we want to split, with a monoidal measure `v` and elements of type `a`.
 - `(FingerTree v a, FingerTree v a)`: The two (possibly empty) subsequences, the first is before the split point the
     second contains the inflection point of our predicate and everything past it.
@@ -121,7 +121,7 @@ newtype Size a = Size
 instance Measured (Sum Int) (Size a) where
   measure _ = Sum 1
 
--- We wrap our values in the 'Size'i wrapper and build a Finger Tree
+-- We wrap our values in the 'Size' wrapper and build a Finger Tree
 alphabet :: FingerTree (Sum Int) (Size Char)
 alphabet = fromList (fmap Size "abcdefghijklmnopqrstuvwxyz")
 
