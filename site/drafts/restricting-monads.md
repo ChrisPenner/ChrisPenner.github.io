@@ -77,7 +77,7 @@ mkSimpleGreeting = do
 ```
 
 In this simplified example we clearly see that we can use our host languages features arbitrarily to construct a smaller 
-program within our ReadWrite DSL. Our simple program here just reads a line of input from the user and then greats them by name.
+program within our ReadWrite DSL. Our simple program here just reads a line of input from the user and then greets them by name.
 
 This is all well and good in such a simple case, however if we expand our simple `ReadWrite` effect slightly by adding a new effect:
 
@@ -207,121 +207,157 @@ ease of program analysis and expressiveness.
 
 Expressive power comes at a cost, specifically the cost of analysis.
 
-## Understanding the blindness of monadic binds
+## Closer to the Sweet Spot
 
-If we take a step back and think about most of the programs we write as software developers, a few things are pretty clear;
+So clearly Applicatives are nice, but they're a pretty strong limitation and prevent us 
+from writing a lot of useful programs. What if there was an interface somewhere on the spectrum between the two?
 
-* We often need to branch our logic based on the results of previous effects.
-* We almost _never_ choose to execute completely _arbitrary_ sets of effects based on the results of previous effects.
+**Selective Applicatives** fit nicely between Applicatives and Monads!
 
-Unless you're writing an interpreter that needs to load and eval strings of JavaScript or something, it's extremely unlikely
-that you don't know in advance exactly which effects your program _may_ execute. You probably have a strong understanding of every _possible_ codepath,
-the only unknown is which of many pre-defined branching paths any given execution will take.
+If you haven't heard of them, this isn't a tutorial on Selective itself, so go read up on them [here](https://hackage.haskell.org/package/selective) if you like.
 
-Defining a small DSL, we can express this idea pretty clearly.
-
-Here's a small CLI DSL which has a few possible effects:
-
-* Get user input
-* Read a file
-* Write a file
-* Echo to stdout
-* Delete my entire hard drive
-
-```haskell
-data CommandF r
-  = GetInput ([String] -> r)
-  | ReadFile FilePath (String -> r)
-  | WriteFile FilePath String r
-  | Echo String r
-  | DeleteMyHardDrive r
-  deriving (Functor)
-
--- Free Monad constructors
-type Command = Free CommandF
-
-getInput :: Command [String]
-getInput = liftF (GetInput id)
-
-readFile :: FilePath -> Command String
-readFile path = liftF (ReadFile path id)
-
-writeFile :: FilePath -> String -> Command ()
-writeFile path content = liftF (WriteFile path content ())
-
-echo :: String -> Command ()
-echo msg = liftF (Echo msg ())
-
-deleteMyHardDrive :: Command ()
-deleteMyHardDrive = liftF (DeleteMyHardDrive ())
-```
-
-Here's a small program written in this DSL:
-
-```haskell
-myProgram :: Command ()
-myProgram = do
-  input <- getInput
-  case input of
-    ["read", path] -> do
-      content <- readFile path
-      echo content
-    ["write", path, content] -> do
-      writeFile path content
-      echo "File written."
-    _ -> do
-      echo "Unknown command."
-      deleteMyHardDrive
-```
-
-This example is obviously contrived for the sake of simplicity and pedagogy of course, but if I'm about to execute a `Command` program at runtime, 
-it'd be very nice to first be able to programmatically analyse all the possible effect chains, in this case discovering that one of them does indeed trigger `deleteMyHardDrive`.
-
-However, since `getInput` uses `bind` to pass its result into a lambda, there's no way to analyze anything past that point without actually running things.
-We could of course use the power of the Free monad to interpret the program in steps and we could bail or error if we find a `DeleteMyHardDrive` effect, but in 
-real systems this would still require _actually_ running the program otherwise we won't know which branches would be taken!
-
-So, in short, Monads are very expressive, but severely limit our analysis, but Applicatives don't let us depend on results of
-previous effects, which is a deal-breaker in most real-world systems. Clearly the sweet spot must be somewhere in between!
-
-## The Sweet Spot
-
-**Selective Applicatives** fit nicely into the continuum between Applicatives and Monads.
-
-If you haven't heard of them, go read up on them [here](https://hackage.haskell.org/package/selective).
-
-The interface for Selective Applicatives allow us to specify a statically known set of branching codepaths and effects that our program _may_ execute,
-but it leaves the actual branching to runtime.
+The interface for Selective Applicatives is similar to Applicatives, but they allow us to specify a known set of branching codepaths that our program _may_ choose between when executing.
+Unlike the monadic interface, these branching paths need to be known and enumerated in advance, we can't make them up on the fly while running our effects.
 
 This interface gets us _much_ closer to matching the
-level of expressiveness we need for everyday programming while still granting us
+level of expressiveness we actually need for everyday programming while still granting us
 most of the best benefits of program analysis.
 
-With Selective Applicatives we can do things like crawl the expression to see
-the union of all possible effects we may run, we can transform the effect graph to perform optimizations like memoizing duplicated
-effects in advance, we can display a flow chart of all possible program executions to the user, we could check all the dependencies of a build-system defined in a Selective Applicative such that we can determine whether any of their inputs have changed, the list goes on.
-These are all things we can't easily do once we've `bound` ourselves into a corner with Monads.
+Here's an example of what it looks like to analyse a `ReadWriteDelete` program using Selective Applicatives:
 
-However, there are unfortunately a lot of problems with Selective Applicatives too:
+```haskell
+import Control.Monad.Writer
+import Control.Selective as Selective
+import Data.Either
+import Data.Functor ((<&>))
 
-* We can't express things like loops or recursion which contain effects
-* Branching logic like case-statements are expressible, but very cumbersome as they're expressed as a sequence of
-  branching binary choices.
-* There's no good syntax for expressing Selective Applicatives like there is with do-notation for Monads and ApplicativeDo.
-* None of Functors, Applicative, Selective Applicative Functors, OR Monads have any structured representation of inputs or the flow of data from one effectful computation to the next.
+-- We require the Selective interface now
+class (Selective m) => ReadWriteDelete m where
+  readLine :: m String
+  writeLine :: String -> m ()
+  deleteMyHardDrive :: m ()
 
-## In conclusion (for now)
+data Command
+  = ReadLine
+  | WriteLine String
+  | DeleteMyHardDrive
+  deriving (Show)
+
+-- | "Under" is a helper for collecting the minimum number of selective effects.
+instance ReadWriteDelete (Under [Command]) where
+  readLine = Under [ReadLine]
+  writeLine msg = Under [WriteLine msg]
+  deleteMyHardDrive = Under [DeleteMyHardDrive]
+
+-- | "Over" is a helper which collects all possible selective effects.
+instance ReadWriteDelete (Over [Command]) where
+  readLine = Over [ReadLine]
+  writeLine msg = Over [WriteLine msg]
+  deleteMyHardDrive = Over [DeleteMyHardDrive]
+
+-- | A "real" IO instance
+instance ReadWriteDelete IO where
+  readLine = getLine
+  writeLine msg = putStrLn msg
+  deleteMyHardDrive = putStrLn "Deleting hard drive... Just kidding!"
+
+-- | A program using Selective effects
+myProgram :: (ReadWriteDelete m) => m String
+myProgram =
+  let msgKind =
+        Selective.matchS
+          -- All the valid values we expect and should consider during static analysis
+          (Selective.cases ["friendly", "mean"])
+          -- The action we run to get the input
+          readLine
+          -- What to do with each input
+          ( \case
+              "friendly" -> writeLine ("Hello! what is your name?") *> readLine
+              "mean" -> writeLine ("Hey doofus, what do you want? Too late. I deleted your hard-drive. How do you feel about that?") *> deleteMyHardDrive *> readLine
+              -- This can't actually happen.
+              _ -> error "impossible"
+          )
+      prompt = writeLine "Select your mood: friendly or mean"
+      fallback =
+        (writeLine "That was unexpected. You're an odd one aren't you?")
+          <&> \() actualInput -> "Got unknown input: " <> actualInput
+   in prompt
+        *> Selective.branch
+          msgKind
+          fallback
+          (pure id)
+
+allPossibleCommands :: Over [Command] x -> [Command]
+allPossibleCommands (Over cmds) = cmds
+
+minimumPossibleCommands :: Under [Command] x -> [Command]
+minimumPossibleCommands (Under cmds) = cmds
+
+runIO :: IO String
+runIO = myProgram
+
+-- | We can now run our program in the Writer applicative to see what it would do!
+main :: IO ()
+main = do
+  let allCommands = allPossibleCommands myProgram
+  let minimumCommands = minimumPossibleCommands myProgram
+  putStrLn "All possible commands:"
+  print allCommands
+  putStrLn "Minimum possible commands:"
+  print minimumCommands
+
+-- All possible commands:
+-- [ WriteLine "Select your mood: friendly or mean"
+-- , ReadLine
+-- , WriteLine "Hey doofus, what do you want? Too late. I deleted your hard-drive. How do you feel about that?"
+-- , DeleteMyHardDrive
+-- , ReadLine
+-- , WriteLine "Hello! what is your name?"
+-- , ReadLine
+-- , WriteLine "That was unexpected. You're an odd one aren't you?"
+-- ]
+--
+-- Minimum possible commands:
+-- [ WriteLine "Select your mood: friendly or mean"
+-- , ReadLine
+-- ]
+```
+
+Okay, so now you've read a program which uses the full power of Selective applicative to _branch_ based on the results of previous effects. 
+
+We can branch on user input to select either a friendly or mean greeting style, so it's clearly more expressive than the Applicative version, 
+but it's also pretty obvious that this is the clunkiest option available. It's a bit tricky to write, and is also pretty tough to read.
+
+We can now _branch_ on user input, but since we need to pre-configure an explicit branch for every possible
+input we want to handle, we can't even write a simple program which echos back whatever the user types in, or even one that greets them by name.
+There are clearly still some substantial limitations on which programs we can express here.
+
+However, let's look on the bright side for a bit, similar to our approach with Applicatives we can analyse the commands our program may run. 
+This time however, we've got branching paths in our program!
+
+The selective interface gives us two methods to analyse our program:
+
+* The `Under` newtype will let us collect the minimum possible sequence of of effects that our program will run no matter what inputs it receives.
+* The `Over` newtype instead collects the list of _all_ possible effects that our program could possibly encounter if it were to run through all of its branching paths.
+
+This isn't as usful as receiving, say, a graph representing the possible execution paths, but it does give us enough information to give users a warning aobut what a program might possibly do, we can let them know that hey, I don't know exactly what will cause it, but this program has the ability to delete your hard-drive!
+
+You can of course write additional Selective interfaces, or use the Free Selective to re-write Selective computations in order to optimize or memoize them as you wish just like you can with Applicatives.
+
+It's clear at this point that Selectives are another good tool, but the limitations are still too severe:
+
+* We can't use results from previous effects in future effects.
+* We can't express things like loops or recursion which require effects
+* Branching logic like case-statements are expressible, but very cumbersome.
+* The syntax for writing programs using Selective Applicatives is a bit rough, and there's no do-notation equivalent.
+
+## In search of the true sweet spot
+
+This isn't a solved problem yet, but don't worry, there are yet more different methods of sequencing effects!
+
+It may take me another 5 years to finally finish it, but at some point we'll continue this journey and explore how we can 
+sequence effects using Cartesian Categories instead, and how this may help us find a more tenable middle-ground on our Expressiveness Spectrum. 
+A place where we can analyze possible execution paths without sacrificing the ability to write the programs we need.
 
 I hope this blog post helps others to understand that while Monads were a huge discovery to the benefit of functional programming, 
-we shouldn't stop looking for abstractions which are a better fit for the problems we generally face in day-to-day programming.
-
-Selective Applicatives are a great step in the right direction, 
-but are unfortunately under-utilized, aren't part of Haskell s Functor-Applicative-Monad Hierarchy, 
-and don't have their own syntax. 
-
-This is just one post in a series I have planned, but I've noticed that multiple years of thinking on these problems have passed 
-without any productive output, so this first post is an attempt to get the ball rolling and hopefully I'll follow up with 
-more posts exploring this space soon.
-
-Stay tuned!
-
+that we should keep looking for abstractions which are a better fit for the problems we generally face in day-to-day programming.
