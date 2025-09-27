@@ -36,7 +36,7 @@ current discussion, at the cost of static analysis.
 Allow me to present, in all its glory, the Expressiveness Spectrum:
 
 ```
-Strong Static Analysis <+------------+------------+> Embarrassingly Expressive Code
+Strong Static Analysis <+---------+---------+> Embarrassingly Expressive Code
 ```
 
 As you can clearly see, as you gain more expressive power you begin to lose the ability to know what the heck your 
@@ -69,7 +69,8 @@ greetUser greeting = do
   name <- readLine
   writeLine ("Hello, " <> name <> "!")
 
--- We can, at run time, construct a new mini-program that the world has never seen before!
+-- We can, at run time, construct a new mini-program 
+-- that the world has never seen before!
 mkSimpleGreeting :: ReadWrite m => IO (m ())
 mkSimpleGreeting = do 
   greeting <- readFile "greeting.txt"
@@ -146,7 +147,10 @@ class Functor f => Applicative f where
   (<*>) :: f (a -> b) -> f a -> f b
 ```
 
-We can see that, unlike Monads, it affords no way to sequence effects such that future effects depend in any way on previously run effects.
+Notice how the interface _does_ contain an arrow `f (a -> b)`, but this arrow can only affect
+the _pure_ aspect of the computation. Unlike monadic bind, there's no way to use the `a` result from 
+running effects to select or build new effects to run.
+
 The sequence of effects is determined entirely by the host language before we start to run the effects, and thus the sequence of effects
 can be reliably inspected in advance.
 
@@ -243,13 +247,14 @@ data Command
   | DeleteMyHardDrive
   deriving (Show)
 
--- | "Under" is a helper for collecting the minimum number of selective effects.
+-- | "Under" is a helper for collecting the 
+-- *minimum* set of effects we might run.
 instance ReadWriteDelete (Under [Command]) where
   readLine = Under [ReadLine]
   writeLine msg = Under [WriteLine msg]
   deleteMyHardDrive = Under [DeleteMyHardDrive]
 
--- | "Over" is a helper which collects all possible selective effects.
+-- | "Over" is a helper which collects *all* possible effects we might run.
 instance ReadWriteDelete (Over [Command]) where
   readLine = Over [ReadLine]
   writeLine msg = Over [WriteLine msg]
@@ -266,14 +271,21 @@ myProgram :: (ReadWriteDelete m) => m String
 myProgram =
   let msgKind =
         Selective.matchS
-          -- All the valid values we expect and should consider during static analysis
+          -- The list of values our program has explicit branches for.
+          -- These are the values which will be used to crawl codepaths when
+          -- analysing your program using `Over`.
           (Selective.cases ["friendly", "mean"])
           -- The action we run to get the input
           readLine
           -- What to do with each input
           ( \case
               "friendly" -> writeLine ("Hello! what is your name?") *> readLine
-              "mean" -> writeLine ("Hey doofus, what do you want? Too late. I deleted your hard-drive. How do you feel about that?") *> deleteMyHardDrive *> readLine
+              "mean" -> 
+                let msg = unlines [ "Hey doofus, what do you want?"
+                                  , "Too late. I deleted your hard-drive."
+                                  , "How do you feel about that?"
+                                  ]
+                 in writeLine msg *> deleteMyHardDrive *> readLine
               -- This can't actually happen.
               _ -> error "impossible"
           )
@@ -309,7 +321,7 @@ main = do
 -- All possible commands:
 -- [ WriteLine "Select your mood: friendly or mean"
 -- , ReadLine
--- , WriteLine "Hey doofus, what do you want? Too late. I deleted your hard-drive. How do you feel about that?"
+-- , WriteLine "Hey doofus, what do you want?\nToo late. I deleted your hard-drive.\nHow do you feel about that?"
 -- , DeleteMyHardDrive
 -- , ReadLine
 -- , WriteLine "Hello! what is your name?"
