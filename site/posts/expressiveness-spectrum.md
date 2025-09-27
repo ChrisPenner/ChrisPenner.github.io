@@ -202,7 +202,7 @@ Since this interface doesn't provide us with a `bind`, we can't use results from
 It's clear that Applicatives are less __expressive__ in this way,
 but we _can_ run an analysis of a program written in the Applicative `ReadWrite` to see **exactly** which effects it will run, and which arguments each of them are provided with, before we execute anything for real.
 
-I hope that's enough ink to convince you that it's always a simple matter of "more expressive is always better", but rather that expressiveness exists on a continuum between
+I hope that's enough ink to convince you that it's not a simple matter of "more expressive is always better", but rather that expressiveness exists on a continuum between
 ease of program analysis and expressiveness.
 
 Expressive power comes at a cost, specifically the cost of analysis.
@@ -353,11 +353,13 @@ It's clear at this point that Selectives are another good tool, but the limitati
 
 ## In search of the true sweet spot
 
-This isn't a solved problem yet, but don't worry, there are yet more methods of sequencing effects.
+This isn't a solved problem yet, but don't worry, there are yet more methods of sequencing effects to explore!
 
 It may take me another 5 years to finally finish it, but at some point we'll continue this journey and explore how we can 
-sequence effects using a hierarchy of Category classes instead, and how this may help us find a more tenable middle-ground on our Expressiveness Spectrum. 
-A place where we can analyze possible execution paths without sacrificing the ability to write the programs we need.
+sequence effects using the hierarchy of Category classes instead. 
+Perhaps you've wondered why Arrows don't get more love, we'll dive into that too! 
+We'll seek to find a more tenable middle-ground on our Expressiveness Spectrum,
+a place where we can analyze possible execution paths without sacrificing the ability to write the programs we need.
 
 I hope this blog post helps others to understand that while Monads were a huge discovery to the benefit of functional programming, 
 that we should keep looking for abstractions which are a better fit for the problems we generally face in day-to-day programming.
