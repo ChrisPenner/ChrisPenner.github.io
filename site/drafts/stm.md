@@ -1,9 +1,9 @@
 ---
-title: "Mutexes suck."
+title: "Stop sharing memory."
 author: Chris Penner
 date: Sep 24, 2025
 tags: [programming, haskell]
-description: "Our parallelism toolkit needs an upgrade."
+description: "Mutexes are bad tools, write code so you don't need them."
 image: power-small.jpg
 ---
 
@@ -17,18 +17,20 @@ Tech moves quickly, but fundamental abstractions usually don't.
 
 If you're fuzzy on the difference, now would be a good time to refresh on the difference between [parallelism and concurrency](https://wiki.haskell.org/index.php?title=Parallelism_vs._Concurrency). 
 
-Concurrency is the idea of **co-ordinating** multiple independently tasks, 
-and __parallelism__ as the idea of executing multiple tasks simultaneously. So you can use concurrency to wait on mutliple network requests to finish and collect their results, which works even on a single-core machine, but it's parallelism to partition a large array across multiple cores to sum its contents at the same time.
+Concurrency is the idea of **co-ordinating** multiple independently tasks, whereas
+__parallelism__ is the idea of executing multiple tasks simultaneously. So you can use concurrency to wait on mutliple network requests to finish and collect their results, which works even on a single-core machine, but it's parallelism to partition a large array across multiple cores to sum its contents at the same time.
 
 Computer scientists have been thinking about concurrency for a __long__ time, Computing has prioritized simpler single-threaded execution environments for decades, so research in this area is much further ahead. We have a whole collection of tools and patterns for handling concurrency. There's a rich landscape of well-researched patterns like communicating sequential processes (CSP), the actor model, structured concurrency, event loops and supervision trees. There's also a set of common tools which provide strong abstractions to build upon, like select/poll, co-routines (e.g. async/await), futures/promises,  errgroup/waitgroup, and so on.
 
-Whereas for parallelism, the landscape is much more sparse.
-Some languages like Python and Javascript simply disallow true parallelism in the core languages.
+So what happens when we add parallelism to the mix? Some patterns handle this by having each process own its own independent memory, for example actors and CSP. 
+This avoids the need for synchronization, and works great in cases where you have many parallel _processes_ to run, but it breaks down in cases when running some few processes on a large amount of data.
 
-GPUs are a whole topic on their own, clearly incredibly useful, but are a completely different paradigm which typically aren't programmable within general purpose languages.
-SIMD is gaining better support these days, but it's still poorly adopted, tricky to use, and has very limited applicability.
+Let's imagine the traditional parallel programming problem of managing many bank accounts, we want to process many concurrent transfer requests between accounts, while ensuring that the total amount of money in the system remains constant, and that no balances go negative.
 
-The pthreads API is the most relevant to this conversation, it allows true parallelism across threads for normal application code.
+Actor-based and CSP systems have a tough time with this sort of thing; typically you'd end up with an actor per account which manages requests to read and write to its balance. Each transfer would require sending messages to at least two different actors. 
+Not only does this require managing an actor process for every account which can be rough on the scheduler and on memory, it's also _very_ difficult to ensure that transfers are atomic and that the system remains consistent in the face of failures and retries. You need additional patterns like two-phase commit to add guarantees that money won't be lost or created out of thin air.
+At this point, you're no longer writing code in your programming language, you're now writing actor-code to build a distributed system.
+TODO: fixup the above
 
 With parallel, shared-memory systems, we now need ways to synchronize access to shared resources, and this is where things get tricky.
 Way back in the 1960s Edsger Dijkstra first proposed the concept of semaphores as a locking mechanism for providing exclusive access to critical sections of code in concurrent systems.
