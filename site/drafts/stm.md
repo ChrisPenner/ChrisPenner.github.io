@@ -1,33 +1,49 @@
 ---
-title: "The best concurrent programming language"
+title: "Mutexes suck."
 author: Chris Penner
 date: Sep 24, 2025
 tags: [programming, haskell]
-description: ""
+description: "Our parallelism toolkit needs an upgrade."
 image: power-small.jpg
 ---
 
-Moore's law is dead, modern computing is multi-threaded, distributed, and there's probably a network call happening on your machine after every few key-presses.
-
-Gone are the days where a single core executes a single contiguous task all the way to completion.
-
-In the timeline of programming languages however, this revolution is still a relatively new development. 
+Moore's law is dead, modern computing is multi-threaded, distributed, and there's probably a network call happening on your machine after every few key-presses,
+gone are the days where a single core executes a single contiguous task all the way to completion.
+We live in the age of parallelism, where it's far easier to scale horizontally than vertically, whether that means adding CPU cores or entire servers.
+In the timeline of programming languages however, this paradigm shift away from fast single cores is still relatively new and languages are still adapting to it. 
 Tech moves quickly, but fundamental abstractions usually don't. 
 
-Notably, at the time of writing Javascript is _still_ single-threaded in the browser, and Python's global interpreter lock (GIL) has hampered true concurrency for decades.
+## The State of Things
 
+If you're fuzzy on the difference, now would be a good time to refresh on the difference between [parallelism and concurrency](https://wiki.haskell.org/index.php?title=Parallelism_vs._Concurrency). 
+
+Concurrency is the idea of **co-ordinating** multiple independently tasks, 
+and __parallelism__ as the idea of executing multiple tasks simultaneously. So you can use concurrency to wait on mutliple network requests to finish and collect their results, which works even on a single-core machine, but it's parallelism to partition a large array across multiple cores to sum its contents at the same time.
+
+Computer scientists have been thinking about concurrency for a __long__ time, Computing has prioritized simpler single-threaded execution environments for decades, so research in this area is much further ahead. We have a whole collection of tools and patterns for handling concurrency. There's a rich landscape of well-researched patterns like communicating sequential processes (CSP), the actor model, structured concurrency, event loops and supervision trees. There's also a set of common tools which provide strong abstractions to build upon, like select/poll, co-routines (e.g. async/await), futures/promises,  errgroup/waitgroup, and so on.
+
+Whereas for parallelism, the landscape is much more sparse.
+Some languages like Python and Javascript simply disallow true parallelism in the core languages.
+
+GPUs are a whole topic on their own, clearly incredibly useful, but are a completely different paradigm which typically aren't programmable within general purpose languages.
+SIMD is gaining better support these days, but it's still poorly adopted, tricky to use, and has very limited applicability.
+
+The pthreads API is the most relevant to this conversation, it allows true parallelism across threads for normal application code.
+
+With parallel, shared-memory systems, we now need ways to synchronize access to shared resources, and this is where things get tricky.
 Way back in the 1960s Edsger Dijkstra first proposed the concept of semaphores as a locking mechanism for providing exclusive access to critical sections of code in concurrent systems.
-Now, 60 years later, semaphores and mutexes (which is a binary semaphore) are _still_ the core concurrency primitives in most programming languages.
 
-Did Dijkstra really perfect his approach on the first try? Have systems really not evolved in 60 years?
+60 years later, semaphores and mutexes (which is a binary semaphore) are _still_ the core synchronization primitives used in most programming languages.
 
-More likely, I think, is that inventing new approaches is difficult, and it's both risky and alienating to introduce new ideas.
+Did Dijkstra really perfect his approach on the first try? Have systems really not evolved in a half century?
+
+More likely, I think, is that inventing new approaches is difficult, and risks alienating users who are used to the status quo.
 As a result, each new language simply copy-pastes existing concurrency ideas, perhaps providing some incremental improvements.
 
-Managing concurrency is a large software system is extremely difficult and introduces copious bugs which are both expensive and difficult to find.
+Managing share-memory parallelism in a large software system is extremely difficult and introduces copious bugs which are both expensive and difficult to find.
 
 As an industry we should strive for good, reliable tools which are _easy to use_ and which, by design, make it _more difficult to make mistakes_.
-This post serves to document _why_ mutexes simply aren't cutting it anymore, and to shine some additional light on the best approach I've found. Perhaps it will also serve to inspire others to keep looking for better solutions rather than accept the current state-of-the-art.
+This post serves to document _why_ mutexes simply aren't cutting it anymore as the one-size-fits-all tool for synchronization, and to shine some additional light on the best tool I've found so far. Perhaps it will also serve to inspire others to keep looking for better solutions rather than accept mutexes as the state-of-the-art solution.
 
 So, what's the deal with mutexes anyways? Lock it, do the thing, unlock it again, simple right? What could possibly go wrong...
 
