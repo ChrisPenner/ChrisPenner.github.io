@@ -1,5 +1,5 @@
 ---
-title: "Stop sharing memory."
+title: "Replacing Mutexes"
 author: Chris Penner
 date: Sep 24, 2025
 tags: [programming, haskell]
@@ -7,59 +7,28 @@ description: "Mutexes are bad tools, write code so you don't need them."
 image: power-small.jpg
 ---
 
-Moore's law is dead, modern computing is multi-threaded, distributed, and there's probably a network call happening on your machine after every few key-presses,
-gone are the days where a single core executes a single contiguous task all the way to completion.
-We live in the age of parallelism, where it's far easier to scale horizontally than vertically, whether that means adding CPU cores or entire servers.
-In the timeline of programming languages however, this paradigm shift away from fast single cores is still relatively new and languages are still adapting to it. 
-Tech moves quickly, but fundamental abstractions usually don't. 
+We find ourselves at an inflection point. Moore's law is dying, beefy single cores are no longer keeping up with our computing needs, so we
+need to scale horizontally instead.
+Nowadays, most computers come with multiple CPU cores and since individual cores aren't getting much faster year to year, we find ourselves needing to 
+utilize multiple cores more effectively.
 
-## The State of Things
+There are differing schools of thought on how to effectively make use of this new parallelism, 
+but I'm here to tell you that sharing mutable data between threads isn't one of them.
 
-If you're fuzzy on the difference, now would be a good time to refresh on the difference between [parallelism and concurrency](https://wiki.haskell.org/index.php?title=Parallelism_vs._Concurrency). 
+For anyone who hasn't run into these problems themselves, let's investigate a simple example to see 
+how sharing data causes problems.
 
-Concurrency is the idea of **co-ordinating** multiple independently tasks, whereas
-__parallelism__ is the idea of executing multiple tasks simultaneously. So you can use concurrency to wait on mutliple network requests to finish and collect their results, which works even on a single-core machine, but it's parallelism to partition a large array across multiple cores to sum its contents at the same time.
+## The Problem with Shared State
 
-Computer scientists have been thinking about concurrency for a __long__ time, Computing has prioritized simpler single-threaded execution environments for decades, so research in this area is much further ahead. We have a whole collection of tools and patterns for handling concurrency. There's a rich landscape of well-researched patterns like communicating sequential processes (CSP), the actor model, structured concurrency, event loops and supervision trees. There's also a set of common tools which provide strong abstractions to build upon, like select/poll, co-routines (e.g. async/await), futures/promises,  errgroup/waitgroup, and so on.
-
-So what happens when we add parallelism to the mix? Some patterns handle this by having each process own its own independent memory, for example actors and CSP. 
-This avoids the need for synchronization, and works great in cases where you have many parallel _processes_ to run, but it breaks down in cases when running some few processes on a large amount of data.
-
-Let's imagine the traditional parallel programming problem of managing many bank accounts, we want to process many concurrent transfer requests between accounts, while ensuring that the total amount of money in the system remains constant, and that no balances go negative.
-
-Actor-based and CSP systems have a tough time with this sort of thing; typically you'd end up with an actor per account which manages requests to read and write to its balance. Each transfer would require sending messages to at least two different actors. 
-Not only does this require managing an actor process for every account which can be rough on the scheduler and on memory, it's also _very_ difficult to ensure that transfers are atomic and that the system remains consistent in the face of failures and retries. You need additional patterns like two-phase commit to add guarantees that money won't be lost or created out of thin air.
-At this point, you're no longer writing code in your programming language, you're now writing actor-code to build a distributed system.
-TODO: fixup the above
-
-With parallel, shared-memory systems, we now need ways to synchronize access to shared resources, and this is where things get tricky.
-Way back in the 1960s Edsger Dijkstra first proposed the concept of semaphores as a locking mechanism for providing exclusive access to critical sections of code in concurrent systems.
-
-60 years later, semaphores and mutexes (which is a binary semaphore) are _still_ the core synchronization primitives used in most programming languages.
-
-Did Dijkstra really perfect his approach on the first try? Have systems really not evolved in a half century?
-
-More likely, I think, is that inventing new approaches is difficult, and risks alienating users who are used to the status quo.
-As a result, each new language simply copy-pastes existing concurrency ideas, perhaps providing some incremental improvements.
-
-Managing share-memory parallelism in a large software system is extremely difficult and introduces copious bugs which are both expensive and difficult to find.
-
-As an industry we should strive for good, reliable tools which are _easy to use_ and which, by design, make it _more difficult to make mistakes_.
-This post serves to document _why_ mutexes simply aren't cutting it anymore as the one-size-fits-all tool for synchronization, and to shine some additional light on the best tool I've found so far. Perhaps it will also serve to inspire others to keep looking for better solutions rather than accept mutexes as the state-of-the-art solution.
-
-So, what's the deal with mutexes anyways? Lock it, do the thing, unlock it again, simple right? What could possibly go wrong...
-
-## The Concurrency Problem(s)
-
-Let's begin by crafting a simple software system which induces the need for synchronization in the first place, then we'll try to fix it with mutexes and see how that goes.
+Let's begin by crafting a simple software system which induces the need for synchronization in the first place. 
 
 I'll present a common concurrency example: the task of managing bank account balances correctly in spite of concurrent transfer requests.
 
-Obviously real banks don't store all their account balances in RAM, but I'll trust in the reader's intelligence enough to 
-translate from this pedagogical example into their more realistic domain of choice.
+Obviously real banks don't store all their account balances in RAM, so I'll 
+hope that the reader can apply the concepts from this pedagogical example to a their own domain as necessary.
 
 Here's some golang pseudo-code for a simple bank account and the operations upon it.
-I'm focused on the concurrency problems here, so forgive me for skipping the double-entry accounting, input validation, and other real-world complexities.
+I'm focused on the synchronization problems here, so forgive me for skipping the double-entry accounting, input validation, and other real-world complexities.
 
 ```go
 struct Account {
@@ -113,16 +82,18 @@ func main() {
 }
 ```
 
-Things may work well in your tests, and might even work well in production for a while, but sooner or later you're going to lose track of money and have some confused and angry customers.
+Things may work well in your tests, and might even work well in production for a while, 
+but sooner or later you're going to lose track of money and have some confused and angry customers.
 
+Do you see why?
 This brings us to our first synchronization problem to solve, Data Races!
 
 ### Data races
 
-__Most__ programming languages are imperative with mutable data structures **\[citation needed\]**. 
-Mutable data necessarily brings along data-races.
+__Most__ programming languages are imperative with mutable data structures **\[citation needed\]**, 
+so passing tpointers to multiple threads leads to shared mutable data, and shared mutable data necessarily causes data races.
 
-A data race is any time two threads access the same memory location concurrently and non-deterministically, when at least one of the accesses is a write.
+A data race occurs any time two threads access the same memory location concurrently and non-deterministically when at least one of the accesses is a write.
 
 We're passing accounts by reference here, so multiple threads have access to modify the same account.
 With multiple transfer go-routines are running on the same account, each could be paused by the scheduler at nearly any point during its execution.
@@ -152,9 +123,14 @@ The idea that a perfectly normal evolution from a single-threaded to a multi-thr
 
 Okay, but now that we've lost thousands if not millions of dollars, how do we fix this?
 
-Mutexes are the solution espoused to fix this issue, if you remember to use them, and indeed if you use them _correctly_.
+Enter Mutexes!
 
-Here's how we can fix the above code using a mutex:
+### Mutexes
+
+Okay, we've encountered a problem with our shared mutable state, the traditional approach to solving these problems is to enforce _exclusive access_ to the shared data in so-called "critical sections".
+Mutexes are so-named because they provide **mut**ual **ex**clusion, meaning only a single thread may access a given virtual resource at a time.
+
+Here's how we can fix the data race problems using a mutex:
 
 ```go
 struct Account {
@@ -188,13 +164,14 @@ When you want to use the bathroom, you take the key, there's only one key availa
 nobody else can use that bathroom.
 Now you're free to do your business, then you return the key to the hook on the wall for the next person.
 
-Unlike a bathroom key however, mutexes are only _conceptual_ locks, an they only operate on the honor system. 
-If you forget to lock the mutex the system won't stop you from accessing the data anyways. Only the program author knows _what_ they actually intend that mutex to conceptually control (and hopefully that programmer documented it somewhere).
+Unlike a bathroom key however, mutexes are only _conceptual_ locks, and they only operate on the honor system. 
+If you forget to lock the mutex the system won't stop you from accessing the data anyways. 
+In fact, only the program author knows _what_ conceptual resource they actually intend that mutex to represent, and hopefully that programmer documented it somewhere.
 
 In this case, we've addressed the data-race within `withdraw` and `deposit` using mutexes, but we've still got a problem with the `transfer` function.
 
-We're properly using mutexes to protect our critical code within each smaller operation, but it's still possible for our `transfer` function to be pre-empted in-between the calls to `withdraw` and `deposit`, in this case it's possible that money has been withdrawn from an account, but hasn't yet been deposited in the other. 
-This is an inconsistent state of the system, as the money has temporarily disappeared.
+We're properly using mutexes to protect our critical code within each smaller operation, but what happens if our `transfer` function is pre-empted in-between the calls to `withdraw` and `deposit`? It's possible that money has been withdrawn from an account, but hasn't yet been deposited in the other. 
+This is an inconsistent state of the system, as the money has temporarily disappeared, and this can result in _very_ strange behaviour.
 
 If we print out all account balances at any time while transfers are happening, we might see that money is missing from the system, even if we obtain the locks for each individual account.
 
@@ -210,7 +187,7 @@ func report() {
 
 In order to fix this, we need to chain together multiple critical sections into a single atomic operation.
 
-### Composition
+### Composing Critical Sections
 
 We need some way to make the entire transfer operation atomic, at least from the perspective of other threads who are respecting our mutexes.
 
@@ -278,7 +255,7 @@ func transfer(from *Account, to *Account, amount int) bool {
 
 Ugh, defining a correct `transfer` function, which conceptually is just the _composition_ of our well encapsulated `withdraw` and a `deposit` has forced us to remove the locking from both `withdraw` and `deposit`, making both of them _less safe_ to use. It has placed the burden of locking on the caller (without any system-maintained guarantees), and even worse, we now need to remember to go and _add_ locking around every existing `withdraw` and `deposit` call in the entire codebase.
 
-Mutexes don't _compose_. They don't allow us to chain multiple critical sections into a single atomic unit and they force us to break encapsulation and thrust the implementation details of mutexes and locking onto the caller, who really shouldn't need to know which invariants must be maintained deep within the implementation.
+Mutexes don't _compose_! They don't allow us to chain multiple critical sections into a single atomic unit and they force us to break encapsulation and thrust the implementation details of mutexes and locking onto the caller, who really shouldn't need to know which invariants must be maintained deep within the implementation.
 
 It's not just composition that's broken here though, in fixing `transfer` to make it an atomic operation we've introduced a new, extra-well-hidden deadlock bug.
 
@@ -303,22 +280,80 @@ This is a pretty disastrous consequence for a problem which is relatively hard t
 
 Golang gets some credit here in that it does provide some runtime tools for detecting both dead-locks and data-races, which is great, but these detections only help if your tests encounter the problem; they don't prevent the problem from happening in the first place.
 
+### Understanding the mess
+
 What a mess.
 
-### How do we fix it?
+In my experience, given enough time and complexity these sorts of problems will crop up eventually.
+Solving them with mutexes is espescially dangerous because they _seem_ to be an effective solution when they're first introduced. They work fine in the small scopes where they're initially introduced, but fail catastrophically once operating at scale.
 
-As we've seen, architecting a correct concurrent software system using mutexes is possible, but _very_ difficult. 
+Architecting a correct software system using mutexes is possible, but _very_ difficult. 
 Every attempt to fix one problem has spawned a couple more. 
+
+We can summarize all the problems with sharing state:
+
+* Data races
+* Non-atomicity/inconsistent system states
+* Lack of composition
+* Deadlocks/livelocks
+* Every change or new addition requires an understanding of the system as a whole
 
 In my opinion, we've tried to stretch mutexes beyond their limits.
 Mutexes work great in small, well-defined scopes where you're locking a _single_ resource which is only ever accessed in a handful of functions in the same module,
 but they simply don't scale to large complex systems with many interacting components maintained by dozens or hundreds of developers.
 
-Time to rebuild things from the foundations.
+### How do we fix it?
+
+First and foremost, I think immutability by default goes a _long_ way here. 
+For many programmers this is a paradigm shift from what they're used to, but more and more new languages (Gleam, Roc, Elm, Unison) are adopting this as core design principle. 
+Using immutable data structures immediately prevents data-races from sneaking their way into your code.
+These languages typically do provide some form of mutable references, accessing these is an immediate sign-post
+that shared-mutable state is involved, which goes a long way.
+Obviously not every programmer can switch to an immutable-first language over night, but I think it would behoove most
+programmers to strongly consider an immutable language if parallelism is a large part of their project's workload.
+
+For the rest of these problems we need to fundamentally re-think our approach to synchronization.
+Mutexes have proven unreliable, they've gotta go. Instead, we can choose from a wide swatch of concurrency patterns.
+
+Actors and Communicating Sequential Processes (CSP) are the most prominent approaches.
+Each of these operate on the principle that there are independent sub-programs which each have
+their own isolated states that only they have access to. Each actor or process receives messages from other units
+and can respond to them in turn.
+
+These approaches work great for _task parallelism_, where there are independent processes to run, and where your parallelism needs are bounded
+by the number of tasks you'd like to run. 
+I've used an actor-based system when building Unison's code-syncing protocol, it had an actor responsible for loading and sending 
+requests for code, one for receiving and unpacking code, and one for validating the hashes of received data.
+I reach for these systems when the number of workers/tasks is statically known. I've seen consultants describe complex patterns for dynamically introducing actors, actor-per-resource systems etc, but in my opinion these systems quickly outgrow the ability of any one developer to understand, espescially when the system is running.
+
+However, these approaches don't tend to work well for _data parallelism_, 
+where you have a large number of data items to process in parallel, but only a few processes to run.
+
+Amongst data-parallel systems if we're dealing with a simple batch-processing job then 
+there's a whole set of simple map-reduce patterns which will handle it, these generally
+match the CSP model, with each step of the pipeline consisting of some number of processes which receive
+data from the previous steps and send results downstream.
+
+Using these patterns has the added benefit that since they operate as multiple processes with independent state, they 
+can be ported to a truly distributed system involving multiple nodes _much_ easier than
+shared-memory approaches.
+
+However there are some (rarer) systems which involve largely unstructured access between 
+multiple synchronized resources, like our bank account example.
+
+If we were to spin up multiple transfer workers they'd still need some way to synchronise access
+to each bank account, and transfers involve a _transactional relationship_ between **multiple** resources.
+
+It's also worth noting that even if using an actor or CSP system we still need synchronized primitives to
+manage access to their channels and mailboxes.
+
+What's a guy to do?
 
 ## Software Transactional Memory
 
-For _most_ concurrent applications, Software Transactional Memory (STM) is __*the best*__ currently available solution to **all** of these problems and _it's not even close_.
+While I still largely believe that using a simpler streaming or CSP system is going to be most effective for most tasks, 
+in situations where those patterns are insufficient or the task is more complex than can reasonably be expressed using those models, 
+Software Transactional Memory (STM) is __*the best*__ currently available solution for synchronization and it's not even close.
 
 Think of database transactions; transaction isolation allows you a consistent view of data in spite of concurrent access.
 Each transaction sees an isolated view of the data, untampered by other reads and writes. After making all your reads and writes
@@ -569,6 +604,44 @@ STM isn't a silver bullet, it uses optimistic locking so may be a bad choice for
 
 
 
+## Concurrency patterns scale better
+
+If you're fuzzy on the difference, now would be a good time to refresh on the difference between [parallelism and concurrency](https://wiki.haskell.org/index.php?title=Parallelism_vs._Concurrency). 
+
+Concurrency is the idea of **co-ordinating** multiple independently tasks, whereas
+__parallelism__ is the idea of executing multiple tasks simultaneously. So you can use concurrency to wait on mutliple network requests to finish and collect their results, which works even on a single-core machine, but it's parallelism to partition a large array across multiple cores to sum its contents at the same time.
+
+Computer scientists have been thinking about concurrency for a __long__ time, Computing has prioritized simpler single-threaded execution environments for decades, so research in this area is much further ahead. We have a whole collection of tools and patterns for handling concurrency. There's a rich landscape of well-researched patterns like communicating sequential processes (CSP), the actor model, structured concurrency, event loops and supervision trees. There's also a set of common tools which provide strong abstractions to build upon, like select/poll, co-routines (e.g. async/await), futures/promises,  errgroup/waitgroup, and so on.
+
+So what happens when we add parallelism to the mix? Some patterns handle this by having each process own its own independent memory, for example actors and CSP. 
+This avoids the need for synchronization, and works great in cases where you have many parallel _processes_ to run, but it breaks down in cases when running some few processes on a large amount of data.
+
+Let's imagine the traditional parallel programming problem of managing many bank accounts, we want to process many concurrent transfer requests between accounts, while ensuring that the total amount of money in the system remains constant, and that no balances go negative.
+
+Actor-based and CSP systems have a tough time with this sort of thing; typically you'd end up with an actor per account which manages requests to read and write to its balance. Each transfer would require sending messages to at least two different actors. 
+Not only does this require managing an actor process for every account which can be rough on the scheduler and on memory, it's also _very_ difficult to ensure that transfers are atomic and that the system remains consistent in the face of failures and retries. You need additional patterns like two-phase commit to add guarantees that money won't be lost or created out of thin air.
+At this point, you're no longer writing code in your programming language, you're now writing actor-code to build a distributed system.
+TODO: fixup the above
+
+With parallel, shared-memory systems, we now need ways to synchronize access to shared resources, and this is where things get tricky.
+Way back in the 1960s Edsger Dijkstra first proposed the concept of semaphores as a locking mechanism for providing exclusive access to critical sections of code in concurrent systems.
+
+60 years later, semaphores and mutexes (which is a binary semaphore) are _still_ the core synchronization primitives used in most programming languages.
+
+Did Dijkstra really perfect his approach on the first try? Have systems really not evolved in a half century?
+
+More likely, I think, is that inventing new approaches is difficult, and risks alienating users who are used to the status quo.
+As a result, each new language simply copy-pastes existing concurrency ideas, perhaps providing some incremental improvements.
+
+Managing share-memory parallelism in a large software system is extremely difficult and introduces copious bugs which are both expensive and difficult to find.
+
+As an industry we should strive for good, reliable tools which are _easy to use_ and which, by design, make it _more difficult to make mistakes_.
+This post serves to document _why_ mutexes simply aren't cutting it anymore as the one-size-fits-all tool for synchronization, and to shine some additional light on the best tool I've found so far. Perhaps it will also serve to inspire others to keep looking for better solutions rather than accept mutexes as the state-of-the-art solution.
+
+So, what's the deal with mutexes anyways? Lock it, do the thing, unlock it again, simple right? What could possibly go wrong...
+
+
+
 ## Conclusion
 
 
@@ -585,3 +658,26 @@ https://danluu.com/concurrency-bugs/
 
 It mentions many tools, but AFAIK none of them claim to detect, never mind _prevent_ 
 entire classes of these bugs.
+
+
+
+
+----
+
+# Graveyard
+
+
+Moore's law is dead, modern computing is multi-threaded, distributed, and there's probably a network call happening on your machine after every few key-presses,
+gone are the days where a single core executes a single contiguous task all the way to completion.
+We live in the age of parallelism, where it's far easier to scale horizontally than vertically, whether that means adding CPU cores or entire servers.
+In the timeline of programming languages however, this paradigm shift away from fast single cores is still relatively new and languages are still adapting to it. 
+Tech moves quickly, but fundamental abstractions usually don't. 
+
+
+
+This isn't a new concept, it ori 
+
+> Don't communicate by sharing memory; share memory by communicating.
+> -- Rob Pike
+
+
