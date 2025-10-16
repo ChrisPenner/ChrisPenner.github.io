@@ -8,50 +8,56 @@ image: pipes.jpg
 ---
 
 [Last time]((https://chrispenner.ca/posts/expressiveness-spectrum), we explored common methods of sequencing effects into little programs.
-If you haven't read it yet, I'd recommend doing that first, but you can probably manage without it if you insist.
-We examined Applicatives, Monads, and Selective Applicatives, and each of these systems has its own trade-offs. 
-We dug into how each approach exists on the spectrum between being **expressive** or **analyzable** and at the end of the post we were unfortunately left wanting something better. 
-Monads reign supreme when it comes to expressiveness, they can express any possible programs we may want to write, 
+If you haven't read it yet, I'd recommend starting with that, but you can probably manage without it if you insist.
+
+We examined Applicatives, Monads, and Selective Applicatives, and each of these systems had its own trade-offs.
+We dug into how all approaches exist on the spectrum between being **expressive** or **analyzable** and at the end of the post
+we were unfortunately left wanting something better.
+Monads reign supreme when it comes to expressiveness as they can express any possible programs we may want to write,
 but they offer essentially no ability to analyze program they represent without executing it.
 
 On the other hand, Applicatives and Selective Applicatives offered reasonable program analysis, but are unable
 to express complex programs. They can't even encode programs in which downstream effects materially depend on the results of upstream effects.
 
 These approaches are all based on the same Functor-Applicative-Monad hierarchy,
-in this post we'll set that aside and rebuild on 
-an altogether different foundation to see if we can do even better. 
+in this post we'll set that aside and rebuild on
+an altogether different foundation to see if we can do even better.
 
 ## Setting the goal posts
 
-Before putting in the work, let's think critically about the what we felt was missing from the Monad hierarchy and what we wish to gain from a new system.
+Before putting in the work let's think critically about the what we felt was missing from the Monad hierarchy and what we wish to gain from a new system.
 
 Here's my wish-list:
 
-* I should be able to list every effect that program might perform.
+* I want to be able to list out every effect that program might perform without executing anything.
 * I want to understand the _dependencies_ between the effects including the flow of data between them.
 * I want to be able to express programs in which downstream effects can fully utilize the results of upstream effects.
 
 Looking at these requirements, the biggest problem with the Monadic effects system is that it's far too rough-grained in how it handles the results of previous effects.
-
-Reviewing the signature of bind:
+We can see this by reviewing the signature of bind:
 
 ```haskell
 (>>=) :: Monad m => m a -> (a -> m b) -> m b
 ```
 
-We can see that the result from a previous effect is passed to an arbitrary Haskell function whose job is to return 
-the _entire_ continuation of the program. This permits that function to swap out the _entire_ rest of the program
-on any particular run, which I'd argue is way more power than most reasonable applications require, and is in some cases,
-frankly a dangerous amount of expressive power. That tells us we have some room to constrain our programs
-a bit, and if we're economical about _how_ we do so, we can trade that power for the benefits we desire.
+We can see that the result from the previous effect is passed to an arbitrary Haskell function whose job is to return
+the _entire_ continuation of the program! This permits that function to swap out the _entire_ rest of the program
+on any particular run, which I'd argue is way more power than the vast majority of reasonable programs require.
+This is quite frankly a dangerous amount of expressive power, what sort of programs are you writing where
+you can't even statically identify the possible code paths that _might_ be taken?
+Even more complex flows like branching, looping and recursion can be expressed
+in a more structured way without resorting to this sledgehammer level of dynamism.
 
-We still need to utilize these past results, but we want to avoid opening pandora's box, a.k.a. determining effects by running arbitrary Haskell functions at execution time.
-To do this, we need to meaningfully include the inputs and outputs in the _structure of our effect system itself_.
+This tells us we have some room to constrain our programs
+a bit, and if we're economical about _how_ we do it we can trade that power for the benefits we desire.
 
-For each effect, we should not only track its output (as Monads do), but its inputs too!
+We still need to utilize these past results, but we want to avoid opening Pandora's box.
+That is, we must be careful not to allow the creation of _new_ effects by running arbitrary Haskell functions at execution time.
+So, in order to use results without a continuation-building function like Monads use,
+we must meaningfully include the inputs and outputs for our effects in the _structure of our effect system itself_.
 We also know that we need to be able to chain these effects together, so we'll need some way to compose them.
 
-If it's not obvious already, let me get to the point: this is a great use for the Category typeclass.
+If it's not obvious already, this is a great fit for the Category typeclass:
 
 ```haskell
 class Category k where
@@ -69,28 +75,27 @@ after all, it's called Category Theory, not Monad Theory...
 Now let's begin to re-implement the examples from the previous post using this new Category-based effect system.
 In order to save some time, we're actually going to jump up the hierarchy a bit all the way to `Arrow`s.
 
-The `Arrow` class, if you're not familiar with it, looks something like this:
+The `Arrow` class, if you're not familiar with it, looks like this:
 
 ```haskell
 class Category a => Arrow (a :: Type -> Type -> Type) where
   arr :: (b -> c) -> a b c
-  (***) :: a b c -> a b' c' -> a (b, b') (c, c') 
+  (***) :: a b c -> a b' c' -> a (b, b') (c, c')
 ```
 
-There are a few other methods, but this is a minimal set of methods we need to define.
+There are a few other methods we get for free, but this is a minimal set of methods we need to define.
 
-Notice that it has a `Category` superclass, so we get identity and composition from there.
-It also provides `arr`, which lets us lift pure Haskell functions into our Category structure.
+Notice that it has a `Category` superclass, so we'll use identity and composition from there.
+We can leverage `arr` to lift pure Haskell functions into our Category structure.
 I know we just said we wanted to avoid arbitrary Haskell functions, but note that in this case,
 just like Applicatives, the function is pure, we can't determine any effects or structure of the effects
-within the function.
+within the function. No problems here.
 
 We'll re-visit `(***)` in just a minute.
 
 To get started, how about we re-implement the program we wrote using `Applicative` in the previous post?
 
-I'll save you from clicking over, here's a refresher on what we did:
-
+I'll save you from clicking over, here's a refresher on what we did before:
 
 ```haskell
 import Control.Applicative (liftA3)
@@ -158,7 +163,7 @@ class (Arrow k) => ReadWrite k where
   -- We track the inputs for the writeLine directly in the Category structure.
   writeLine :: k String ()
 
--- Helper for embedding a Haskell value directly into an Arrow
+-- Helper for embedding a static Haskell value directly into an Arrow
 constA :: (Arrow k) => b -> k a b
 constA b = arr (\_ -> b)
 
@@ -206,9 +211,9 @@ Let's look a little closer at `Kleisli`:
 newtype Kleisli m a b = Kleisli { runKleisli :: a -> m b }
 ```
 
-Look familiar? It's just the function from monadic bind hiding in there.
+Look familiar? It's just the continuation function from monadic bind hiding in there.
 
-There's a difference though, now that arbitrary function is part of our _implementation_, 
+There's a difference though, now that arbitrary function is part of our _implementation_,
 not our interface!
 
 This is important, because it means we can invent a different implementation of our `ReadWrite` interface
@@ -232,11 +237,11 @@ instance Category CommandRecorder where
 
 -- Now the Arrow instance.
 instance Arrow CommandRecorder where
-  -- We know this function must be pure (barring errors), so we don't 
+  -- We know this function must be pure (barring errors), so we don't
   -- need to track any effects from it.
   arr _ = CommandRecorder []
 
-  -- Don't worry about this combinator yet, we'll come back to it. 
+  -- Don't worry about this combinator yet, we'll come back to it.
   -- For now we'll collect the effects from both sides.
   (CommandRecorder cmds1) *** (CommandRecorder cmds2) = CommandRecorder (cmds1 <> cmds2)
 
@@ -257,17 +262,17 @@ analyze prog = do
   print commands
 ```
 
-We can analyze our program and it'll show us which effects it will run:
+We can analyze our program and it'll show us which effects it will run if we were to execute it:
 
 ```haskell
 >>> analyze (myProgram "Hello")
 [WriteLine,ReadLine,WriteLine]
 ```
 
-Okay, we've achieved the ability to analyze and execute our program at parity with the 
-Applicative version, but isn't silly that we're asking the user their name and
+Okay, we've achieved the ability to analyze and execute our program at parity with the
+Applicative version, but isn't it silly that we're asking the user their name and
 simply ignoring it?
-As it turns out, our Arrow interface is quantifiably more expressive: 
+As it turns out, our Arrow interface is quantifiably more expressive:
 we can use results of past effects in future effects.
 
 Here's something we couldn't do with the Applicative version, we can rewrite the program to greet the user by the name they provide.
@@ -307,7 +312,7 @@ We're off to a great start, the ability to use the results of past effects is al
 without sacrificing any of the analysis capabilities we had in the Applicative version.
 
 However, at the moment our programs are all still just linear sequences of commands.
-What happens if we want to route results from an earlier effect down to one far later 
+What happens if we want to route results from an earlier effect down to one far later
 in the program?
 
 We need a bit more power, time to call back to that `(***)` we ignored earlier,
@@ -320,11 +325,11 @@ and while we're at it, let's look at `(&&&)` too, which we get for free when we 
 
 These operators allow us to take two independent programs in our arrow interface
 and compose them _in parallel_ to one another, rather than sequentially.
-What _parallel_ means in practice is going to be up to the implementation (within the scope of the `Arrow` laws),
+What _parallel_ means is going to be up to the implementation (within the scope of the `Arrow` laws),
 but the key part is that these two sides don't depend on each other, which is distinct from
 the normal sequential composition we've been doing with `(>>>)`.
 
-With these we can write a now write a _slightly_ more complex program which routes values around, and can 
+With these we can write a now write a _slightly_ more complex program which routes values around, and can
 forward values from earlier effects to later ones.
 
 ```haskell
@@ -380,16 +385,17 @@ ShoppingList.backup
 
 Uhh, okay so you can't see the result, but trust me it works!
 Kleisli's implementation of `(***)` just runs the left side, _then_ the right side;
-but if, for other applications, you wanted real parallel execution you could write your 
-implementation which runs each pair of operations in parallel using
-`Concurrently` or something like it.
+but if, for other applications, you wanted real parallel execution you could write your
+implementation which runs each pair of parallel operations using
+`Concurrently` or something like it and your program will magically become as parallel as your data-dependencies allow!
+Caveat emptor, but at least having the option is nice, we don't get that from the Monadic interface where data-dependencies are hidden from us.
 
 Now for the analysis.
 
 We could, of course, still collect and print out the _list_ of effects that would be run,
 but I'm bored of that, so let's level that up too.
-Now that we have both sequential and parallel composition, our programs are now constructed 
-as a _tree_ of operations, so our analysis tools should probably follow suite!
+Now that we have both sequential and parallel composition, our programs are
+a _tree_ of operations, so our analysis tools should probably follow suite.
 
 Here's a rewrite of our `CommandRecorder` which tracks the whole tree of effects:
 
@@ -442,8 +448,10 @@ as a tree too!
 Here's a function that renders any program tree down into a flow-chart
 description using the `mermaid` diagramming language.
 
-Don't judge me for the implementation of my mermaid renderer... 
-Better yet, if you have a nicer one please send it to me :)
+Don't judge me for the implementation of my mermaid renderer...
+In fact, if you have a nicer one please send it to me :)
+
+(It's not terribly important, so feel free to skip it)
 
 ```haskell
 diagram :: CommandRecorder Command i o -> IO ()
@@ -509,7 +517,7 @@ commandTreeToMermaid cmdTree =
         pure (leftIds <> rightIds, links)
 ```
 
-Here's what the output for our `fileCopyProgram` looks like:
+Here's what the diagram output for our `fileCopyProgram` looks like:
 
 ```mermaid
 >>> diagram fileCopyProgram
@@ -524,19 +532,19 @@ Input --> 0[Parallel]
 5[CopyFile] --> Output
 ```
 
-And rendered!
+And rendered:
 
 ![fileCopyProgram](/images/arrow-effects/filecopyprogram.png)
 
-Tell me that's not pretty cool...
+Pretty cool eh?
 
 Diagramming is just one thing you can do with our `CommandTree`, it's just data,
 you can fold over it to get all the effects, analyze which effects depend on which others, all
 sorts of things. This provides more clarity into what's happening than Selective's
 `Over` and `Under` newtypes.
 
-This was a very simple example, but I promise you, with combinations of `arr`, `(***)` 
-and `first`/`second` you can 
+This was a very simple example, but I promise you, with combinations of `arr`, `(***)`
+and `first`/`second` you can
 do any possible routing of values that you might like.
 
 What you can't do yet, however, is to branch between possible execution
@@ -544,9 +552,9 @@ paths, then run only one of them.
 
 Let's add that.
 
-## Adding Branching with ArrowChoice
+## Branching with ArrowChoice
 
-Luckily for us, adding branching is pretty straight-forward. 
+Luckily for us, adding branching is pretty straight-forward.
 There's an aptly named `ArrowChoice` in `base` that we'll go ahead and implement.
 
 `ArrowChoice` adds a new combinator:
@@ -555,10 +563,10 @@ There's an aptly named `ArrowChoice` in `base` that we'll go ahead and implement
 (+++) :: ArrowChoice k => k a b -> k c d -> k (Either a c) (Either b d)
 ```
 
-Similar to how `(***)` lets us represent two parallel, independent programs and fuse them into a single arrow which runs _both_, 
-`(+++)` lets us introduce a conditional branch to our program, only one path will be executed based on whether the input value is a `Left` or a `Right`.
+Similar to how `(***)` lets us represent two parallel and independent programs and fuse them into a single arrow which runs _both_,
+`(+++)` lets us introduce a conditional branch to our program, _only one path_ will be executed based on whether the input value is a `Left` or a `Right`.
 
-By implementing `(+++)` we also get `(|||)` for free:
+By implementing `(+++)` we also get the similar `(|||)` for free:
 
 ```haskell
 (|||) :: ArrowChoice k => k a c -> k b c -> k (Either a b) c
@@ -601,7 +609,7 @@ myProgram =
           -- What to do with each input
           ( \case
               "friendly" -> writeLine ("Hello! what is your name?") *> readLine
-              "mean" -> 
+              "mean" ->
                 let msg = unlines [ "Hey doofus, what do you want?"
                                   , "Too late. I deleted your hard-drive."
                                   , "How do you feel about that?"
@@ -624,7 +632,7 @@ myProgram =
 This example was always a bit forced just because of how limited Selective Applicatives are,
 but let's copy it over into our Arrow setup anyways.
 
-First we'll implement ArrowChoice for our `CommandRecorder`.
+First we'll implement `ArrowChoice` for our `CommandRecorder`.
 
 ```haskell
 -- Define our effects
@@ -635,7 +643,7 @@ class (Arrow k) => ReadWriteDelete k where
 
   deleteMyHardDrive :: k () ()
 
--- We'll update our commands
+-- New commands for the new effects
 data Command
   = ReadLine
   | WriteLine
@@ -689,8 +697,10 @@ branchingProgram =
          in mean ||| friendly
 ```
 
-Notice again, this version is actually more expressive than the Selective Applicative version, 
+Notice again, this version is actually more expressive than the Selective Applicative version,
 it actually greets the user by the name they provided, how kind.
+
+I'll elide the edits to the mermaid renderer, Branch is very similar to the implementation of Parallel.
 
 Let's make a mermaid chart like before:
 
@@ -733,20 +743,18 @@ How do you feel about that?
 Deleting hard drive... Just kidding!
 ```
 
-Okay, so the syntax of that last example was starting to get pretty hairy, 
+Okay, so the syntax of that last example was starting to get pretty hairy,
 if only there was something like do-notation, but for arrows...
 
 ## Arrow Notation
 
-It turns out someone thought of that!
-
-By enabling the `{-# LANGUAGE Arrows #-}` pragma we can use 
-a form of do-notation with arrows. It will automatically route 
-your inputs wherever you need them using combinators from the `Arrow` class and 
-will even translate `if` and `case` statements into `ArrowChoice` combinators, it's very 
+By enabling the `{-# LANGUAGE Arrows #-}` pragma we can use
+a form of do-notation with arrows. It will automatically route
+your inputs wherever you need them using combinators from the `Arrow` class and
+will even translate `if` and `case` statements into `ArrowChoice` combinators, it's very
 impressive.
 
-I won't explain Arrow Notation deeply here, check out the [GHC Manual](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/arrows.html) for a more detailed look.
+I won't explain Arrow Notation deeply here, so go ahead and check out the [GHC Manual](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/arrows.html) for a more detailed look.
 
 Here's what our branching program looks like when we translate it:
 
@@ -787,24 +795,23 @@ it's just inserting `Identity` on the other side, this is perfectly valid, since
 laws require that the `Identity` won't affect behaviour, but in our case it's messy and is clogging
 up our diagram, so let's clean it up.
 
-The command tree we build as an intermediate step is just a value, so we can 
+The command tree we build as an intermediate step is just a value, so we can
 transform it to clean it up no problem.
 
-If you derive `Data` and `Plated` for our `Command` and `CommandTree` types then 
-we can do this with a simple [rewrite](https://hackage-content.haskell.org/package/lens-5.3.5/docs/Control-Lens-Combinators.html#v:rewrite)-rule from the `lens` package.
-We'll just tell it to remove any redundant `Identity` nodes. `rewrite` will
-iterate until all possible rewrites are applied.
+If you derive `Data` and `Plated` for our `Command` and `CommandTree` types then
+we can do this with a simple [transform](https://hackage-content.haskell.org/package/lens-5.3.5/docs/Control-Lens-Plated.html#v:transform) on the tree.
+`transform` will rebuild the tree from the bottom up removing any redundant `Identity` nodes as it goes.
 
 ```haskell
 unredundify :: (Data eff) => CommandTree eff -> CommandTree eff
-unredundify = rewrite \case
-  Parallel Identity right -> Just right
-  Parallel left Identity -> Just left
-  Branch Identity right -> Just right
-  Branch left Identity -> Just left
-  Composed Identity right -> Just right
-  Composed left Identity -> Just left
-  _other -> Nothing
+unredundify = transform \case
+  Parallel Identity right -> right
+  Parallel left Identity -> left
+  Branch Identity right -> right
+  Branch left Identity -> left
+  Composed Identity right -> right
+  Composed left Identity -> left
+  other -> other
 ```
 
 Diagramming the `unredundified` version looks much cleaner:
@@ -814,10 +821,48 @@ Diagramming the `unredundified` version looks much cleaner:
 We can see here that case statements with multiple arms are getting collapsed into a sequence of binary branches,
 which is perfectly correct of course, but if you wanted to diagram it as a single branch you could rewrite
 the `Branch` constructor to have a list of options and collapse them all down with another rewrite rule.
-Same for `Parallel`s of course.
+Same for `Parallel`s of course. You can really do whatever is most useful for your use-case.
 
 Arrow notation has its quirks, but it's still a substantial improvement over doing
 argument routing completely manually.
+
+## Static vs Dynamic data
+
+It's worth a quick note on the difference between static and dynamic data with Arrows.
+With Applicatives, all the data needed to define an effect's behaviour was static,
+that is, it must be known at the time the program was constructed, though this might
+still be at runtime for the greater Haskell program.
+
+With Arrows it's possible to interleave static and dynamic data, it's up to the author of the
+interface.
+
+For example, if one were constructing a build-system they might have an interface like this:
+
+```haskell
+class (Arrow k) => Builder k where
+  dynamicReadFile :: k FilePath String
+  staticReadFile :: FilePath -> k () String
+```
+
+`dynamicReadFile` takes its `FilePath` as a dynamic input, so we won't know which file we're
+going to read until execution time, however `staticReadFile` takes its `FilePath` as a static input.
+You pass it a single `FilePath` as a Haskell value when you construct the program. In this case
+we can embed the `FilePath` into the structure of the effect itself so that it's available
+during analysis.
+
+While this is a bit more of an advanced use-case, it can be very useful. In the build-system
+case you could provide any statically known dependency files using `staticReadFile` and
+the build-system could check if those files have changed since the last run and safely replace
+some subtrees of the build with cached results if no dependencies in that subtree have changed.
+
+This sort of thing takes careful thought and design, but provides a lot of flexibility which can unlock
+whole new programming techniques.
+
+Folks may well have heard of Haxl, it's a Haskell library for analyzing programs and 
+batching and caching requests to remote data sources.
+The implementation and interface for Haxl is moderately complex, and is limited in what
+it can do by the fact that it uses Monads. I'm curious how effective an Arrow-based
+version could be.
 
 ## What's next?
 
@@ -834,7 +879,7 @@ class Arrow a => ArrowLoop a where
   loop :: a (b, d) (c, d) -> a b c
 ```
 
-Interestingly, this is actually just another name for `Costrong`, as you can see by comparing 
+Interestingly, this is actually just another name for `Costrong`, as you can see by comparing
 with [`Costrong`](https://hackage-content.haskell.org/package/profunctors-5.6.3/docs/Data-Profunctor.html#t:Costrong) from the `profunctors` package.
 
 If you really really need to be able to completely restructure your program on the fly
@@ -847,14 +892,14 @@ class Arrow a => ArrowApply a where
 ```
 
 This gives you the wildly expressive power to
-define entirely new codepaths at runtime. I'd posture that reasonable programs
+define entirely new code-paths at runtime. I'd still argue that reasonable programs
 that actually _need_ to do this are pretty rare, but sometimes it's a useful shortcut to avoid
 some tedium. Note that if you use `app`, any effects within the dynamically applied arrow
 will be hidden from analysis, but you can still analyze the non-dynamic parts.
 
 There are a few additional interesting classes which are strangely missing from `base`;
 but they have counterparts in `profunctors`.
-One example being `ArrowCochoice`, which, if it existed, would look something like this:
+One example would be an arrow counterpart to [`Cochoice`](https://hackage-content.haskell.org/package/profunctors-5.6.3/docs/Data-Profunctor.html#t:Cochoice), which, if it existed, would look something like this:
 
 ```haskell
 class (Arrow k) => ArrowCochoice k where
@@ -870,8 +915,8 @@ There's some other good stuff in `profunctors` so I'd recommend just browsing ar
 [`Traversing`](https://hackage-content.haskell.org/package/profunctors-5.6.3/docs/Data-Profunctor-Traversing.html#t:Traversing) lets you apply a profunctor to elements of a Traversable container, [`Mapping`](https://hackage-content.haskell.org/package/profunctors-5.6.3/docs/Data-Profunctor.html#t:Mapping) does the same for Functors.
 
 Anyways, you can see that most behaviours you take for granted when writing Haskell code
-with arbitrary functions in do-notation binds can generally be 
-decomposed into some combination of Arrow typeclasses which accomplish the same thing. 
+with arbitrary functions in do-notation binds can generally be
+decomposed into some combination of Arrow typeclasses which accomplish the same thing.
 Using the principal of least-power is a good
 rule of thumb here. Generally you should use the lowest-power abstraction you can
 reasonably encode your program with, that will ensure you'll have the strongest
@@ -879,7 +924,7 @@ potential for analysis.
 
 ## In Summary
 
-We've discovered that by switching from the Functor-Applicative-Monad effect system to 
+We've discovered that by switching from the Functor-Applicative-Monad effect system to
 a Category and Arrow hierarchy we can express significantly more complex and expressive programs
 while maintaining the ability to deeply introspect the programs we create.
 
