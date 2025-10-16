@@ -7,7 +7,7 @@ description: "Monads are _one_ way to sequence effects, but they're not the only
 image: arrow.jpg
 ---
 
-[Last time]((https://chrispenner.ca/posts/expressiveness-spectrum), we explored common methods of sequencing effects into little programs.
+[Last time](https://chrispenner.ca/posts/expressiveness-spectrum), we explored common methods of sequencing effects into little programs.
 If you haven't read it yet, I'd recommend starting with that, but you can probably manage without it if you insist.
 
 We examined Applicatives, Monads, and Selective Applicatives, and each of these systems had its own trade-offs.
