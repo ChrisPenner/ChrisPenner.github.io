@@ -1,10 +1,10 @@
 ---
 title: "Exploring Arrows for sequencing effects"
 author: Chris Penner
-date: Aug 14, 2025
+date: Oct 16, 2025
 tags: [programming, haskell]
 description: "Monads are _one_ way to sequence effects, but they're not the only way!"
-image: pipes.jpg
+image: arrow.jpg
 ---
 
 [Last time]((https://chrispenner.ca/posts/expressiveness-spectrum), we explored common methods of sequencing effects into little programs.
