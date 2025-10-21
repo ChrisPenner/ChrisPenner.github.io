@@ -222,6 +222,11 @@ that just tracks the effects that doesn't have to deal with arbitrary binds like
 Let's implement a command-recorder that does exactly that.
 
 ```haskell
+data Command
+  = ReadLine
+  | WriteLine
+  deriving (Show)
+
 -- Just like the applicative we create a custom implementation of the interface which for static analysis.
 -- The parameters are phantom, we won't be running anything, so we only care about
 -- the structure of the effects for now.
@@ -273,7 +278,12 @@ Okay, we've achieved the ability to analyze and execute our program at parity wi
 Applicative version, but isn't it silly that we're asking the user their name and
 simply ignoring it?
 As it turns out, our Arrow interface is quantifiably more expressive:
-we can use results of past effects in future effects.
+we can use results of past effects in future effects!
+Since we're now allowing `writeLine` to take it's input dynamically we no longer track
+the output in the structure of the command itself. This bit might seem like a step back, but
+if you still wanted the old version you could of course still define it: `writeLineStatic :: String -> k () ()`.
+Arrows allow us the flexibility to choose which we prefer. We'll chat a bit more about this 
+later in the article.
 
 Here's something we couldn't do with the Applicative version, we can rewrite the program to greet the user by the name they provide.
 While we're at it, why not receive the greeting message as an input too?
@@ -807,8 +817,6 @@ unredundify :: (Data eff) => CommandTree eff -> CommandTree eff
 unredundify = transform \case
   Parallel Identity right -> right
   Parallel left Identity -> left
-  Branch Identity right -> right
-  Branch left Identity -> left
   Composed Identity right -> right
   Composed left Identity -> left
   other -> other
@@ -818,7 +826,7 @@ Diagramming the `unredundified` version looks much cleaner:
 
 ![Arrow Notation Cleaner](/images/arrow-effects/arrow-notation-cleaner.png)
 
-We can see here that case statements with multiple arms are getting collapsed into a sequence of binary branches,
+We can see here that the with multiple arms are getting collapsed into a sequence of binary branches,
 which is perfectly correct of course, but if you wanted to diagram it as a single branch you could rewrite
 the `Branch` constructor to have a list of options and collapse them all down with another rewrite rule.
 Same for `Parallel`s of course. You can really do whatever is most useful for your use-case.
