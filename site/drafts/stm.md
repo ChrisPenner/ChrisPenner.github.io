@@ -20,14 +20,14 @@ how sharing data causes problems.
 
 ## The Problem with Shared State
 
-Let's begin by crafting a simple software system which induces the need for synchronization in the first place. 
+Let's begin by crafting a simple software system which needs synchronization in the first place. 
 
-I'll present a common concurrency example: the task of managing bank account balances correctly in spite of concurrent transfer requests.
+I'll present a commonly used example: the task of managing bank account balances correctly in spite of parallel transfer requests.
 
 Obviously real banks don't store all their account balances in RAM, so I'll 
 hope that the reader can apply the concepts from this pedagogical example to a their own domain as necessary.
 
-Here's some golang pseudo-code for a simple bank account and the operations upon it.
+Here's some golang'ish pseudo-code (please don't try to actually compile it) for a simple bank account and the operations upon it.
 I'm focused on the synchronization problems here, so forgive me for skipping the double-entry accounting, input validation, and other real-world complexities.
 
 ```go
@@ -86,18 +86,18 @@ Things may work well in your tests, and might even work well in production for a
 but sooner or later you're going to lose track of money and have some confused and angry customers.
 
 Do you see why?
-This brings us to our first synchronization problem to solve, Data Races!
+This brings us to our first synchronization problem to solve, **Data Races**.
 
 ### Data races
 
 __Most__ programming languages are imperative with mutable data structures **\[citation needed\]**, 
-so passing tpointers to multiple threads leads to shared mutable data, and shared mutable data necessarily causes data races.
+so passing pointers to multiple threads leads to _shared mutable data_, and _shared mutable data_ necessarily causes _data races_.
 
-A data race occurs any time two threads access the same memory location concurrently and non-deterministically when at least one of the accesses is a write.
+A data race occurs any time two threads access the same memory location concurrently and non-deterministically, if at least one of the accesses is a write. In these situations two runs of the same code with the same state may non-deterministically have a different result.
 
 We're passing accounts by reference here, so multiple threads have access to modify the same account.
 With multiple transfer go-routines are running on the same account, each could be paused by the scheduler at nearly any point during its execution.
-This means that in this seemingly simple withdraw function, we've actually got a data race. Let me point it out:
+This means that we've got a data race in this seemingly simple withdraw function. Let me point it out:
 
 ```go
 // Withdraw money from an account, or return false if there are insufficient funds
@@ -114,12 +114,12 @@ func (a *Account) withdraw(amount int) bool {
 ```
 
 If two threads are withdrawing $100 from Alice's account, which only has $150 in it, it's possible thread 1 checks the balance, sees there's enough money, then gets paused. Thread 2 runs, checks the balance, also sees there's enough money, then withdraws $100. 
-When thread 1 resumes execution and withdraws its $100 too, Alice's account ends up with a negative balance of -$50, which is invalid.
+When thread 1 resumes execution _after the check_ and withdraws its $100 too, Alice's account ends up with a negative balance of -$50, which is invalid.
 
 This sort of concurrency error is particularly insidious because the original `withdraw` method is perfectly reasonable and idiomatic in a single-threaded program;
 however when we decide to add concurrency at a completely different point in the system we've introduced a bug deep within existing previously correct code.
 
-The idea that a perfectly normal evolution from a single-threaded to a multi-threaded program can introduce critical system-breaking bugs in completely unrelated code without so much as a warning is frankly _completely unacceptable_. As a craftsman I expect better from my tools.
+The idea that a perfectly normal evolution from a single-threaded to a multi-threaded program can introduce critical system-breaking bugs in completely unrelated code without so much as a warning is frankly _completely unacceptable_. As a craftsman I expect better from my tools. 
 
 Okay, but now that we've lost thousands if not millions of dollars, how do we fix this?
 
@@ -164,16 +164,18 @@ When you want to use the bathroom, you take the key, there's only one key availa
 nobody else can use that bathroom.
 Now you're free to do your business, then you return the key to the hook on the wall for the next person.
 
-Unlike a bathroom key however, mutexes are only _conceptual_ locks, and they only operate on the honor system. 
-If you forget to lock the mutex the system won't stop you from accessing the data anyways. 
-In fact, only the program author knows _what_ conceptual resource they actually intend that mutex to represent, and hopefully that programmer documented it somewhere.
+Unlike a bathroom key however, mutexes are only _conceptual_ locks, not _real_ locks, and as such they operate on the honor system. 
 
-In this case, we've addressed the data-race within `withdraw` and `deposit` using mutexes, but we've still got a problem with the `transfer` function.
+If you forget to lock the mutex the system won't stop you from accessing the data anyways, there's no actual link between
+the data being locked and the lock itself, we need to trust the programmers to respect the agreement (always a risky prospect).
 
-We're properly using mutexes to protect our critical code within each smaller operation, but what happens if our `transfer` function is pre-empted in-between the calls to `withdraw` and `deposit`? It's possible that money has been withdrawn from an account, but hasn't yet been deposited in the other. 
-This is an inconsistent state of the system, as the money has temporarily disappeared, and this can result in _very_ strange behaviour.
+In this case, we've addressed the data-race within `withdraw` and `deposit` using mutexes, 
+but we've still got a problem within the `transfer` function.
 
-If we print out all account balances at any time while transfers are happening, we might see that money is missing from the system, even if we obtain the locks for each individual account.
+We're properly using **mutexes** to protect our critical code within each smaller operation, but let's revisit the `transfer` function. What happens if a thread is pre-empted while running the `transfer` function between the calls to `withdraw` and `deposit`? It's possible that money has been withdrawn from an account, but hasn't yet been deposited in the other. 
+This is an inconsistent state of the system, as the money has temporarily disappeared. This can result in _very_ strange behaviour.
+
+Let's say we have a `report` function which prints out all account balances. If it runs while transfers are happening, we might see that the total money we've counted within the system is incorrect, even if we obtain the locks for each individual account.
 
 ```go
 func report() {
@@ -185,7 +187,8 @@ func report() {
 }
 ```
 
-In order to fix this, we need to chain together multiple critical sections into a single atomic operation.
+In larger systems this can even result in flawed logic taking place, since choices may be made against inconsistent system states.
+The issue is that a single operation requires multiple independent locks, and they're not grouped in any way into an atomic operation.
 
 ### Composing Critical Sections
 
@@ -216,8 +219,7 @@ The first is obvious when you point it out, remember that `withdraw` and `deposi
 `transfer` won't even begin to run in this state, it will block forever when it tries to lock the `from.mutex` for the second time.
 
 Some systems, like _re-entrant locks_ and Java's `synchronized` keyword do some additional book-keeping which
-allow a single thread to lock the same mutex multiple times, so using a re-entrant lock here would solve this problem.
-
+allow a single thread to lock the same mutex multiple times, so using a re-entrant lock here would solve this particular problem.
 However other systems, like golang, avoid providing re-entrant locks [on a matter of principle](https://groups.google.com/g/golang-nuts/c/XqW1qcuZgKg/m/Ui3nQkeLV80J).
 
 So what can we do? I suppose
@@ -253,10 +255,12 @@ func transfer(from *Account, to *Account, amount int) bool {
 }
 ```
 
-Ugh, defining a correct `transfer` function, which conceptually is just the _composition_ of our well encapsulated `withdraw` and a `deposit` has forced us to remove the locking from both `withdraw` and `deposit`, making both of them _less safe_ to use. It has placed the burden of locking on the caller (without any system-maintained guarantees), and even worse, we now need to remember to go and _add_ locking around every existing `withdraw` and `deposit` call in the entire codebase.
+Ugh, defining a correct `transfer` function, which conceptually is just the _composition_ of our well encapsulated `withdraw` and a `deposit` has forced us to remove the locking from both `withdraw` and `deposit`, making both of them _less safe_ to use. It has placed the burden of locking on the caller (without _any_ system-maintained guarantees), and even worse, we now need to remember to go and _add_ locking around every existing `withdraw` and `deposit` call in the entire codebase.
 
-Mutexes don't _compose_! They don't allow us to chain multiple critical sections into a single atomic unit and they force us to break encapsulation and thrust the implementation details of mutexes and locking onto the caller, who really shouldn't need to know which invariants must be maintained deep within the implementation.
+Mutexes don't _compose_! They don't allow us to chain multiple critical sections into a single atomic unit and they force us to break encapsulation and thrust the implementation details of mutexes and locking onto the caller who really shouldn't need to know which invariants must be maintained deep within the implementation. Not to mention that adding or removing access to synchronized variables within an operation now necessitates adding or removing locking to every call site, and those call sites may be in a completely different application or library.
+This is an absolute mess.
 
+But would you believe that's actually not the only problem here? 
 It's not just composition that's broken here though, in fixing `transfer` to make it an atomic operation we've introduced a new, extra-well-hidden deadlock bug.
 
 ### Deadlocks/Livelocks
@@ -276,107 +280,124 @@ When the second `transfer` call comes in, it first locks Bob's account, then tri
 
 This is a classic deadlock situation. This leaves both goroutines stuck forever, and worse, both Alice and Bob's accounts will be locked until the system restarts.
 
-This is a pretty disastrous consequence for a problem which is relatively hard to spot even in this trivially simple example. In a real system with dozens or hundreds of methods it's very difficult to reason about this, and can be a lot of work to ensure locks are obtained in a safe and consistent order.
+This is a pretty disastrous consequence for a problem which is relatively hard to spot even in this trivially simple example. In a real system with dozens or hundreds of methods being parallelized in a combinatorial explosion of ways it's very difficult to reason about this, and can be a lot of work to ensure locks are obtained in a safe and consistent order.
 
-Golang gets some credit here in that it does provide some runtime tools for detecting both dead-locks and data-races, which is great, but these detections only help if your tests encounter the problem; they don't prevent the problem from happening in the first place.
+Golang gets some credit here in that it does provide _some_ runtime tools for detecting both dead-locks and data-races, which is great, but these detections only help if your tests encounter the problem; they don't prevent the problem from happening in the first place. Most languages aren't so helpful, these issues can be very difficult to track down in production systems.
 
-### Understanding the mess
+### Assessing the damage
 
 What a mess.
 
 In my experience, given enough time and complexity these sorts of problems will crop up eventually.
-Solving them with mutexes is espescially dangerous because they _seem_ to be an effective solution when they're first introduced. They work fine in the small scopes where they're initially introduced, but fail catastrophically once operating at scale.
+Solving them with mutexes is especially dangerous because they _seem_ to be an effective solution when they're first introduced. 
+They work fine in small units, tempting us to use them, but as the system grows organically we stretch them too far and they fail catastrophically once operating at scale, causing all sorts of hacky workarounds. Crossing your fingers is not 
+an adequate software-engineering strategy.
 
-Architecting a correct software system using mutexes is possible, but _very_ difficult. 
-Every attempt to fix one problem has spawned a couple more. 
+So, architecting a correct software system using mutexes is possible, but _very_ difficult. 
+Every attempt we've made to fix one problem has spawned a couple more. 
 
-We can summarize all the problems with sharing state:
+Here's a summary of the problems we've encountered:
 
 * Data races
 * Non-atomicity/inconsistent system states
 * Lack of composition
+* Leaking abstractions
 * Deadlocks/livelocks
 * Every change or new addition requires an understanding of the system as a whole
 
-In my opinion, we've tried to stretch mutexes beyond their limits.
+In my opinion, we've tried to stretch mutexes beyond their limits, both in this blog post and 
+in the industry as a whole.
 Mutexes work great in small, well-defined scopes where you're locking a _single_ resource which is only ever accessed in a handful of functions in the same module,
-but they simply don't scale to large complex systems with many interacting components maintained by dozens or hundreds of developers.
+but they simply don't scale to large complex systems with many interacting components maintained by dozens or hundreds of developers. We 
+need to evolve our tools and come up with more reliable solutions.
 
-### How do we fix it?
+## Cleaning up the Chaos
 
-First and foremost, I think immutability by default goes a _long_ way here. 
-For many programmers this is a paradigm shift from what they're used to, but more and more new languages (Gleam, Roc, Elm, Unison) are adopting this as core design principle. 
-Using immutable data structures immediately prevents data-races from sneaking their way into your code.
-These languages typically do provide some form of mutable references, accessing these is an immediate sign-post
-that shared-mutable state is involved, which goes a long way.
+Thankfully, despite an over-reliance on mutexes, we as an industry _have_ still learned
+a thing or two since the 1960s.
+Particularly I think that enforcing _immutability by default_ goes a _long_ way here. 
+For many programmers this is a paradigm shift from what they're used to, causing some uneasiness. 
+Seatbelts, too, were often scorned in their early years for their restrictive nature, but over time 
+it has become the prevailing opinion that the mild inconvenience is more than worth the provided safety.
+
+More and more languages (Haskell, Clojure, Erlang, Gleam, Elixir, Roc, Elm, Unison, ...) are realizing this 
+and are adopting this as core design principle. 
+Using immutable data structures immediately prevents data-races, full-stop.
+While these languages typically do provide some form of mutable references, it's not the default, and there's typically some additional 
+ceremony which acts as an immediate sign-post that shared-mutable state is involved, here there be dragons.
+
 Obviously not every programmer can switch to an immutable-first language over night, but I think it would behoove most
 programmers to strongly consider an immutable language if parallelism is a large part of their project's workload.
 
-For the rest of these problems we need to fundamentally re-think our approach to synchronization.
-Mutexes have proven unreliable, they've gotta go. Instead, we can choose from a wide swatch of concurrency patterns.
+In a world of immutability we'll still need some way to synchronize our parallelism.
 
-Actors and Communicating Sequential Processes (CSP) are the most prominent approaches.
-Each of these operate on the principle that there are independent sub-programs which each have
-their own isolated states that only they have access to. Each actor or process receives messages from other units
+Decades of research and industrial research have provided us with a swath battle-tested options. 
+Interestingly, because our data is immutable, most of these operate one level higher than mutexes 
+as architectural patterns which co-ordinate processes rather than individual atoms of data.
+
+### Concurrency Patterns
+
+Actor systems and Communicating Sequential Processes (CSP) are some of the most common concurrency orchestration patterns.
+Each of these operate by defining independent sub-programs which have
+their own isolated states that only they can access. Each actor or process receives messages from other units
 and can respond to them in turn.
 
 These approaches work great for _task parallelism_, where there are independent processes to run, and where your parallelism needs are bounded
 by the number of tasks you'd like to run. 
-I've used an actor-based system when building Unison's code-syncing protocol, it had an actor responsible for loading and sending 
-requests for code, one for receiving and unpacking code, and one for validating the hashes of received data.
-I reach for these systems when the number of workers/tasks is statically known. I've seen consultants describe complex patterns for dynamically introducing actors, actor-per-resource systems etc, but in my opinion these systems quickly outgrow the ability of any one developer to understand, espescially when the system is running.
+For instance I used an actor-based system when building Unison's code-syncing protocol. There was one actor responsible for loading and sending 
+requests for code, one for receiving and unpacking code, and one for validating the hashes of received code.
 
-However, these approaches don't tend to work well for _data parallelism_, 
-where you have a large number of data items to process in parallel, but only a few processes to run.
-
-Amongst data-parallel systems if we're dealing with a simple batch-processing job then 
-there's a whole set of simple map-reduce patterns which will handle it, these generally
-match the CSP model, with each step of the pipeline consisting of some number of processes which receive
-data from the previous steps and send results downstream.
-
-Using these patterns has the added benefit that since they operate as multiple processes with independent state, they 
-can be ported to a truly distributed system involving multiple nodes _much_ easier than
+I reach for actor and CSP systems when the number of workers/tasks we need to co-ordinate is statically known, i.e. a fixed number of workers, or a pre-defined map-reduce pipeline.
+As an added benefit these approaches, which have no shared mutable state, can 
+be ported to a truly distributed system involving multiple nodes _much_ easier than
 shared-memory approaches.
 
-However there are some (rarer) systems which involve largely unstructured access between 
-multiple synchronized resources, like our bank account example.
+However, in cases where the parallelism is _dynamic_, meaning there could be any number of runtime-spawned concurrent actors
+that must co-ordinate well with each other these systems tend to break down.
+I've seen consultants describe complex patterns for dynamically introducing actors, actor-per-resource systems etc, 
+but in my opinion these systems quickly outgrow the ability of any one developer to understand and debug.
 
-If we were to spin up multiple transfer workers they'd still need some way to synchronise access
-to each bank account, and transfers involve a _transactional relationship_ between **multiple** resources.
-
-It's also worth noting that even if using an actor or CSP system we still need synchronized primitives to
-manage access to their channels and mailboxes.
+So how then, do we model a system like the bank account example? 
+Even if we were to limit the system to a fixed number of transfer-workers they'd still be concurrently 
+accessing the same data (the bank accounts) and need some way to express **atomic transfers** between them.
 
 What's a guy to do?
 
-## Software Transactional Memory
+## A new (old) synchronization primitive
 
-While I still largely believe that using a simpler streaming or CSP system is going to be most effective for most tasks, 
-in situations where those patterns are insufficient or the task is more complex than can reasonably be expressed using those models, 
-Software Transactional Memory (STM) is __*the best*__ currently available solution for synchronization and it's not even close.
+In the vast majority of cases using a streaming system, actors or CSP is going to be most effective and understandable.
+However in cases where we must synchronize individual chunks of data across many workers, and require operations to affect
+multiple chunks of data atomically, there's only one name in town that gets the job done right.
 
-Think of database transactions; transaction isolation allows you a consistent view of data in spite of concurrent access.
+Software Transactional Memory (STM) is a criminally under-utilized synchronization tool which solves all of the problems we've encountered so far with mutexes while providing more safety, better compositionality, and cleaner abstractions. Did I mention they prevent most deadlocks and livelocks too?
+
+Think of database transactions; in a database transaction isolation provides you with a consistent view of data in spite of concurrent access.
 Each transaction sees an isolated view of the data, untampered by other reads and writes. After making all your reads and writes
-you _commit_ the transaction. Upon commit, the transaction either succeeds completely, applying changes to the data snapshot, or it may detect a conflict. Upon a conflict the transaction fails and rolls back all your changes as though nothing happened, then may retry on the new data snapshot.
+you _commit_ the transaction. Upon commit, the transaction either succeeds completely, applying changes to the actual data snapshot, or it may result in a conflict. 
+In cases of a conflict the transaction fails and rolls back all your changes as though nothing happened, then may retry on the new data snapshot.
 
-STM works in much the same way, but instead of rows and columns in a database, you use transactions on your normal in-memory data structures and variables.
+STM works in much the same way, but instead of the rows and columns in a database, transactions operate on normal in-memory data structures and variables.
 
-Unlike our mutex workflows, these transactions are composable, atomic, and help in preventing and detecting deadlock.
-
-Let's convert our bank account example into Haskell using STM instead of mutexes.
+To explore this technique let's convert our bank account example into Haskell so we can use STM instead of mutexes.
 
 ```haskell
 data Account = Account {
-  -- All mutable data is stored in a Transactional Variable, a.k.a. TVar
+  -- Data that needs synchronization is stored in a Transactional Variable, a.k.a. TVar
   balanceVar :: TVar Int
 }
 
--- Deposit money into an account
+-- Deposit money into an account.
 deposit :: Account -> Int -> STM ()
 deposit Account{balanceVar} amount = do
+  -- We interact with the data using TVar operations which
+  -- build up an STM transaction.
   modifyTVar balanceVar (\existing -> existing + amount)
 
 -- Withdraw money from an account
+-- Everything within the `do` block
+-- is part of the same transaction.
+-- This guarantees a consistent view of the TVars we 
+-- access and mutate.
 withdraw :: Account -> Int -> STM Bool
 withdraw Account{balanceVar} amount = do
   existing <- readTVar balanceVar
@@ -389,8 +410,10 @@ withdraw Account{balanceVar} amount = do
 -- Transfer money between two accounts atomically
 transfer :: Account -> Account -> Int -> STM Bool
 transfer from to amount = do
-  -- These two operations are contained within the same
-  -- transaction (see the STM type in the signature).
+  -- These two individual transactions seamlessly
+  -- compose into one larger transaction, guaranteeing
+  -- consistency without any need to change the individual
+  -- operations.
   withdrawalSuccessful <- withdraw from amount
   if successful
     then do
@@ -404,15 +427,15 @@ Let's do another lap over all the problems we had with mutexes to see how this n
 
 ### Data Races
 
-Data races area  problem which I believe are best solved at the language level itself.
+Data races are a problem which I believe are best solved at the language level itself.
+As mentioned earlier, using immutable data by default simply prevents data races from existing in the first place.
+Pre-emption can occur at any point in normal code and we know we won't get a data race because all the data is immutable.
 
-In a language like Haskell, data races are solved by simply _never sharing mutable state_. Haskell provides guarantee by default, the entire language is based on immutable data, so you're free to share your data between threads however you like.
+When we need mutable data, it's made explicit by wrapping that data in `TVar`s, 
+and the language further protects us by only allowing us to mutate these variables within 
+transactions, which we compose into operations which are guaranteed a consistent uncorrupted view of the data.
 
-In other languages it does require some discipline to ensure that all mutable state is contained within `TVar`s, but I suppose this is no more difficult than remembering to contain access to resources within their appropriate mutexes.
-
-In practice this means that you just literally can't _mutate state_ to cause a problem for some other thread. The language simply doesn't provide a mechanism to do it without explicitly wrapping your state in an `IORef`s, which you'd have no reason to do unless you explicitly _want_ to accept the tradeoffs and dangers that come with traditional mutation.
-
-Looking at our withdraw function, we see that we can write code very much like the original un-synchronized golang version, but in STM it's perfectly safe from data races since we're using TVars within a Transaction.
+Looking at our withdraw function, we see that we can write code that looks very much like the original un-synchronized golang version, but in STM it's perfectly safe from data races since we're using `TVar`s within an `STM` Transaction.
 
 ```haskell
 -- Withdraw money from an account
@@ -429,27 +452,37 @@ withdraw Account{balanceVar} amount = do
 
 ### Deadlock/Livelock
 
-STM is an optimistic concurrency system, which means that threads never block waiting for locks. 
-Instead, each concurrent operation proceeds on their own independent transaction log. If, at commit time it is detected that some other transaction has been committed and altered data which this transaction read, then the transaction is rolled back and retried. This can be accomplished efficiently 
-by tracking access to all `TVar`s within a transaction.
+STM is an optimistic concurrency system, which means that threads __never block waiting for locks__. 
+Instead, each concurrent operation proceeds, possibly in parallel, on their own independent transaction log. 
+Each transaction tracks which pieces of data it has accessed or mutated and
+if at commit time it is detected that some other transaction has been committed and altered data which this transaction also accessed, 
+then the latter transaction is rolled back and is simply retried. 
 
-This arrangement is fundamentally different than a lock-based exclusive access system. In STM, you don't deal with locks at all, you simply read and write data within a transaction as necessary.
-Our `transfer` function reads and writes two different `TVar`s, but since we're not obtaining exclusive _locks_ to these vars, we don't need to worry about deadlock _at all_ here. If two threads are running a `transfer` on the same vars at the same time, whichever commits first will atomically apply its updates to both accounts, and the other transaction will detect this update at commit-time and will retry against the new balances.
+This arrangement is fundamentally different than a lock-based exclusive access system. 
+In STM, you don't deal with locks at all, you simply read and write data within a transaction as necessary.
+Our `transfer` function reads and writes two different `TVar`s, but since we're 
+not obtaining exclusive _locks_ to these vars, we don't need to worry about deadlock _at all_. 
+If two threads happen to be running a `transfer` on the same `TVars` at the same time, 
+whichever commits first will atomically apply its updates to both accounts and the other 
+transaction will detect this update at commit-time and will retry against the new balances.
 
-A conflict can only occur if some other transaction has succeeded, so while it _is_ possible that one particular transfer may be stalled for a while (which is true of a mutex based system as well), the system is guaranteed to always be making progress on at least some thread.
+This _can_ cause some contention and possibly even starvation of any single transaction if many threads are trying to update the same data at the same time,
+but since a conflict can only occur if some other transaction has been committed, it does still have the guarantee that the system 
+will make progress on at least some work.
 
 ### Composition
 
 It may not be immediately obvious from the types if you're not used to Haskell code, but all three of `withdraw`, `deposit`, and `transfer` are all functions which 
 return their results wrapped in the `STM` monad, which is essentially a sequence of operations which we can ask to execute in a transaction using the `atomically` function.
 
-We can call out to any arbitrary methods which return something wrapped in `STM` and it will automatically be part of the same transaction.
+We can call out to any arbitrary methods which return something wrapped in `STM` and it will automatically be joined in as part of the current transaction.
 
-So, unlike our mutex setup, callers don't need to manually handle locks when calling`withdraw` and `deposit`, nor do we need to expose special __synchronized__ versions of these methods for things to be safe.
-
+Unlike our mutex setup, callers don't need to manually handle locks when calling`withdraw` and `deposit`, nor do we need to expose special __synchronized__ versions of these methods for things to be safe.
 We can define them exactly once and use them on their own or within a more complex operation like `transfer` without any additional work.
+This abstraction is leak-proof, the caller doesn't need to know which synchronized data is accessed or lock or unlock any mutexes. 
+It simply runs the transaction and the STM system happily handles the rest for you.
 
-Here's what it looks like to actually run our STM transactions.
+Here's what it looks like to actually run our STM transactions, which we do using the `atomically` function:
 
 ```haskell
 main :: IO ()
@@ -460,8 +493,8 @@ main = do
 ```
 
 If we'd like to compile a report of all account balances like we did previously, we can do that too.
-This time however we won't default in to getting a potentially inconsistent snapshot of the system, we 
-are faced with an explicit choice to make: what are the bounds of our transaction going to be?
+This time however we won't get a potentially inconsistent snapshot of the system by accident, 
+instead the type-system forces us to make an explicit choice of which behaviour we'd like.  
 
 We can either:
 
