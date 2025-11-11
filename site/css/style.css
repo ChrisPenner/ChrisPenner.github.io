@@ -135,6 +135,8 @@ h3 {
   font-family: "helvetica neue", sans-serif;
   color: var(--title-two-fg);
   font-size: 1.4em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }
 
 blockquote {
@@ -429,8 +431,14 @@ a.category:hover {
   min-width: 300px;
   margin: 0 auto;
   padding: 1em 0.5em 1em 0;
-  -webkit-transition: color 0.7s, background 0.7s, padding 0.5s;
-  transition: color 0.7s, background 0.7s, padding 0.5s;
+  -webkit-transition:
+    color 0.7s,
+    background 0.7s,
+    padding 0.5s;
+  transition:
+    color 0.7s,
+    background 0.7s,
+    padding 0.5s;
 }
 
 .table-of-contents li a .date {
@@ -483,8 +491,14 @@ a.category:hover {
   box-sizing: border-box;
   border-radius: 0.75em;
   opacity: 0.7;
-  -webkit-transition: background 0.5s, opacity 0.5s, width 0.5s;
-  transition: background 0.5s, opacity 0.5s, width 0.5s;
+  -webkit-transition:
+    background 0.5s,
+    opacity 0.5s,
+    width 0.5s;
+  transition:
+    background 0.5s,
+    opacity 0.5s,
+    width 0.5s;
   cursor: pointer;
 }
 
@@ -495,8 +509,14 @@ a.category:hover {
   border: 1px solid var(--highlight-fg);
   opacity: 0.9;
   background: #fffffc;
-  -webkit-transition: background 0.5s, opacity 0.5s, width 0.5s;
-  transition: background 0.5s, opacity 0.5s, width 0.5s;
+  -webkit-transition:
+    background 0.5s,
+    opacity 0.5s,
+    width 0.5s;
+  transition:
+    background 0.5s,
+    opacity 0.5s,
+    width 0.5s;
   text-decoration: none;
 }
 
@@ -616,8 +636,12 @@ a.category:hover {
   font-weight: bold;
   text-align: right;
   cursor: pointer;
-  -webkit-transition: opacity 0.5s, color 2s;
-  transition: opacity 0.5s, color 2s;
+  -webkit-transition:
+    opacity 0.5s,
+    color 2s;
+  transition:
+    opacity 0.5s,
+    color 2s;
   opacity: 0.6;
 }
 

@@ -398,7 +398,8 @@ To explore this technique let's convert our bank account example into Haskell so
 
 ```haskell
 data Account = Account {
-  -- Data that needs synchronization is stored in a Transactional Variable, a.k.a. TVar
+  -- Data that needs synchronization is stored in a 
+  -- Transactional Variable, a.k.a. TVar
   balanceVar :: TVar Int
 }
 
@@ -534,7 +535,8 @@ reportInconsistent accounts = do
     balance <- atomically (readTVar balanceVar)
     print balance
 
--- Consistent report, may be retried indefinitely if transfers are happening too frequently
+-- Consistent report, may be retried indefinitely 
+-- if transfers are happening too frequently
 reportConsistent :: [Account] -> IO ()
 reportConsistent accounts = do
   balances <- atomically do 
