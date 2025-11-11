@@ -1,9 +1,9 @@
 ---
-title: "Replacing Mutexes"
+title: "Ditch your (mut)ex, you deserve better"
 author: Chris Penner
-date: Nov 10, 2025
+date: Nov 11, 2025
 tags: [programming, haskell]
-description: "Mutexes are unreliable tools, we can do better."
+description: "Mutexes are unreliable tools, let's explore better alternatives."
 image: parallel-pipes.jpg
 ---
 
