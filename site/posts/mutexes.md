@@ -47,7 +47,7 @@ func (a *Account) deposit(amount int) {
 
 // Withdraw money from an account, or return false if there are insufficient funds
 func (a *Account) withdraw(amount int) bool {
-  if (a.balance < amount) {
+  if (a.balance <= amount) {
     return false
   } else {
     balance -= amount
@@ -303,7 +303,7 @@ What a dumpster fire we've gotten ourselves into...
 
 While it may be no accident that the example I've engineered happens to hit all of the worst bugs at once, in my experience, given enough time and complexity these sorts of problems will crop up any system eventually.
 Solving them with mutexes is especially dangerous because it will _seem_ to be an effective solution at first. 
-Mutexes work fine in small localized use-cases, thus tempting us to use them, but as the system grows organically we stretch them too far and they fail catastrophically at scale, causing all sorts of hacky workarounds. 
+Mutexes work fine in small localized use-cases, thus tempting us to use them, but as the system grows organically we stretch them too far and they fail catastrophically as the complexity of the system scales up, causing all sorts of hacky workarounds. 
 I'm of the opinion that crossing your fingers and hoping for the best is not 
 an adequate software-engineering strategy.
 
@@ -324,7 +324,7 @@ Here's a summary of the problems we've encountered:
 In my opinion, we've tried to stretch mutexes beyond their limits, both in this blog post and 
 in the industry as a whole.
 Mutexes work great in small, well-defined scopes where you're locking a _single_ resource which is only ever accessed in a handful of functions in the same module,
-but they simply don't scale to large complex systems with many interacting components maintained by dozens or hundreds of developers. We 
+but they're too hard to wrangle in larger complex systems with many interacting components maintained by dozens or hundreds of developers. We 
 need to evolve our tools and come up with more reliable solutions.
 
 ## Cleaning up the Chaos
@@ -418,7 +418,7 @@ deposit Account{balanceVar} amount = do
 withdraw :: Account -> Int -> STM Bool
 withdraw Account{balanceVar} amount = do
   existing <- readTVar balanceVar
-  if existing < amount
+  if existing <= amount
     then (return False)
     else do
       writeTVar balanceVar (existing - amount)
@@ -459,7 +459,7 @@ Let's convert `withdraw` to use STM and our `balaceVar` TVar.
 withdraw :: Account -> Int -> STM Bool
 withdraw Account{balanceVar} amount = do
   existing <- readTVar balanceVar
-  if existing < amount
+  if existing <= amount
     then (return False)
     else do
       -- No data races here!
@@ -510,7 +510,7 @@ main :: IO ()
 main = do
   forever $ do
     req <- acceptTransferRequest
-    -- Run each transfer on its own green-thread, in an atomic transaciton.
+    -- Run each transfer on its own green-thread, in an atomic transaction.
     forkIO (atomically (transfer req.from req.to req.amount)
 ```
 
@@ -572,7 +572,7 @@ the balance of that account is changed by some other transaction's success.
 withdraw :: Account -> Int -> STM ()
 withdraw Account{balanceVar} amount = do
   existing <- readTVar balanceVar
-  if existing < amount
+  if existing <= amount
     then retry
     else do
       writeTVar balanceVar (existing - amount)
