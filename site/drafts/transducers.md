@@ -140,7 +140,7 @@ type RF r i = Input r i -> r
 Our reducing function is very simple, it takes an input and returns a result!
 
 
-Next we'll need to define the type of a **transducer** itself. Remember, a transducer accepts a reducing function which represents the rest of the pipeline and returns a new reducing function. It shakes out somethingn like this:
+Next we'll need to define the type of a **transducer** itself. Remember, a transducer accepts a reducing function which represents the rest of the pipeline and returns a new reducing function. It shakes out something like this:
 
 ```haskell
 type Transducer r i o = RF r o -> RF r i
