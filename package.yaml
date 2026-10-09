@@ -29,6 +29,8 @@ dependencies:
 - binary
 - bytestring
 - containers
+- unliftio
+- profunctors
 
 executables:
   build-site:

@@ -16,8 +16,11 @@ import Data.Aeson.Lens
 import Data.Function (on)
 import Data.List (sortBy)
 import Data.Map as M
+import Data.Profunctor.Traversing (Traversing (..))
 import Data.Set as S
+import qualified Data.Set as Set
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
@@ -25,27 +28,31 @@ import Development.Shake hiding (Resource)
 import Development.Shake.Classes
 import Development.Shake.FilePath
 import Development.Shake.Forward
+import Flinch
+import Forge
 import GHC.Generics (Generic)
-import Slick
+import Slick hiding (convert, markdownToHTML)
+import Text.Mustache (Template)
+import UnliftIO
 
 outputFolder :: FilePath
 outputFolder = "dist/"
 
 main :: IO ()
-main = withFlinch siteBuilder $ \(input, output) -> do
-  atomically $ input ()
+main = withForge siteBuilder $ \(input, output) -> do
+  _ <- atomically $ input ()
   forever $ do
-    atomically $ output ()
+    atomically $ output
 
-siteBuilder :: Flinch () ()
+siteBuilder :: Forge () ()
 siteBuilder = proc () -> do
   allPosts <- buildPosts -< ()
   let sortedPosts = sortByDate allPosts
   let allTags = getTags allPosts
   () <- buildTags -< allTags
-  () <- buildIndex -< (allPosts, allTags)
-  () <- buildFeed -< allPosts
-  () <- copyStaticFiles -< ()
+  () <- buildIndex -< (sortedPosts, allTags)
+  () <- buildFeed -< sortedPosts
+  copyStaticFiles -< ()
 
 data IndexInfo = IndexInfo
   { indexPosts :: [Post],
@@ -128,7 +135,7 @@ instance ToJSON Post where
       ]
 
 -- | Copy all static files from the listed folders to their destination
-copyStaticFiles :: Action ()
+copyStaticFiles :: Forge () ()
 copyStaticFiles = cacheAction ("static-files" :: T.Text) $ do
   filepaths <- getDirectoryFiles "site/" ["images//*", "css//*", "js//*"]
   void $ forP filepaths $ \filepath ->
@@ -136,18 +143,17 @@ copyStaticFiles = cacheAction ("static-files" :: T.Text) $ do
 
 buildPosts :: Forge () [Post]
 buildPosts = proc () -> do
-  (updated, files) <- watchGlob -< (".", ["site/posts//*.md"])
-  traverse' buildPost -< Map.restrictKeys files updated
-
--- forP pPaths buildPost
+  (updated, _files) <- watchGlob -< (".", ["site/posts//*.md"])
+  traverse' buildPost -< Set.toList updated
 
 -- | Load a post, process metadata, write it to output, then return the post object
 -- Detects changes to either post content or template
-buildPost :: FilePath -> Action Post
-buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
-  postContent <- readFile' srcPath
+buildPost :: Forge FilePath Post
+buildPost = proc srcPath -> do
+  {-cacheAction ("build" :: T.Text, srcPath) $ do -}
+  postContent <- mapIO TIO.readFile -< srcPath
   -- load post content and metadata as JSON blob
-  postData <- markdownToHTML . T.pack $ postContent
+  postData <- markdownToHTML -< postContent
   let postUrl = T.pack . dropDirectory1 . dropExtension $ srcPath
   let withPostUrl = _Object . at "url" ?~ String ("/" <> postUrl)
   let withSlug =
@@ -155,25 +161,29 @@ buildPost srcPath = cacheAction ("build" :: T.Text, srcPath) $ do
           ?~ String (T.pack . dropExtension . takeBaseName $ srcPath)
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
-  template <- compileTemplate' "site/templates/post.html"
-  writeFile' (outputFolder </> T.unpack postUrl -<.> "html") . T.unpack $ substitute template fullPostData
-  convert fullPostData
+  template <- compileTemplate -< "site/templates/post.html"
+  let postContents = substitute template fullPostData
+  let postPath = (outputFolder </> T.unpack postUrl -<.> "html")
+  () <- mapIO (uncurry TIO.writeFile) -< (postPath, postContents)
+  convert -< fullPostData
 
-buildIndex :: [Post] -> [Tag] -> Action ()
-buildIndex allPosts allTags = do
-  indexT <- compileTemplate' "site/templates/index.html"
+buildIndex :: Forge ([Post], [Tag]) ()
+buildIndex = proc (allPosts, allTags) -> do
+  indexT <- compileTemplate -< "site/templates/index.html"
   let indexInfo = IndexInfo {indexPosts = allPosts, indexTags = allTags}
       indexHTML = T.unpack $ substitute indexT (toJSON indexInfo)
-  writeFile' (outputFolder </> "index.html") indexHTML
+  mapIO (uncurry writeFile) -< ((outputFolder </> "index.html"), indexHTML)
 
-buildTags :: [Tag] -> Action ()
-buildTags tags = do
-  void $ forP tags writeTag
+buildTags :: Forge [Tag] ()
+buildTags = proc tags -> do
+  rmap (const ()) (traverse' writeTag) -< tags
 
-writeTag :: Tag -> Action ()
-writeTag t@Tag {tagUrl} = do
-  tagTempl <- compileTemplate' "site/templates/tag.html"
-  writeFile' (outputFolder <> tagUrl -<.> "html") . T.unpack $ substitute tagTempl (toJSON t)
+writeTag :: Forge Tag ()
+writeTag = proc (t@Tag {tagUrl}) -> do
+  tagTempl <- compileTemplate -< "site/templates/tag.html"
+  let tagFilePath = outputFolder </> tagUrl -<.> "html"
+  let tagContents = substitute tagTempl (toJSON t)
+  mapIO (uncurry TIO.writeFile) -< (tagFilePath, tagContents)
 
 getTags :: [Post] -> [Tag]
 getTags posts =
@@ -204,9 +214,9 @@ formatDate humanDate = toIsoDate parsedTime
 toIsoDate :: UTCTime -> String
 toIsoDate = formatShow (utcTimeFormat (calendarFormat ExtendedFormat) (timeOfDayFormat ExtendedFormat))
 
-buildFeed :: [Post] -> Action ()
-buildFeed posts = do
-  now <- liftIO getCurrentTime
+buildFeed :: Forge [Post] ()
+buildFeed = proc posts -> do
+  now <- mapIO (const getCurrentTime) -< ()
   let atomData =
         AtomData
           { title = "Chris Penner",
@@ -216,8 +226,10 @@ buildFeed posts = do
             currentTime = toIsoDate now,
             url = "/atom.xml"
           }
-  atomTempl <- compileTemplate' "site/templates/atom.xml"
-  writeFile' (outputFolder </> "atom.xml") . T.unpack $ substitute atomTempl (toJSON atomData)
+  atomTempl <- compileTemplate -< "site/templates/atom.xml"
+  let atomFilePath = outputFolder </> "atom.xml"
+  let atomContents = substitute atomTempl (toJSON atomData)
+  mapIO (uncurry TIO.writeFile) -< (atomFilePath, atomContents)
 
 data AtomData = AtomData
   { title :: String,
@@ -239,3 +251,12 @@ instance ToJSON AtomData where
         "currentTime" A..= currentTime,
         "url" A..= url
       ]
+
+compileTemplate :: Forge FilePath Template
+compileTemplate = error "compileTemplate is not implemented"
+
+markdownToHTML :: Forge T.Text T.Text
+markdownToHTML = error "markdownToHTML is not implemented"
+
+convert :: (FromJSON a, ToJSON b) => Forge a b
+convert = error "convert is not implemented"
