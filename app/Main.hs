@@ -9,10 +9,12 @@
 
 module Main (main) where
 
+import Control.Category ((>>>))
 import Control.Lens
 import Control.Monad
 import Data.Aeson as A
 import Data.Aeson.Lens
+import Data.Bifunctor
 import Data.Function (on)
 import Data.List (sortBy)
 import Data.Map as M
@@ -24,16 +26,17 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
-import Development.Shake hiding (Resource)
 import Development.Shake.Classes
 import Development.Shake.FilePath
-import Development.Shake.Forward
 import Flinch
 import Forge
 import GHC.Generics (Generic)
-import Slick hiding (convert, markdownToHTML)
+import Site.Pandoc
 import Text.Mustache (Template)
+import Text.Mustache.Compile (localAutomaticCompile)
+import Text.Mustache.Render (substitute)
 import UnliftIO
+import qualified UnliftIO.Directory as Directory
 
 outputFolder :: FilePath
 outputFolder = "dist/"
@@ -136,10 +139,16 @@ instance ToJSON Post where
 
 -- | Copy all static files from the listed folders to their destination
 copyStaticFiles :: Forge () ()
-copyStaticFiles = cacheAction ("static-files" :: T.Text) $ do
-  filepaths <- getDirectoryFiles "site/" ["images//*", "css//*", "js//*"]
-  void $ forP filepaths $ \filepath ->
-    copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
+copyStaticFiles = proc () -> do
+  -- cacheAction ("static-files" :: T.Text) $ do
+  (filepaths, _) <- watchGlob -< ("site/", ["images//*", "css//*", "js//*"])
+  rmap (const ()) (traverse' (mapIO (copyFile))) -< (Set.toList filepaths)
+  where
+    copyFile :: FilePath -> IO ()
+    copyFile fp = do
+      let srcPath = "site" </> fp
+          destPath = outputFolder </> fp
+      Directory.copyFile srcPath destPath
 
 buildPosts :: Forge () [Post]
 buildPosts = proc () -> do
@@ -253,10 +262,4 @@ instance ToJSON AtomData where
       ]
 
 compileTemplate :: Forge FilePath Template
-compileTemplate = error "compileTemplate is not implemented"
-
-markdownToHTML :: Forge T.Text T.Text
-markdownToHTML = error "markdownToHTML is not implemented"
-
-convert :: (FromJSON a, ToJSON b) => Forge a b
-convert = error "convert is not implemented"
+compileTemplate = mapIO (fmap (first SomeException) . localAutomaticCompile) >>> reportException
