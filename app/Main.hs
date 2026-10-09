@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -31,15 +32,20 @@ outputFolder :: FilePath
 outputFolder = "dist/"
 
 main :: IO ()
-main =
-  let shOpts = forwardOptions $ shakeOptions {shakeVerbosity = Chatty, shakeThreads = 4, shakeLintInside = ["."]}
-   in shakeArgsForward shOpts $ do
-        allPosts <- sortByDate <$> buildPosts
-        allTags <- getTags allPosts
-        buildTags allTags
-        buildIndex allPosts allTags
-        buildFeed allPosts
-        copyStaticFiles
+main = withFlinch siteBuilder $ \(input, output) -> do
+  atomically $ input ()
+  forever $ do
+    atomically $ output ()
+
+siteBuilder :: Flinch () ()
+siteBuilder = proc () -> do
+  allPosts <- buildPosts -< ()
+  let sortedPosts = sortByDate allPosts
+  let allTags = getTags allPosts
+  () <- buildTags -< allTags
+  () <- buildIndex -< (allPosts, allTags)
+  () <- buildFeed -< allPosts
+  () <- copyStaticFiles -< ()
 
 data IndexInfo = IndexInfo
   { indexPosts :: [Post],
@@ -128,10 +134,12 @@ copyStaticFiles = cacheAction ("static-files" :: T.Text) $ do
   void $ forP filepaths $ \filepath ->
     copyFileChanged ("site" </> filepath) (outputFolder </> filepath)
 
-buildPosts :: Action [Post]
-buildPosts = do
-  pPaths <- getDirectoryFiles "." ["site/posts//*.md"]
-  forP pPaths buildPost
+buildPosts :: Forge () [Post]
+buildPosts = proc () -> do
+  (updated, files) <- watchGlob -< (".", ["site/posts//*.md"])
+  traverse' buildPost -< Map.restrictKeys files updated
+
+-- forP pPaths buildPost
 
 -- | Load a post, process metadata, write it to output, then return the post object
 -- Detects changes to either post content or template
@@ -167,15 +175,15 @@ writeTag t@Tag {tagUrl} = do
   tagTempl <- compileTemplate' "site/templates/tag.html"
   writeFile' (outputFolder <> tagUrl -<.> "html") . T.unpack $ substitute tagTempl (toJSON t)
 
-getTags :: [Post] -> Action [Tag]
-getTags posts = do
+getTags :: [Post] -> [Tag]
+getTags posts =
   let tagToPostsSet = M.unionsWith mappend (toMap <$> posts)
       tagToPostsList = fmap S.toList tagToPostsSet
       tagObjects =
         foldMapWithKey
           (\tag ps -> [Tag {tag, tagPosts = sortByDate ps, tagUrl = "/tag/" <> tag}])
           tagToPostsList
-  return tagObjects
+   in tagObjects
   where
     toMap :: Post -> Map String (Set Post)
     toMap p@Post {postTags} = M.unionsWith mappend (embed p <$> postTags)
