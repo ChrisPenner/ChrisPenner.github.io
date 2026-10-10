@@ -16,8 +16,10 @@ import Data.Aeson as A
 import Data.Aeson.Lens
 import Data.Bifunctor
 import Data.Function (on)
-import Data.List (sortBy)
+import Data.List (sortBy, stripPrefix)
+import qualified Data.List as List
 import Data.Map as M
+import Data.Maybe
 import Data.Profunctor.Traversing (Traversing (..))
 import Data.Set as S
 import qualified Data.Set as Set
@@ -26,7 +28,7 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
-import Debug.Trace (trace, traceShowId)
+import Debug.Trace (trace)
 import Development.Shake.Classes
 import Development.Shake.FilePath
 import Flinch
@@ -50,21 +52,47 @@ main = withForge siteBuilder $ \(input, output) -> do
     atomically $ output
     putStrLn "Waiting for changes..."
 
+-- main :: IO ()
+-- main = withForge f $ \(input, output) -> do
+--   putStrLn "Building..."
+--   _ <- atomically $ input ()
+--   posts <- atomically $ output
+--   print posts
+--   where
+--     -- putStrLn $ "Built " <> show (length posts) <> " posts"
+--     f = proc () -> do watchGlob -< ("site/posts", ["**/*.md"])
+
+voidArr :: (Arrow a) => a i ()
+voidArr = arr (const ())
+
 siteBuilder :: Forge () ()
-siteBuilder = proc () -> do
-  _allPosts <- buildPosts -< ()
-  -- let sortedPosts = sortByDate allPosts
-  -- let allTags = getTags allPosts
-  -- () <- buildTags -< allTags
-  -- () <- buildIndex -< (sortedPosts, allTags)
-  -- () <- buildFeed -< sortedPosts
-  copyStaticFiles -< ()
+siteBuilder =
+  -- (posts, ()) <- buildPosts &&& copyStaticFiles -< ()
+  -- let sortedPosts = sortByDate posts
+  -- let allTags = getTags posts
+  -- voidArr <<< (lmap snd buildTags &&& buildIndex &&& lmap fst buildFeed) -< (sortedPosts, allTags)
+
+  rmap (\(posts, _) -> let sorted = sortByDate posts in (sorted, getTags sorted)) (buildPosts &&& copyStaticFiles)
+    >>> rmap (const ()) (lmap snd (uniq >>> buildTags) &&& (uniq >>> buildIndex) &&& lmap fst (uniq >>> buildFeed))
+
+-- arr (\x -> (x, x))
+--   >>> Arrow.first buildPosts
+--   >>> arr (\(allPosts, x) -> (x, allPosts))
+--   >>> Arrow.first (uniq >>> copyStaticFiles)
+--   >>> arr (\(allTags, x) -> ())
+
+-- _allPosts <- buildPosts -< i
+-- _r <- copyStaticFiles -< i
+
+-- arr (\ x -> (x, x)) >>>
+--               first f >>> arr (\ (y, x) -> (x, y)) >>>
+--               first g >>> arr (\ (z, y) -> y + z)
 
 data IndexInfo = IndexInfo
   { indexPosts :: [Post],
     indexTags :: [Tag]
   }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 instance ToJSON IndexInfo where
   toJSON IndexInfo {..} =
@@ -78,7 +106,7 @@ data Tag = Tag
     tagPosts :: [Post],
     tagUrl :: String
   }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 instance ToJSON Tag where
   toJSON Tag {..} =
@@ -145,17 +173,20 @@ copyStaticFiles :: Forge () ()
 copyStaticFiles = proc () -> do
   -- cacheAction ("static-files" :: T.Text) $ do
   (filepaths, _) <- watchGlob -< ("site/", ["images/**/*", "css/**/*", "js/**/*"])
-  rmap (const ()) (traverse' (mapIO (copyFile))) -< (Set.toList filepaths)
+  rmap (const ()) (traverse' (mapIO (copyFile))) -< tracer "copying: " (Set.toList filepaths)
   where
     copyFile :: FilePath -> IO ()
     copyFile fp = do
-      let srcPath = "site" </> fp
-          destPath = outputFolder </> fp
+      let srcPath = fp
+          destPath = outputFolder </> fromMaybe fp (stripPrefix "site/" fp)
+      putStrLn $ "Copying static file: " <> srcPath <> " -> " <> destPath
+      Directory.createDirectoryIfMissing True (takeDirectory destPath)
       Directory.copyFile srcPath destPath
+      putStrLn $ "Copied static file: " <> srcPath <> " -> " <> destPath
 
 buildPosts :: Forge () [Post]
 buildPosts = proc () -> do
-  (updated, _files) <- watchGlob -< (".", ["site/posts/**/*.md"])
+  (updated, _files) <- watchGlob -< ("site/posts", ["**/*.md"])
   traverse' buildPost -< tracer "Posts changed" $ Set.toList updated
 
 -- | Load a post, process metadata, write it to output, then return the post object
@@ -193,7 +224,7 @@ buildTags = proc tags -> do
 writeTag :: Forge Tag ()
 writeTag = proc (t@Tag {tagUrl}) -> do
   tagTempl <- compileTemplate -< "site/templates/tag.html"
-  let tagFilePath = outputFolder </> tagUrl -<.> "html"
+  let tagFilePath = outputFolder </> (List.dropWhile (== '/') tagUrl) -<.> "html"
   let tagContents = substitute tagTempl (toJSON t)
   mapIO (uncurry TIO.writeFile) -< (tagFilePath, tagContents)
 
