@@ -6,11 +6,14 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main (main) where
 
 import Control.Arrow
-import Control.Lens
+import qualified Control.Category as Cat
+import qualified Control.Category.Cartesian as MF
+import qualified Control.Category.Tensor as MF
 import Control.Monad
 import Data.Aeson as A
 import Data.Aeson.Lens
@@ -20,6 +23,7 @@ import Data.List (sortBy, stripPrefix)
 import qualified Data.List as List
 import Data.Map as M
 import Data.Maybe
+import Data.Profunctor (Profunctor (..))
 import Data.Profunctor.Traversing (Traversing (..))
 import Data.Set as S
 import qualified Data.Set as Set
@@ -45,7 +49,7 @@ outputFolder :: FilePath
 outputFolder = "dist/"
 
 main :: IO ()
-main = withForge siteBuilder $ \(input, output) -> do
+main = withForge catSiteBuilder $ \(input, output) -> do
   putStrLn "Building..."
   _ <- atomically $ input ()
   forever $ do
@@ -65,24 +69,39 @@ main = withForge siteBuilder $ \(input, output) -> do
 voidArr :: (Arrow a) => a i ()
 voidArr = arr (const ())
 
-siteBuilder :: Forge () ()
-siteBuilder =
-  -- (posts, ()) <- buildPosts &&& copyStaticFiles -< ()
-  -- let sortedPosts = sortByDate posts
-  -- let allTags = getTags posts
-  -- voidArr <<< (lmap snd buildTags &&& buildIndex &&& lmap fst buildFeed) -< (sortedPosts, allTags)
+forkTuple :: (MonadUnliftIO m) => Flinch m a b -> Flinch m a c -> Flinch m a (b, c)
+forkTuple = MF.fork
 
-  rmap (\(posts, _) -> let sorted = sortByDate posts in (sorted, getTags sorted)) (buildPosts &&& copyStaticFiles)
-    >>> rmap (const ()) (lmap snd (uniq >>> buildTags) &&& (uniq >>> buildIndex) &&& lmap fst (uniq >>> buildFeed))
+fst' :: (MonadUnliftIO m) => Flinch m (a, b) a
+fst' = MF.projl
 
--- arr (\x -> (x, x))
---   >>> Arrow.first buildPosts
---   >>> arr (\(allPosts, x) -> (x, allPosts))
---   >>> Arrow.first (uniq >>> copyStaticFiles)
---   >>> arr (\(allTags, x) -> ())
+snd' :: (MonadUnliftIO m) => Flinch m (a, b) b
+snd' = MF.projr
 
--- _allPosts <- buildPosts -< i
--- _r <- copyStaticFiles -< i
+arrNotationSiteBuilder :: Forge () ()
+arrNotationSiteBuilder = proc () -> do
+  (posts, ()) <- buildPosts &&& copyStaticFiles -< ()
+  let sortedPosts = sortByDate posts
+  let allTags = getTags posts
+  () <- buildTags -< allTags
+  () <- buildIndex -< (sortedPosts, allTags)
+  buildFeed -< sortedPosts
+  returnA -< ()
+
+catSiteBuilder :: Forge () ()
+catSiteBuilder =
+  (buildPosts MF./\ copyStaticFiles)
+    >>> MF.projl
+    >>> rmap (\posts -> let sorted = sortByDate posts in (sorted, getTags sorted)) Cat.id
+    >>> (((uniq >>> buildFeed) MF.# (uniq >>> buildTags)) MF./\ (uniq >>> buildIndex))
+    >>> MF.kill
+
+arrCombinatorSiteBuilder :: Forge () ()
+arrCombinatorSiteBuilder =
+  (buildPosts &&& copyStaticFiles)
+    >>> arr (\(posts, ()) -> let sorted = sortByDate posts in (sorted, getTags sorted))
+    >>> (((uniq >>> buildFeed) *** (uniq >>> buildTags)) &&& (uniq >>> buildIndex))
+    >>> arr (const ())
 
 -- arr (\ x -> (x, x)) >>>
 --               first f >>> arr (\ (y, x) -> (x, y)) >>>
@@ -200,7 +219,8 @@ buildPost = proc srcPath -> do
   let postUrl = T.pack . dropDirectory1 . dropExtension $ srcPath
   let withPostUrl = _Object . at "url" ?~ String ("/" <> postUrl)
   let withSlug =
-        _Object . at "slug"
+        _Object
+          . at "slug"
           ?~ String (T.pack . dropExtension . takeBaseName $ srcPath)
   -- Add additional metadata we've been able to compute
   let fullPostData = withSlug . withPostUrl $ postData
