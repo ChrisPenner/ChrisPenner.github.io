@@ -9,7 +9,7 @@
 
 module Main (main) where
 
-import Control.Category ((>>>))
+import Control.Arrow
 import Control.Lens
 import Control.Monad
 import Data.Aeson as A
@@ -26,6 +26,7 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
+import Debug.Trace (trace, traceShowId)
 import Development.Shake.Classes
 import Development.Shake.FilePath
 import Flinch
@@ -43,18 +44,20 @@ outputFolder = "dist/"
 
 main :: IO ()
 main = withForge siteBuilder $ \(input, output) -> do
+  putStrLn "Building..."
   _ <- atomically $ input ()
   forever $ do
     atomically $ output
+    putStrLn "Waiting for changes..."
 
 siteBuilder :: Forge () ()
 siteBuilder = proc () -> do
-  allPosts <- buildPosts -< ()
-  let sortedPosts = sortByDate allPosts
-  let allTags = getTags allPosts
-  () <- buildTags -< allTags
-  () <- buildIndex -< (sortedPosts, allTags)
-  () <- buildFeed -< sortedPosts
+  _allPosts <- buildPosts -< ()
+  -- let sortedPosts = sortByDate allPosts
+  -- let allTags = getTags allPosts
+  -- () <- buildTags -< allTags
+  -- () <- buildIndex -< (sortedPosts, allTags)
+  -- () <- buildFeed -< sortedPosts
   copyStaticFiles -< ()
 
 data IndexInfo = IndexInfo
@@ -141,7 +144,7 @@ instance ToJSON Post where
 copyStaticFiles :: Forge () ()
 copyStaticFiles = proc () -> do
   -- cacheAction ("static-files" :: T.Text) $ do
-  (filepaths, _) <- watchGlob -< ("site/", ["images//*", "css//*", "js//*"])
+  (filepaths, _) <- watchGlob -< ("site/", ["images/**/*", "css/**/*", "js/**/*"])
   rmap (const ()) (traverse' (mapIO (copyFile))) -< (Set.toList filepaths)
   where
     copyFile :: FilePath -> IO ()
@@ -152,8 +155,8 @@ copyStaticFiles = proc () -> do
 
 buildPosts :: Forge () [Post]
 buildPosts = proc () -> do
-  (updated, _files) <- watchGlob -< (".", ["site/posts//*.md"])
-  traverse' buildPost -< Set.toList updated
+  (updated, _files) <- watchGlob -< (".", ["site/posts/**/*.md"])
+  traverse' buildPost -< tracer "Posts changed" $ Set.toList updated
 
 -- | Load a post, process metadata, write it to output, then return the post object
 -- Detects changes to either post content or template
@@ -262,4 +265,7 @@ instance ToJSON AtomData where
       ]
 
 compileTemplate :: Forge FilePath Template
-compileTemplate = mapIO (fmap (first SomeException) . localAutomaticCompile) >>> reportException
+compileTemplate = mapIO (fmap (Data.Bifunctor.first SomeException) . localAutomaticCompile) >>> reportException
+
+tracer :: (Show a) => String -> a -> a
+tracer label x = trace (label <> ": " <> show x) x
