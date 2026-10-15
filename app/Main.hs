@@ -14,6 +14,7 @@ import Control.Arrow
 import qualified Control.Category as Cat
 import qualified Control.Category.Cartesian as MF
 import qualified Control.Category.Tensor as MF
+import Control.Lens hiding ((#))
 import Control.Monad
 import Data.Aeson as A
 import Data.Aeson.Lens
@@ -23,7 +24,6 @@ import Data.List (sortBy, stripPrefix)
 import qualified Data.List as List
 import Data.Map as M
 import Data.Maybe
-import Data.Profunctor (Profunctor (..))
 import Data.Profunctor.Traversing (Traversing (..))
 import Data.Set as S
 import qualified Data.Set as Set
@@ -44,6 +44,7 @@ import Text.Mustache.Compile (localAutomaticCompile)
 import Text.Mustache.Render (substitute)
 import UnliftIO
 import qualified UnliftIO.Directory as Directory
+import Prelude hiding (writeFile)
 
 outputFolder :: FilePath
 outputFolder = "dist/"
@@ -78,6 +79,12 @@ fst' = MF.projl
 snd' :: (MonadUnliftIO m) => Flinch m (a, b) b
 snd' = MF.projr
 
+(/\) :: (MonadUnliftIO m) => Flinch m a b -> Flinch m a c -> Flinch m a (b, c)
+(/\) = (MF./\)
+
+(#) :: (MonadUnliftIO m) => Flinch m a b -> Flinch m c d -> Flinch m (a, c) (b, d)
+(#) = (MF.#)
+
 arrNotationSiteBuilder :: Forge () ()
 arrNotationSiteBuilder = proc () -> do
   (posts, ()) <- buildPosts &&& copyStaticFiles -< ()
@@ -90,11 +97,11 @@ arrNotationSiteBuilder = proc () -> do
 
 catSiteBuilder :: Forge () ()
 catSiteBuilder =
-  (buildPosts MF./\ copyStaticFiles)
-    >>> MF.projl
+  (buildPosts /\ copyStaticFiles)
+    >>> MF.projl @_ @(,)
     >>> rmap (\posts -> let sorted = sortByDate posts in (sorted, getTags sorted)) Cat.id
-    >>> (((uniq >>> buildFeed) MF.# (uniq >>> buildTags)) MF./\ (uniq >>> buildIndex))
-    >>> MF.kill
+    >>> (((uniq >>> buildFeed) # (uniq >>> buildTags)) /\ (uniq >>> buildIndex))
+    >>> MF.kill @_ @(,)
 
 arrCombinatorSiteBuilder :: Forge () ()
 arrCombinatorSiteBuilder =
@@ -208,6 +215,11 @@ buildPosts = proc () -> do
   (updated, _files) <- watchGlob -< ("site/posts", ["**/*.md"])
   traverse' buildPost -< tracer "Posts changed" $ Set.toList updated
 
+writeFile :: FilePath -> T.Text -> IO ()
+writeFile path contents = do
+  Directory.createDirectoryIfMissing True (takeDirectory path)
+  TIO.writeFile path contents
+
 -- | Load a post, process metadata, write it to output, then return the post object
 -- Detects changes to either post content or template
 buildPost :: Forge FilePath Post
@@ -227,14 +239,14 @@ buildPost = proc srcPath -> do
   template <- compileTemplate -< "site/templates/post.html"
   let postContents = substitute template fullPostData
   let postPath = (outputFolder </> T.unpack postUrl -<.> "html")
-  () <- mapIO (uncurry TIO.writeFile) -< (postPath, postContents)
+  () <- mapIO (uncurry writeFile) -< (postPath, postContents)
   convert -< fullPostData
 
 buildIndex :: Forge ([Post], [Tag]) ()
 buildIndex = proc (allPosts, allTags) -> do
   indexT <- compileTemplate -< "site/templates/index.html"
   let indexInfo = IndexInfo {indexPosts = allPosts, indexTags = allTags}
-      indexHTML = T.unpack $ substitute indexT (toJSON indexInfo)
+      indexHTML = substitute indexT (toJSON indexInfo)
   mapIO (uncurry writeFile) -< ((outputFolder </> "index.html"), indexHTML)
 
 buildTags :: Forge [Tag] ()
@@ -246,7 +258,7 @@ writeTag = proc (t@Tag {tagUrl}) -> do
   tagTempl <- compileTemplate -< "site/templates/tag.html"
   let tagFilePath = outputFolder </> (List.dropWhile (== '/') tagUrl) -<.> "html"
   let tagContents = substitute tagTempl (toJSON t)
-  mapIO (uncurry TIO.writeFile) -< (tagFilePath, tagContents)
+  mapIO (uncurry writeFile) -< (tagFilePath, tagContents)
 
 getTags :: [Post] -> [Tag]
 getTags posts =
@@ -292,7 +304,7 @@ buildFeed = proc posts -> do
   atomTempl <- compileTemplate -< "site/templates/atom.xml"
   let atomFilePath = outputFolder </> "atom.xml"
   let atomContents = substitute atomTempl (toJSON atomData)
-  mapIO (uncurry TIO.writeFile) -< (atomFilePath, atomContents)
+  mapIO (uncurry writeFile) -< (atomFilePath, atomContents)
 
 data AtomData = AtomData
   { title :: String,
