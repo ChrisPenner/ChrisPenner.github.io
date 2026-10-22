@@ -98,10 +98,10 @@ arrNotationSiteBuilder = proc () -> do
 catSiteBuilder :: Forge () ()
 catSiteBuilder =
   (buildPosts /\ copyStaticFiles)
-    >>> MF.projl @_ @(,)
+    >>> MF.projl
     >>> rmap (\posts -> let sorted = sortByDate posts in (sorted, getTags sorted)) Cat.id
     >>> (((uniq >>> buildFeed) # (uniq >>> buildTags)) /\ (uniq >>> buildIndex))
-    >>> MF.kill @_ @(,)
+    >>> MF.kill
 
 arrCombinatorSiteBuilder :: Forge () ()
 arrCombinatorSiteBuilder =
