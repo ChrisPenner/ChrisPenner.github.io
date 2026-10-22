@@ -3,17 +3,30 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main (main) where
 
 import Control.Arrow
+import qualified Control.Arrow as Arrow
+import qualified Control.Categorical.Bifunctor as Categorical
 import qualified Control.Category as Cat
-import qualified Control.Category.Cartesian as MF
+import qualified Control.Category.Associative as Category
+import qualified Control.Category.Monoidal as Monoidal
+import Control.Category.Structural (Contract)
+import qualified Control.Category.Structural as Category
+import Control.Category.Syntax (cat, syntax)
 import qualified Control.Category.Tensor as MF
+import Control.Category.Terminal (Terminal (..))
 import Control.Lens hiding ((#))
 import Control.Monad
 import Data.Aeson as A
@@ -32,6 +45,7 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
+import qualified Data.Tuple as Tuple
 import Debug.Trace (trace)
 import Development.Shake.Classes
 import Development.Shake.FilePath
@@ -44,13 +58,14 @@ import Text.Mustache.Compile (localAutomaticCompile)
 import Text.Mustache.Render (substitute)
 import UnliftIO
 import qualified UnliftIO.Directory as Directory
+import qualified "monoidal-functors" Control.Category.Cartesian as MF
 import Prelude hiding (writeFile)
 
 outputFolder :: FilePath
 outputFolder = "dist/"
 
 main :: IO ()
-main = withForge catSiteBuilder $ \(input, output) -> do
+main = withForge catSyntaxSiteBuilder $ \(input, output) -> do
   putStrLn "Building..."
   _ <- atomically $ input ()
   forever $ do
@@ -67,7 +82,7 @@ main = withForge catSiteBuilder $ \(input, output) -> do
 --     -- putStrLn $ "Built " <> show (length posts) <> " posts"
 --     f = proc () -> do watchGlob -< ("site/posts", ["**/*.md"])
 
-voidArr :: (Arrow a) => a i ()
+voidArr :: (Arrow.Arrow a) => a i ()
 voidArr = arr (const ())
 
 forkTuple :: (MonadUnliftIO m) => Flinch m a b -> Flinch m a c -> Flinch m a (b, c)
@@ -109,6 +124,37 @@ arrCombinatorSiteBuilder =
     >>> arr (\(posts, ()) -> let sorted = sortByDate posts in (sorted, getTags sorted))
     >>> (((uniq >>> buildFeed) *** (uniq >>> buildTags)) &&& (uniq >>> buildIndex))
     >>> arr (const ())
+
+sortByDate' :: [Post] -> [Post]
+sortByDate' = undefined
+
+buildPosts' :: () -> [Post]
+buildPosts' = undefined
+
+getTags' :: [Post] -> [Tag]
+getTags' = undefined
+
+buildTags' :: [Tag] -> ()
+buildTags' = undefined
+
+buildIndex' :: ([Post], [Tag]) -> ()
+buildIndex' = undefined
+
+buildFeed' :: [Post] -> ()
+buildFeed' = undefined
+
+catSyntaxSiteBuilder :: Forge () ((), ((), ()))
+catSyntaxSiteBuilder =
+  [cat| \i -> do
+              posts <- buildPosts   ()
+              () <- copyStaticFiles ()
+              sortedPosts <- arr sortByDate posts
+              allTags <- arr getTags sortedPosts
+              r1 <- buildTags allTags
+              r2 <- buildIndex (sortedPosts, allTags)
+              r3 <- buildFeed sortedPosts
+              (r1, (r2, r3))
+         |]
 
 -- arr (\ x -> (x, x)) >>>
 --               first f >>> arr (\ (y, x) -> (x, y)) >>>
@@ -332,3 +378,48 @@ compileTemplate = mapIO (fmap (Data.Bifunctor.first SomeException) . localAutoma
 
 tracer :: (Show a) => String -> a -> a
 tracer label x = trace (label <> ": " <> show x) x
+
+instance (MonadUnliftIO m) => Category.Symmetric (,) (Flinch m) where
+  swap :: (MonadUnliftIO m) => Flinch m (a, b) (b, a)
+  swap = arr (\(x, y) -> (y, x))
+
+instance (MonadUnliftIO m) => Category.Associative (,) (Flinch m) where
+  associate :: (MonadUnliftIO m) => Flinch m ((a, b), c) (a, (b, c))
+  associate = arr (\((x, y), z) -> (x, (y, z)))
+  coassociate :: (MonadUnliftIO m) => Flinch m (a, (b, c)) ((a, b), c)
+  coassociate = arr (\(x, (y, z)) -> ((x, y), z))
+
+instance (MonadUnliftIO m) => Category.Weaken (,) (Flinch m) where
+  fst :: (MonadUnliftIO m) => Flinch m (a, b) a
+  fst = arr Tuple.fst
+
+  snd :: (MonadUnliftIO m) => Flinch m (a, b) b
+  snd = arr Tuple.snd
+
+instance (MonadUnliftIO m) => Monoidal.HasLeftIdentity () (,) (Flinch m) where
+  coidl :: (MonadUnliftIO m) => Flinch m a ((), a)
+  coidl = arr (\x -> ((), x))
+
+instance (MonadUnliftIO m) => Monoidal.HasIdentity () (,) (Flinch m)
+
+instance (MonadUnliftIO m) => Monoidal.HasRightIdentity () (,) (Flinch m) where
+  coidr :: (MonadUnliftIO m) => Flinch m a (a, ())
+  coidr = arr (\x -> (x, ()))
+
+instance (MonadUnliftIO m) => Categorical.PFunctor (,) (Flinch m) where
+  first = Arrow.first
+
+instance (MonadUnliftIO m) => Categorical.QFunctor (,) (Flinch m) where
+  second = Arrow.second
+
+instance (MonadUnliftIO m) => Categorical.Bifunctor (,) (Flinch m) where
+  (***) :: (MonadUnliftIO m) => Flinch m a a' -> Flinch m b b' -> Flinch m (a, b) (a', b')
+  (***) = (Arrow.***)
+
+instance (MonadUnliftIO m) => Terminal (Flinch m) where
+  terminal :: (MonadUnliftIO m) => Flinch m a ()
+  terminal = arr (const ())
+
+instance (MonadUnliftIO m) => Contract (,) (Flinch m) where
+  (&&&) :: (MonadUnliftIO m) => Flinch m a b1 -> Flinch m a b2 -> Flinch m a (b1, b2)
+  (&&&) = (Arrow.&&&)
