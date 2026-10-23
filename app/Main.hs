@@ -18,15 +18,9 @@ module Main (main) where
 
 import Control.Arrow
 import qualified Control.Arrow as Arrow
-import qualified Control.Categorical.Bifunctor as Categorical
 import qualified Control.Category as Cat
-import qualified Control.Category.Associative as Category
-import qualified Control.Category.Monoidal as Monoidal
-import Control.Category.Structural (Contract)
-import qualified Control.Category.Structural as Category
-import Control.Category.Syntax (cat, syntax)
+import Control.Category.Notation (cat, catDebugDesugaring)
 import qualified Control.Category.Tensor as MF
-import Control.Category.Terminal (Terminal (..))
 import Control.Lens hiding ((#))
 import Control.Monad
 import Data.Aeson as A
@@ -35,7 +29,7 @@ import Data.Bifunctor
 import Data.Function (on)
 import Data.List (sortBy, stripPrefix)
 import qualified Data.List as List
-import Data.Map as M
+import Data.Map as Map
 import Data.Maybe
 import Data.Profunctor.Traversing (Traversing (..))
 import Data.Set as S
@@ -45,7 +39,6 @@ import qualified Data.Text.IO as TIO
 import Data.Text.Lens
 import Data.Time
 import Data.Time.Format.ISO8601
-import qualified Data.Tuple as Tuple
 import Debug.Trace (trace)
 import Development.Shake.Classes
 import Development.Shake.FilePath
@@ -69,8 +62,16 @@ main = withForge catSyntaxSiteBuilder $ \(input, output) -> do
   putStrLn "Building..."
   _ <- atomically $ input ()
   forever $ do
-    atomically $ output
+    out <- atomically $ output
+    print out
     putStrLn "Waiting for changes..."
+
+-- traverseTest :: Forge () [Int]
+-- traverseTest =
+--   [cat|
+-- \() -> do
+--   (traverse' (delayBy <<< arr (\n -> (n, n)) <<< countup )) [1, 2, 3, 4]
+--   |]
 
 -- main :: IO ()
 -- main = withForge f $ \(input, output) -> do
@@ -143,17 +144,26 @@ buildIndex' = undefined
 buildFeed' :: [Post] -> ()
 buildFeed' = undefined
 
-catSyntaxSiteBuilder :: Forge () ((), ((), ()))
+trace' :: (Show a) => Forge a a
+trace' = mapIO (\a -> putStrLn ("trace: " <> show a) *> return a)
+
+trace'' :: (Show a) => String -> Forge a a
+trace'' label = mapIO (\a -> putStrLn (label <> ": " <> show a) *> return a)
+
+tap :: (Show a) => String -> Forge a a
+tap label = mapIO (\a -> putStrLn label *> pure a)
+
+catSyntaxSiteBuilder :: Forge () ()
 catSyntaxSiteBuilder =
-  [cat| \i -> do
-              posts <- buildPosts   ()
-              () <- copyStaticFiles ()
-              sortedPosts <- arr sortByDate posts
-              allTags <- arr getTags sortedPosts
-              r1 <- buildTags allTags
-              r2 <- buildIndex (sortedPosts, allTags)
-              r3 <- buildFeed sortedPosts
-              (r1, (r2, r3))
+  [catDebugDesugaring| \() -> do
+               posts <- (tap "rebuilt posts" <<< buildPostsCat) ()
+               -- () <- (tap "copied static" <<< copyStaticFilesCat) ()
+               let sortedPosts = sortByDate (Map.elems posts)
+               allTags <- (uniq <<< arr getTagsCat) sortedPosts
+               () <- (buildTagsCat  <<< tap "rebuilding tags") allTags
+               () <-  (buildIndexCat  <<< tap "rebuilding index" <<< threshold (Milliseconds 100)) (sortedPosts, Map.elems allTags)
+               () <- (buildFeedCat  <<< tap "rebuilding feed") sortedPosts
+               ()
          |]
 
 -- arr (\ x -> (x, x)) >>>
@@ -175,7 +185,6 @@ instance ToJSON IndexInfo where
 
 data Tag = Tag
   { tag :: String,
-    tagPosts :: [Post],
     tagUrl :: String
   }
   deriving (Generic, Show, Eq)
@@ -184,7 +193,6 @@ instance ToJSON Tag where
   toJSON Tag {..} =
     object
       [ "tag" A..= tag,
-        "posts" A..= tagPosts,
         "url" A..= tagUrl
       ]
 
@@ -256,10 +264,38 @@ copyStaticFiles = proc () -> do
       Directory.copyFile srcPath destPath
       putStrLn $ "Copied static file: " <> srcPath <> " -> " <> destPath
 
+copyStaticFilesCat :: Forge () ()
+copyStaticFilesCat =
+  [cat| \() -> do
+  (filepaths, _x) <- watchGlob ("site/", ["images/**/*", "css/**/*", "js/**/*"])
+  _y <- (traverse' (mapIO copyFile)) (Set.toList filepaths)
+  ()
+  |]
+  where
+    copyFile :: FilePath -> IO ()
+    copyFile fp = do
+      let srcPath = fp
+          destPath = outputFolder </> fromMaybe fp (stripPrefix "site/" fp)
+      putStrLn $ "Copying static file: " <> srcPath <> " -> " <> destPath
+      Directory.createDirectoryIfMissing True (takeDirectory destPath)
+      Directory.copyFile srcPath destPath
+      putStrLn $ "Copied static file: " <> srcPath <> " -> " <> destPath
+
 buildPosts :: Forge () [Post]
 buildPosts = proc () -> do
   (updated, _files) <- watchGlob -< ("site/posts", ["**/*.md"])
-  traverse' buildPost -< tracer "Posts changed" $ Set.toList updated
+  traverse' buildPost -< Set.toList updated
+
+buildPostsCat :: Forge () (Map.Map FilePath Post)
+buildPostsCat =
+  [cat| \() -> do
+  (updated, files) <- watchGlob ("site/posts", ["**/*.md"])
+  let taggedFiles =
+        Set.toList files
+          <&> (\fp -> (fp, (fp, fp `Set.member` updated)))
+          & Map.fromList
+  traverse' (buildPost <<< MF.projl <<< uniq) taggedFiles
+  |]
 
 writeFile :: FilePath -> T.Text -> IO ()
 writeFile path contents = do
@@ -295,9 +331,30 @@ buildIndex = proc (allPosts, allTags) -> do
       indexHTML = substitute indexT (toJSON indexInfo)
   mapIO (uncurry writeFile) -< ((outputFolder </> "index.html"), indexHTML)
 
+buildIndexCat :: Forge ([Post], [Tag]) ()
+buildIndexCat =
+  [cat| \(allPosts, allTags) -> do
+  indexT <- compileTemplate "site/templates/index.html"
+  let indexInfo = IndexInfo {indexPosts = allPosts, indexTags = allTags}
+  let indexHTML = substitute indexT (toJSON indexInfo)
+  mapIO (uncurry writeFile) ((outputFolder </> "index.html"), indexHTML)
+  |]
+
 buildTags :: Forge [Tag] ()
 buildTags = proc tags -> do
   rmap (const ()) (traverse' writeTag) -< tags
+
+buildTagsCat :: Forge (Map String Tag) ()
+buildTagsCat = rmap (const ()) $ traverse' writeTagCat
+  where
+    writeTagCat :: Forge Tag ()
+    writeTagCat =
+      [cat| \t -> do
+                  tagTempl <- compileTemplate "site/templates/tag.html"
+                  let tagFilePath = outputFolder </> (List.dropWhile (== '/') (tagUrl t)) -<.> "html"
+                  let tagContents = substitute tagTempl (toJSON t)
+                  mapIO (uncurry writeFile) (tagFilePath, tagContents)
+        |]
 
 writeTag :: Forge Tag ()
 writeTag = proc (t@Tag {tagUrl}) -> do
@@ -307,19 +364,20 @@ writeTag = proc (t@Tag {tagUrl}) -> do
   mapIO (uncurry writeFile) -< (tagFilePath, tagContents)
 
 getTags :: [Post] -> [Tag]
-getTags posts =
-  let tagToPostsSet = M.unionsWith mappend (toMap <$> posts)
-      tagToPostsList = fmap S.toList tagToPostsSet
+getTags = getTagsCat >>> Map.elems
+
+getTagsCat :: [Post] -> (Map.Map String Tag)
+getTagsCat posts =
+  let tagToPostsSet = Map.unionsWith mappend (toMap <$> posts)
+      tags = Map.keys tagToPostsSet
       tagObjects =
-        foldMapWithKey
-          (\tag ps -> [Tag {tag, tagPosts = sortByDate ps, tagUrl = "/tag/" <> tag}])
-          tagToPostsList
+        tags & foldMap (\tag -> Map.singleton tag (Tag {tag, tagUrl = "/tag/" <> tag}))
    in tagObjects
   where
     toMap :: Post -> Map String (Set Post)
-    toMap p@Post {postTags} = M.unionsWith mappend (embed p <$> postTags)
+    toMap p@Post {postTags} = Map.unionsWith mappend (embed p <$> postTags)
     embed :: Post -> String -> Map String (Set Post)
-    embed post tag = M.singleton tag (S.singleton post)
+    embed post tag = Map.singleton tag (S.singleton post)
 
 sortByDate :: [Post] -> [Post]
 sortByDate = sortBy (flip compareDates)
@@ -352,6 +410,25 @@ buildFeed = proc posts -> do
   let atomContents = substitute atomTempl (toJSON atomData)
   mapIO (uncurry writeFile) -< (atomFilePath, atomContents)
 
+buildFeedCat :: Forge [Post] ()
+buildFeedCat =
+  [cat| \posts -> do
+  now <- mapIO (const getCurrentTime) ()
+  let atomData =
+        AtomData
+          { title = "Chris Penner",
+            domain = "https://chrispenner.ca",
+            author = "Chris Penner",
+            posts = posts,
+            currentTime = toIsoDate now,
+            url = "/atom.xml"
+          }
+  atomTempl <- compileTemplate "site/templates/atom.xml"
+  let atomFilePath = outputFolder </> "atom.xml"
+  let atomContents = substitute atomTempl (toJSON atomData)
+  mapIO (uncurry writeFile) (atomFilePath, atomContents)
+  |]
+
 data AtomData = AtomData
   { title :: String,
     domain :: String,
@@ -378,48 +455,3 @@ compileTemplate = mapIO (fmap (Data.Bifunctor.first SomeException) . localAutoma
 
 tracer :: (Show a) => String -> a -> a
 tracer label x = trace (label <> ": " <> show x) x
-
-instance (MonadUnliftIO m) => Category.Symmetric (,) (Flinch m) where
-  swap :: (MonadUnliftIO m) => Flinch m (a, b) (b, a)
-  swap = arr (\(x, y) -> (y, x))
-
-instance (MonadUnliftIO m) => Category.Associative (,) (Flinch m) where
-  associate :: (MonadUnliftIO m) => Flinch m ((a, b), c) (a, (b, c))
-  associate = arr (\((x, y), z) -> (x, (y, z)))
-  coassociate :: (MonadUnliftIO m) => Flinch m (a, (b, c)) ((a, b), c)
-  coassociate = arr (\(x, (y, z)) -> ((x, y), z))
-
-instance (MonadUnliftIO m) => Category.Weaken (,) (Flinch m) where
-  fst :: (MonadUnliftIO m) => Flinch m (a, b) a
-  fst = arr Tuple.fst
-
-  snd :: (MonadUnliftIO m) => Flinch m (a, b) b
-  snd = arr Tuple.snd
-
-instance (MonadUnliftIO m) => Monoidal.HasLeftIdentity () (,) (Flinch m) where
-  coidl :: (MonadUnliftIO m) => Flinch m a ((), a)
-  coidl = arr (\x -> ((), x))
-
-instance (MonadUnliftIO m) => Monoidal.HasIdentity () (,) (Flinch m)
-
-instance (MonadUnliftIO m) => Monoidal.HasRightIdentity () (,) (Flinch m) where
-  coidr :: (MonadUnliftIO m) => Flinch m a (a, ())
-  coidr = arr (\x -> (x, ()))
-
-instance (MonadUnliftIO m) => Categorical.PFunctor (,) (Flinch m) where
-  first = Arrow.first
-
-instance (MonadUnliftIO m) => Categorical.QFunctor (,) (Flinch m) where
-  second = Arrow.second
-
-instance (MonadUnliftIO m) => Categorical.Bifunctor (,) (Flinch m) where
-  (***) :: (MonadUnliftIO m) => Flinch m a a' -> Flinch m b b' -> Flinch m (a, b) (a', b')
-  (***) = (Arrow.***)
-
-instance (MonadUnliftIO m) => Terminal (Flinch m) where
-  terminal :: (MonadUnliftIO m) => Flinch m a ()
-  terminal = arr (const ())
-
-instance (MonadUnliftIO m) => Contract (,) (Flinch m) where
-  (&&&) :: (MonadUnliftIO m) => Flinch m a b1 -> Flinch m a b2 -> Flinch m a (b1, b2)
-  (&&&) = (Arrow.&&&)

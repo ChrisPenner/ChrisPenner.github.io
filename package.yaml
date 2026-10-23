@@ -32,7 +32,7 @@ dependencies:
 - unliftio
 - profunctors
 - monoidal-functors
-- category-syntax
+- category-notation
 
 executables:
   build-site:

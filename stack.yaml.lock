@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: kindly-functors-0.2.0.0@sha256:f15ed4a750699fe4ebec6b8a8e7423010f97ceb05be12b23cf5f4397a46b2c9a,4236
+    pantry-tree:
+      sha256: a26be4178a10eb679f726bb761749dad06fb670ee2f297986fb4627cd8b7e9c5
+      size: 1001
+  original:
+    hackage: kindly-functors-0.2.0.0@sha256:f15ed4a750699fe4ebec6b8a8e7423010f97ceb05be12b23cf5f4397a46b2c9a,4236
+- completed:
+    hackage: kind-generics-th-0.2.3.3@sha256:c53280116db0dab9891f5a531679073f0b1f9ba6b8a3399bca11d98c506d0c62,1578
+    pantry-tree:
+      sha256: 89954f3519b63d5d379ff3e062f9c7ad9d3e1106ee734a99fa8c9943d7df0150
+      size: 328
+  original:
+    hackage: kind-generics-th-0.2.3.3@sha256:c53280116db0dab9891f5a531679073f0b1f9ba6b8a3399bca11d98c506d0c62,1578
 snapshots:
 - completed:
     sha256: abc790b571e0c70e929db74b329e3c18d7e76a6e173e8bdf94f1ba20770d4c24
